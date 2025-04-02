@@ -1,17 +1,24 @@
+import React from "react";
 import {
-  FileText,
+  LayoutDashboard,
+  MessageSquare,
+  Package,
+  Settings,
+  Music,
   GalleryHorizontal,
   GitCompare,
-  ImageIcon,
-  LayoutDashboard,
-  LucideIcon,
-  MessageSquare,
-  Music,
+  Users,
+  GitPullRequest,
   PanelLeft,
-  Settings,
+  PanelTopOpen,
+  FileText,
+  Home,
+  ImageIcon,
   Table,
+  LucideIcon,
 } from "lucide-react";
-import React from "react";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 interface NavItem {
   name: string;
@@ -82,12 +89,6 @@ export const NavItems: React.FC<NavItemsProps> = ({
       href: "/ai-chat",
       icon: <FileText size={20} />,
       isActive: currentPath === "/ai-chat",
-    },
-    {
-      title: "Audio Upload",
-      href: "/audio-upload",
-      icon: <Music size={20} />,
-      isActive: currentPath === "/audio-upload",
     },
     {
       title: "Settings",

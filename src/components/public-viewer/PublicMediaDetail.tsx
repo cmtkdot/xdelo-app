@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react'
 import { Message } from '@/types/entities/Message'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
@@ -29,8 +30,6 @@ import { useTelegramOperations } from '@/hooks/useTelegramOperations'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { format } from 'date-fns'
-import { MessageAdapter } from '@/components/common/MessageAdapter'
-import { adaptMessage } from '@/lib/messageAdapter'
 
 interface PublicMediaDetailProps {
   isOpen: boolean
@@ -93,10 +92,7 @@ export function PublicMediaDetail({
     if (!currentMessage) return
     
     try {
-      // Adapt the message to ensure it has the required fields
-      const adaptedMessage = adaptMessage(currentMessage)
-      
-      await handleDelete(adaptedMessage, deleteFromTelegram)
+      await handleDelete(currentMessage, deleteFromTelegram)
       
       // If there's an external onDelete handler, call it
       if (onDelete) {

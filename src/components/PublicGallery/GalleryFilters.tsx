@@ -1,186 +1,172 @@
 
-import React from 'react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { LayoutGrid, List, SlidersHorizontal, Search } from 'lucide-react';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+import { Button } from "@/components/ui/button";
+import { Grid3X3, ImageIcon, Film, Grid, Table, CalendarDays, ArrowUpDown, Search } from "lucide-react";
+import { VendorFilter } from "./Filters/VendorFilter";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DateFieldFilter } from "./Filters/DateFieldFilter";
+import { SortOrderFilter } from "./Filters/SortOrderFilter";
+import { Input } from "@/components/ui/input";
+import { useState } from "react";
 
 interface GalleryFiltersProps {
   filter: string;
   setFilter: (filter: string) => void;
   viewMode: 'grid' | 'table';
   setViewMode: (mode: 'grid' | 'table') => void;
-  vendorFilter: string[];
-  vendors: string[];
-  onVendorFilterChange: (vendors: string[]) => void;
-  dateField: 'purchase_date' | 'created_at';
-  onDateFieldChange: (field: 'purchase_date' | 'created_at') => void;
-  sortOrder: 'asc' | 'desc';
-  onSortOrderChange: (order: 'asc' | 'desc') => void;
-  searchTerm: string;
-  onSearchChange: (term: string) => void;
+  vendorFilter?: string[];
+  vendors?: string[];
+  onVendorFilterChange?: (value: string[]) => void;
+  dateField?: 'purchase_date' | 'created_at';
+  onDateFieldChange?: (value: 'purchase_date' | 'created_at') => void;
+  sortOrder?: 'asc' | 'desc';
+  onSortOrderChange?: (value: 'asc' | 'desc') => void;
+  searchTerm?: string;
+  onSearchChange?: (value: string) => void;
 }
 
-export function GalleryFilters({
-  filter,
-  setFilter,
-  viewMode,
+export const GalleryFilters = ({ 
+  filter, 
+  setFilter, 
+  viewMode, 
   setViewMode,
-  vendorFilter,
-  vendors,
+  vendorFilter = [],
+  vendors = [],
   onVendorFilterChange,
-  dateField,
+  dateField = 'created_at',
   onDateFieldChange,
-  sortOrder,
+  sortOrder = 'desc',
   onSortOrderChange,
-  searchTerm,
-  onSearchChange,
-}: GalleryFiltersProps) {
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    onSearchChange(e.target.value);
-  };
-
-  const toggleVendorFilter = (vendor: string) => {
-    if (vendorFilter.includes(vendor)) {
-      onVendorFilterChange(vendorFilter.filter(v => v !== vendor));
-    } else {
-      onVendorFilterChange([...vendorFilter, vendor]);
+  searchTerm = '',
+  onSearchChange
+}: GalleryFiltersProps) => {
+  const [inputValue, setInputValue] = useState(searchTerm);
+  
+  const handleSearch = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && onSearchChange) {
+      onSearchChange(inputValue);
     }
   };
-
+  
+  const handleSearchClick = () => {
+    if (onSearchChange) {
+      onSearchChange(inputValue);
+    }
+  };
+  
+  const handleClearSearch = () => {
+    setInputValue('');
+    if (onSearchChange) {
+      onSearchChange('');
+    }
+  };
+  
   return (
-    <Card className="mb-6">
-      <CardContent className="p-4">
-        <div className="flex flex-col md:flex-row gap-4">
-          {/* Search */}
-          <div className="relative flex-grow">
-            <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-              <Search className="w-4 h-4 text-gray-500" />
-            </div>
+    <div className="space-y-4 mb-4">
+      {/* Search input */}
+      {onSearchChange && (
+        <div className="flex gap-2 mb-4">
+          <div className="relative flex-1">
             <Input
-              type="search"
-              placeholder="Search gallery..."
-              value={searchTerm}
-              onChange={handleSearchChange}
-              className="pl-10"
+              placeholder="Search by product name, code, vendor or caption..."
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyDown={handleSearch}
+              className="pr-8"
             />
-          </div>
-
-          {/* Filters */}
-          <div className="flex gap-2">
-            {/* Media Type Filter */}
-            <Select value={filter} onValueChange={setFilter}>
-              <SelectTrigger className="w-[140px]">
-                <SelectValue placeholder="Media Type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Media</SelectItem>
-                <SelectItem value="images">Images Only</SelectItem>
-                <SelectItem value="videos">Videos Only</SelectItem>
-              </SelectContent>
-            </Select>
-
-            {/* Advanced Filters */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="icon">
-                  <SlidersHorizontal className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuLabel>Filter Options</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                
-                <div className="p-2">
-                  <Label className="text-xs font-medium">Date Field</Label>
-                  <Select
-                    value={dateField}
-                    onValueChange={(value) => onDateFieldChange(value as 'purchase_date' | 'created_at')}
-                  >
-                    <SelectTrigger className="w-full mt-1">
-                      <SelectValue placeholder="Date Field" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="created_at">Upload Date</SelectItem>
-                      <SelectItem value="purchase_date">Purchase Date</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="p-2">
-                  <Label className="text-xs font-medium">Sort Order</Label>
-                  <Select
-                    value={sortOrder}
-                    onValueChange={(value) => onSortOrderChange(value as 'asc' | 'desc')}
-                  >
-                    <SelectTrigger className="w-full mt-1">
-                      <SelectValue placeholder="Sort Order" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="desc">Newest First</SelectItem>
-                      <SelectItem value="asc">Oldest First</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {vendors.length > 0 && (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuLabel>Vendor</DropdownMenuLabel>
-                    <div className="max-h-40 overflow-y-auto">
-                      {vendors.map((vendor) => (
-                        <DropdownMenuCheckboxItem
-                          key={vendor}
-                          checked={vendorFilter.includes(vendor)}
-                          onCheckedChange={() => toggleVendorFilter(vendor)}
-                        >
-                          {vendor}
-                        </DropdownMenuCheckboxItem>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            {/* View Mode Toggle */}
-            <div className="flex border rounded-md overflow-hidden">
-              <Button
-                variant={viewMode === 'grid' ? 'default' : 'ghost'}
-                size="icon"
-                onClick={() => setViewMode('grid')}
-                className="rounded-none border-0"
+            {inputValue && (
+              <button 
+                onClick={handleClearSearch}
+                className="absolute right-8 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               >
-                <LayoutGrid className="h-4 w-4" />
-              </Button>
-              <Button
-                variant={viewMode === 'table' ? 'default' : 'ghost'}
-                size="icon"
-                onClick={() => setViewMode('table')}
-                className="rounded-none border-0"
-              >
-                <List className="h-4 w-4" />
-              </Button>
-            </div>
+                ×
+              </button>
+            )}
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="absolute right-0 top-0 h-full"
+              onClick={handleSearchClick}
+            >
+              <Search className="h-4 w-4" />
+            </Button>
           </div>
         </div>
-      </CardContent>
-    </Card>
+      )}
+      
+      <div className="flex flex-wrap justify-between gap-2">
+        <div className="flex flex-wrap gap-2 items-center">
+          <Button 
+            variant={filter === "all" ? "default" : "outline"} 
+            onClick={() => setFilter("all")}
+            className="transition-all duration-200 ease-in-out"
+            size="sm"
+          >
+            <Grid3X3 className="mr-2 h-4 w-4" />
+            All
+          </Button>
+          <Button 
+            variant={filter === "images" ? "default" : "outline"} 
+            onClick={() => setFilter("images")}
+            className="transition-all duration-200 ease-in-out"
+            size="sm"
+          >
+            <ImageIcon className="mr-2 h-4 w-4" />
+            Images
+          </Button>
+          <Button 
+            variant={filter === "videos" ? "default" : "outline"} 
+            onClick={() => setFilter("videos")}
+            className="transition-all duration-200 ease-in-out"
+            size="sm"
+          >
+            <Film className="mr-2 h-4 w-4" />
+            Videos
+          </Button>
+          
+          {onVendorFilterChange && vendors.length > 0 && (
+            <VendorFilter 
+              value={vendorFilter} 
+              vendors={vendors} 
+              onChange={onVendorFilterChange} 
+            />
+          )}
+
+          {onDateFieldChange && (
+            <DateFieldFilter
+              value={dateField}
+              onChange={onDateFieldChange}
+            />
+          )}
+
+          {onSortOrderChange && (
+            <SortOrderFilter
+              value={sortOrder}
+              onChange={onSortOrderChange}
+            />
+          )}
+        </div>
+        
+        <div className="flex gap-2">
+          <Button 
+            variant={viewMode === "grid" ? "default" : "outline"} 
+            onClick={() => setViewMode("grid")}
+            className="transition-all duration-200 ease-in-out"
+            size="sm"
+          >
+            <Grid className="mr-2 h-4 w-4" />
+            Grid
+          </Button>
+          <Button 
+            variant={viewMode === "table" ? "default" : "outline"} 
+            onClick={() => setViewMode("table")}
+            className="transition-all duration-200 ease-in-out"
+            size="sm"
+          >
+            <Table className="mr-2 h-4 w-4" />
+            Table
+          </Button>
+        </div>
+      </div>
+    </div>
   );
-}
+};

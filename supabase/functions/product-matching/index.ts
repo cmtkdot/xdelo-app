@@ -1,16 +1,10 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"; // Keep for serve
-import {
-  createHandler,
-  createSuccessResponse,
-  RequestMetadata,
-  SecurityLevel,
-} from "../_shared/unifiedHandler.ts";
-import { supabaseClient } from "../_shared/supabase.ts"; // Use singleton client
-import { logProcessingEvent } from "../_shared/auditLogger.ts"; // Import from dedicated module
-import { findBestProductMatch } from './matching-utils.ts';
-import { ProductMatchRequest, ProductMatchResponse, GlProduct } from './types.ts';
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
+import { corsHeaders } from "../_shared/cors.ts";
+import { findBestProductMatch } from './matching-utils.ts'
+import { ProductMatchRequest, ProductMatchResponse, GlProduct } from './types.ts'
 
-console.log('Product matching function started');
+console.log('Product matching function started')
 
 // Define payload interfaces
 interface WebhookPayload {
@@ -22,300 +16,340 @@ interface WebhookPayload {
   config?: Record<string, any>;
 }
 
-// Default configuration (Consider moving to a shared config or env vars)
+// Default configuration
 const DEFAULT_CONFIG = {
   similarityThreshold: 0.7,
   minConfidence: 0.6,
-  weights: { productName: 0.4, vendorUid: 0.3, purchaseDate: 0.3 },
-  partialMatch: { enabled: true },
-  algorithm: { useJaroWinkler: true }
+  weights: {
+    productName: 0.4,
+    vendorUid: 0.3,
+    purchaseDate: 0.3
+  },
+  partialMatch: {
+    enabled: true
+  },
+  algorithm: {
+    useJaroWinkler: true
+  }
 };
 
-// Core handler logic
-async function handleProductMatching(req: Request, metadata: RequestMetadata): Promise<Response> {
-  const { correlationId } = metadata;
-  console.log(`[${correlationId}] Processing product-matching request`);
-
-  let payload: WebhookPayload;
-  try {
-    payload = await req.json();
-  } catch (parseError: unknown) {
-    const errorMessage = parseError instanceof Error ? parseError.message : "Invalid JSON body";
-    console.error(`[${correlationId}] Failed to parse request body: ${errorMessage}`);
-    throw new Error(`Invalid request: ${errorMessage}`);
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders })
   }
 
-  const config = { ...DEFAULT_CONFIG, ...(payload.config || {}) }; // Merge default and request config
-
-  await logProcessingEvent('product_matching_started', correlationId, correlationId, {
-      type: payload.messageIds ? 'bulk' : (payload.request ? 'single_message' : (payload.customText ? 'single_text' : 'unknown')),
-      messageIdsCount: payload.messageIds?.length,
-      hasRequest: !!payload.request,
-      hasCustomText: !!payload.customText,
-      configUsed: config // Log the effective config
-  });
-
   try {
-    let resultData: any;
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    )
+
+    const payload = await req.json() as WebhookPayload;
+    
+    // Handle different request types
     if (payload.messageIds && Array.isArray(payload.messageIds)) {
-      // Bulk request
-      console.log(`[${correlationId}] Routing to bulk match processing.`);
-      resultData = await processBulkMatch(correlationId, payload.messageIds, config);
+      // This is a batch request with multiple message IDs
+      const response = await processBulkMatch(
+        payload.messageIds, 
+        supabaseClient,
+        payload.config ?? DEFAULT_CONFIG
+      );
+      return new Response(
+        JSON.stringify(response),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200,
+        }
+      );
     } else if (payload.request || payload.customText) {
-      // Single request
-      console.log(`[${correlationId}] Routing to single match processing.`);
-      const singleRequest = payload.request ?? { customText: payload.customText };
-      resultData = await processProductMatch(correlationId, singleRequest, config);
+      // This is a single product match request
+      const response = await processProductMatch(
+        payload.request ?? { customText: payload.customText },
+        supabaseClient,
+        payload.config ?? DEFAULT_CONFIG
+      );
+      return new Response(
+        JSON.stringify(response),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200,
+        }
+      );
     } else {
-      await logProcessingEvent('product_matching_failed', correlationId, correlationId, { reason: 'Invalid format' }, 'Invalid request format');
-      throw new Error('Invalid request format. Expected "messageIds" array or "request"/"customText" object.');
+      throw new Error('Invalid request format. Expected "messageIds" array or "request" object.');
     }
-
-    await logProcessingEvent('product_matching_completed', correlationId, correlationId, { summary: resultData?.summary || 'OK' });
-    return createSuccessResponse({ success: true, ...resultData }, correlationId);
-
-  } catch (error: unknown) {
-    // Catch errors thrown by processing functions
-    const errorMessage = error instanceof Error ? error.message : "Unknown error during product matching";
-    console.error(`[${correlationId}] Error during product matching: ${errorMessage}`);
-    // Log if not already logged (might be redundant if processing functions log before throwing)
-    await logProcessingEvent('product_matching_failed', correlationId, correlationId, {}, errorMessage);
-    throw error; // Re-throw for unifiedHandler
+  } catch (error) {
+    console.error('Error:', error.message)
+    return new Response(
+      JSON.stringify({ success: false, error: error.message }),
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 400,
+      }
+    )
   }
-}
+})
 
-// --- Processing Functions (Refactored) ---
-
-// Modified signature to accept either messageId or customText
 async function processProductMatch(
-  correlationId: string,
-  request: { messageId?: string; customText?: string; minConfidence?: number },
+  request: ProductMatchRequest & { customText?: string },
+  supabase: any,
   config: Record<string, any>
-): Promise<{ matches: Array<any>; bestMatch: any | null }> { // Return data directly
-  const logEntityId = request.messageId || correlationId; // Use messageId if available for entity log
-  const minConfidence = request.minConfidence ?? config.minConfidence ?? 0.6;
-
+): Promise<{
+  success: boolean;
+  data?: { matches: Array<any>; bestMatch: any | null };
+  error?: string;
+}> {
   try {
-    // Fetch products (common step)
-    const { data: products, error: queryError } = await supabaseClient
-      .from('gl_products')
-      .select('*')
-      .order('created_at', { ascending: false }) // Consider if ordering/limiting is always needed
-      .limit(100); // Consider if limit is appropriate
-
-    if (queryError) {
-      throw new Error(`Failed to fetch products: ${queryError.message}`);
-    }
-    if (!products) {
-        throw new Error('No products found for matching.');
-    }
-    await logProcessingEvent('product_fetch_success', logEntityId, correlationId, { productCount: products.length });
-
-    let productName = '';
-    let vendorUid = '';
-    let purchaseDate = '';
-
-    // Determine input source: customText or messageId
+    // Handle custom text if provided
     if (request.customText) {
-      console.log(`[${correlationId}] Matching custom text against ${products.length} products.`);
-      productName = request.customText; // Use custom text as the primary name for matching
-      // vendorUid and purchaseDate remain empty for custom text matching unless more analysis is added
-      await logProcessingEvent('custom_text_matching', logEntityId, correlationId, { textLength: productName.length });
+      // Fetch products for matching
+      const { data: products, error: queryError } = await supabase
+        .from('gl_products')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(100);
 
-    } else if (request.messageId) {
-      const messageId = request.messageId; // Assign to local variable for clarity
-      console.log(`[${correlationId}] Fetching message ${messageId} for matching.`);
-      const { data: message, error: messageError } = await supabaseClient
+      if (queryError) {
+        throw new Error(`Failed to fetch products: ${queryError.message}`);
+      }
+
+      console.log(`Matching custom text against ${products.length} products`);
+
+      // Analyze custom text to extract product name, vendor, etc.
+      // This is a simplified version - in a real app, you might use NLP or other analysis
+      const { matches, bestMatch } = findBestProductMatch(
+        products as GlProduct[],
+        request.customText,
+        '', // vendorName
+        '', // poNumber
+        '', // vendorUid
+        '', // purchaseDate
+        request.minConfidence ?? config.minConfidence ?? 0.6
+      );
+
+      return {
+        success: true,
+        data: {
+          matches,
+          bestMatch
+        }
+      };
+    } 
+    // Handle message ID if provided
+    else if (request.messageId) {
+      // Fetch the message to analyze
+      const { data: message, error: messageError } = await supabase
         .from('messages')
-        .select('id, caption, analyzed_content') // Select necessary fields
-        .eq('id', messageId) // Use local variable
+        .select('*')
+        .eq('id', request.messageId)
         .single();
 
-      if (messageError) throw new Error(`Failed to fetch message: ${messageError.message}`);
-      if (!message) throw new Error(`Message not found with ID: ${messageId}`); // Use local variable
+      if (messageError) {
+        throw new Error(`Failed to fetch message: ${messageError.message}`);
+      }
 
-      await logProcessingEvent('message_fetch_success', messageId, correlationId); // Use messageId for entity
+      if (!message) {
+        throw new Error(`Message not found with ID: ${request.messageId}`);
+      }
 
+      // Fetch products for matching
+      const { data: products, error: queryError } = await supabase
+        .from('gl_products')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(100);
+
+      if (queryError) {
+        throw new Error(`Failed to fetch products: ${queryError.message}`);
+      }
+
+      console.log(`Matching message ${request.messageId} against ${products.length} products`);
+
+      // Extract product information from the message
       const analyzedContent = message.analyzed_content || {};
-      productName = analyzedContent.product_name || message.caption || '';
-      vendorUid = analyzedContent.vendor_uid || '';
-      purchaseDate = analyzedContent.purchase_date || '';
-      console.log(`[${correlationId}] Matching message ${messageId} (Name: ${productName.substring(0,30)}...) against ${products.length} products.`);
+      const productName = analyzedContent.product_name || message.caption || '';
+      const vendorUid = analyzedContent.vendor_uid || '';
+      const purchaseDate = analyzedContent.purchase_date || '';
 
+      // Find matches
+      const { matches, bestMatch } = findBestProductMatch(
+        products as GlProduct[],
+        productName,
+        '', // vendorName
+        '', // poNumber
+        vendorUid,
+        purchaseDate,
+        request.minConfidence ?? config.minConfidence ?? 0.6
+      );
+
+      return {
+        success: true,
+        data: {
+          matches,
+          bestMatch
+        }
+      };
     } else {
-      // This case should ideally not be reached due to checks in handleProductMatching
-      throw new Error('Internal error: No messageId or customText provided to processProductMatch');
+      throw new Error('Missing required parameter: messageId or customText');
     }
-
-    // Find matches using the utility function
-    const { matches, bestMatch } = findBestProductMatch(
-      products as GlProduct[],
-      productName,
-      '', // vendorName - not used currently
-      '', // poNumber - not used currently
-      vendorUid,
-      purchaseDate,
-      minConfidence
-    );
-
-    await logProcessingEvent('match_finding_completed', logEntityId, correlationId, { matchCount: matches.length, bestMatchFound: !!bestMatch });
-    console.log(`[${correlationId}] Found ${matches.length} potential matches. Best match: ${bestMatch ? bestMatch.product_id : 'None'}`);
-
-    // Return structured data
-    return { matches, bestMatch };
-
-  } catch (error: unknown) {
-    // Log error and re-throw
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error during single product match';
-    console.error(`[${correlationId}] Error in processProductMatch for ${logEntityId}:`, errorMessage);
-    // Log specific error before throwing
-    await logProcessingEvent('single_match_failed', logEntityId, correlationId, {}, errorMessage);
-    throw new Error(errorMessage); // Let main handler catch
+  } catch (error) {
+    console.error('Error in product matching:', error);
+    return {
+      success: false,
+      error: error.message || 'Unknown error during product matching'
+    };
   }
 }
 
 async function processBulkMatch(
-  correlationId: string,
   message_ids: string[],
+  supabase: any,
   config: Record<string, any>
-): Promise<{ results: any[]; summary: { total: number; matched: number; unmatched: number; failed: number } }> { // Return data directly
-  const action = 'bulk_match';
-  const minConfidence = config.minConfidence ?? 0.6;
-  const approvalThreshold = config.approvalThreshold ?? 0.75; // Threshold to auto-approve and update message
-
-  console.log(`[${correlationId}] Processing ${action} for ${message_ids.length} messages`);
-  await logProcessingEvent('bulk_match_started', correlationId, correlationId, { count: message_ids.length });
-
+): Promise<{
+  success: boolean;
+  results?: any[];
+  summary?: { total: number; matched: number; unmatched: number; failed: number };
+  error?: string;
+}> {
   try {
+    console.log(`Processing batch match for ${message_ids.length} messages`);
+    
     // Fetch messages
-    const { data: messages, error: messagesError } = await supabaseClient
+    const { data: messages, error: messagesError } = await supabase
       .from('messages')
       .select('id, caption, analyzed_content')
       .in('id', message_ids);
 
-    if (messagesError) throw new Error(`Failed to fetch messages: ${messagesError.message}`);
-    if (!messages) throw new Error('No messages found for the provided IDs.');
-    await logProcessingEvent('bulk_messages_fetched', correlationId, correlationId, { fetchedCount: messages.length });
+    if (messagesError) {
+      throw new Error(`Failed to fetch messages: ${messagesError.message}`);
+    }
+
+    console.log(`Found ${messages.length} messages to process`);
 
     // Fetch products
-    const { data: products, error: productsError } = await supabaseClient
+    const { data: products, error: productsError } = await supabase
       .from('gl_products')
-      .select('*') // Select necessary fields for matching
-      .order('created_at', { ascending: false }) // Consider if ordering/limit needed
-      .limit(100); // Adjust limit as needed
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(100);
 
-    if (productsError) throw new Error(`Failed to fetch products: ${productsError.message}`);
-    if (!products) throw new Error('No products found for matching.');
-    await logProcessingEvent('bulk_products_fetched', correlationId, correlationId, { productCount: products.length });
+    if (productsError) {
+      throw new Error(`Failed to fetch products: ${productsError.message}`);
+    }
 
+    console.log(`Found ${products.length} products for matching`);
+    
     const matchResults = [];
-    let matchedCount = 0;
-    let unmatchedCount = 0;
-    let failedCount = 0;
+    let matched = 0;
+    let unmatched = 0;
+    let failed = 0;
 
+    // Process each message
     for (const message of messages) {
-      const messageLogId = message.id;
       try {
+        console.log(`Processing message ${message.id}`);
+        
+        // Extract product data from message or analyzed_content
         const analyzedContent = message.analyzed_content || {};
         const productName = analyzedContent.product_name || message.caption || '';
         const vendorUid = analyzedContent.vendor_uid || '';
         const purchaseDate = analyzedContent.purchase_date || '';
-
+        
+        // Find matches
         const { matches, bestMatch } = findBestProductMatch(
-          products as GlProduct[], productName, '', '', vendorUid, purchaseDate, minConfidence
+          products as GlProduct[],
+          productName,
+          '', // vendorName
+          '', // poNumber
+          vendorUid,
+          purchaseDate,
+          config.minConfidence ?? 0.6
         );
 
-        let matchRecorded = false;
-        let dbErrorMsg: string | null = null;
-
-        if (bestMatch && bestMatch.confidence_score >= minConfidence) {
+        // If we have a match with sufficient confidence, record it
+        if (bestMatch && bestMatch.confidence_score >= (config.minConfidence ?? 0.6)) {
           try {
-            const matchStatus = bestMatch.confidence_score >= approvalThreshold ? 'approved' : 'pending';
-            const { error: matchError } = await supabaseClient
+            // Insert match record
+            const { error: matchError } = await supabase
               .from('sync_matches')
-              .upsert({ // Use upsert to handle potential re-runs
+              .upsert({
                 message_id: message.id,
                 product_id: bestMatch.product_id,
                 confidence: bestMatch.confidence_score,
-                // Explicitly type 'k' as keyof typeof bestMatch.match_criteria if possible, or string
-                match_fields: bestMatch.match_criteria ? Object.keys(bestMatch.match_criteria).filter((k: string) => bestMatch.match_criteria[k as keyof typeof bestMatch.match_criteria]) : [],
-                status: matchStatus,
-                // created_at handled by default value?
+                match_fields: bestMatch.match_criteria ? 
+                  Object.entries(bestMatch.match_criteria)
+                    .filter(([_, value]) => value === true)
+                    .map(([key]) => key) : 
+                  [],
+                status: bestMatch.confidence_score >= 0.75 ? 'approved' : 'pending',
+                created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString()
-              }, { onConflict: 'message_id' }); // Upsert based on message_id
+              });
 
-            if (matchError) throw new Error(`Match recording error: ${matchError.message}`);
-            matchRecorded = true;
-
-            // Update message if approved
-            if (matchStatus === 'approved') {
-              const { error: updateMsgError } = await supabaseClient
-                .from('messages')
-                .update({ glide_row_id: bestMatch.product_id, updated_at: new Date().toISOString() })
-                .eq('id', message.id);
-              if (updateMsgError) throw new Error(`Message update error: ${updateMsgError.message}`);
+            if (matchError) {
+              console.error(`Error recording match for message ${message.id}:`, matchError);
             }
-            matchedCount++;
-            await logProcessingEvent('bulk_message_matched', messageLogId, correlationId, { productId: bestMatch.product_id, confidence: bestMatch.confidence_score, status: matchStatus });
-
-          } catch (dbError: unknown) {
-             dbErrorMsg = dbError instanceof Error ? dbError.message : String(dbError);
-             console.error(`[${correlationId}] Database error for message ${messageLogId}:`, dbErrorMsg);
-             failedCount++;
-             await logProcessingEvent('bulk_match_db_error', messageLogId, correlationId, {}, dbErrorMsg);
+            
+            // If high confidence, update the message record
+            if (bestMatch.confidence_score >= 0.75) {
+              await supabase
+                .from('messages')
+                .update({
+                  glide_row_id: bestMatch.product_id,
+                  updated_at: new Date().toISOString()
+                })
+                .eq('id', message.id);
+            }
+            
+            matched++;
+          } catch (dbError) {
+            console.error(`Database error for message ${message.id}:`, dbError);
+            failed++;
           }
         } else {
-          unmatchedCount++;
-          await logProcessingEvent('bulk_message_unmatched', messageLogId, correlationId, { reason: 'No match above threshold' });
+          unmatched++;
         }
 
+        // Add detailed result to our response
         matchResults.push({
+          success: true,
           messageId: message.id,
-          success: !dbErrorMsg, // Success if no DB error occurred during recording/update
-          matched: matchRecorded,
+          message_id: message.id,  // For backward compatibility
+          productName,
+          vendorUid,
           bestMatch: bestMatch ? {
-            product_id: bestMatch.product_id,
-            confidence_score: bestMatch.confidence_score,
-            // Optionally add product name back if needed for response
-            // product_name: (products.find(p => p.id === bestMatch.product_id) || {}).new_product_name || 'Unknown'
-          } : null,
-          error: dbErrorMsg
+            ...bestMatch,
+            message_id: message.id,
+            product_name: (products.find((p: any) => p.id === bestMatch.product_id) || {}).new_product_name || 'Unknown'
+          } : null
         });
-
-      } catch (messageError: unknown) {
-        const errorMessage = messageError instanceof Error ? messageError.message : String(messageError);
-        console.error(`[${correlationId}] Error processing message ${messageLogId} in bulk:`, errorMessage);
-        matchResults.push({ messageId: message.id, success: false, error: errorMessage });
-        failedCount++;
-        await logProcessingEvent('bulk_message_failed', messageLogId, correlationId, {}, errorMessage);
+      } catch (messageError) {
+        console.error(`Error processing message ${message.id}:`, messageError);
+        matchResults.push({
+          success: false,
+          messageId: message.id,
+          message_id: message.id,
+          error: messageError.message
+        });
+        failed++;
       }
-    } // end for loop
+    }
 
-    const summary = { total: messages.length, matched: matchedCount, unmatched: unmatchedCount, failed: failedCount };
-    console.log(`[${correlationId}] Bulk matching finished. Summary:`, summary);
-    await logProcessingEvent('bulk_match_finished', correlationId, correlationId, { summary });
-
-    return { results: matchResults, summary };
-
-  } catch (error: unknown) {
-    // Log error and re-throw
-    const errorMessage = error instanceof Error ? error.message : `Unknown error in ${action}`;
-    console.error(`[${correlationId}] Error in ${action}:`, errorMessage);
-    await logProcessingEvent('bulk_match_error', correlationId, correlationId, {}, errorMessage);
-    throw new Error(errorMessage); // Let main handler catch
+    return {
+      success: true,
+      results: matchResults,
+      summary: {
+        total: matchResults.length,
+        matched,
+        unmatched,
+        failed
+      }
+    };
+  } catch (error) {
+    console.error('Error in bulk matching:', error);
+    return {
+      success: false,
+      error: error.message || 'Unknown error during bulk matching'
+    };
   }
 }
-
-
-// --- Server Setup ---
-
-// Create and configure the handler
-const handler = createHandler(handleProductMatching)
-  .withMethods(['POST']) // Matching actions are triggered via POST
-  .withSecurity(SecurityLevel.AUTHENTICATED) // Assume matching requires auth
-  .build();
-
-// Serve the handler
-serve(handler);
-
-console.log("product-matching function deployed and listening.");

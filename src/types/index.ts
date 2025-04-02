@@ -1,44 +1,19 @@
 
-// Re-export all type definitions for easy importing throughout the app
-// Using named exports to avoid ambiguity
+// Re-export all types from multiple files
+// This allows us to import from a single location: import { Type } from '@/types'
 
-// Core entity types with proper naming to avoid conflicts
+// Re-export specific types with proper syntax to avoid conflicts/duplicates
 export type { ProcessingState } from './api/ProcessingState';
+export type { SyncStatus } from './api/SyncStatus';
+export type { AnalyzedContent } from './utils/AnalyzedContent';
+export type { MatchResult } from './utils/MatchResult';
+export type { MessageProcessingStats } from './utils/MessageProcessingStats';
+export type { FilterValues } from './ui/FilterValues';
+export type { MediaItem } from './ui/MediaViewer';
 export type { Message } from './entities/Message';
-export type { MediaItem } from './entities/MediaItem';
 export type { GlProduct } from './entities/Product';
+export { LogEventType } from './api/LogEventType';
+export type { StorageOperationResult, ApiResponse } from './api/SupabaseTypes';
 
-// Additional types used throughout the app
-export type SyncStatus = 'pending' | 'in_progress' | 'completed' | 'failed' | 'partial';
-
-// Export AnalyzedContent interface for common use
-export interface AnalyzedContent {
-  product_name?: string;
-  product_code?: string;
-  vendor_uid?: string;
-  purchase_date?: string;
-  quantity?: number;
-  notes?: string;
-  caption?: string;
-  unit_price?: number;
-  total_price?: number;
-  parsing_metadata?: {
-    method?: string;
-    timestamp?: string;
-    partial_success?: boolean;
-  };
-}
-
-// Export MatchResult interface for product matching
-export interface MatchResult {
-  id: string;
-  message_id: string;
-  product_id: string;
-  confidence: number;
-  matchType: string;
-  details: {
-    matchedFields: string[];
-    confidence: number;
-  };
-  isMatch?: boolean; // Added for backward compatibility
-}
+// Export compatibility types
+export * from './compatibility';

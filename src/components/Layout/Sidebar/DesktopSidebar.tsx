@@ -7,7 +7,6 @@ import { cn } from "@/lib/utils";
 import { NavItems } from "./NavItems";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/useToast";
-import { ThemeToggle } from "@/components/Theme/ThemeToggle";
 
 export const DesktopSidebar = () => {
   const [expanded, setExpanded] = useState(false);
@@ -22,21 +21,21 @@ export const DesktopSidebar = () => {
   const handleLogout = async () => {
     try {
       await supabase.auth.signOut();
-      toast({
-        title: "Logged out successfully",
-        variant: "default"
+      toast({ 
+        title: "Logged out successfully", 
+        variant: "default" 
       });
     } catch (error) {
-      toast({
-        title: "Error signing out",
-        description: "Please try again.",
-        variant: "destructive"
+      toast({ 
+        title: "Error signing out", 
+        description: "Please try again.", 
+        variant: "destructive" 
       });
     }
   };
 
   return (
-    <div
+    <div 
       className={cn(
         "fixed left-0 top-0 h-full bg-white dark:bg-gray-900 transition-all duration-300 ease-in-out z-40",
         expanded ? "w-64" : "w-16",
@@ -62,10 +61,7 @@ export const DesktopSidebar = () => {
           />
         </nav>
 
-        <div className="px-2 space-y-1">
-          <div className={cn("flex", expanded ? "justify-start" : "justify-center")}>
-            <ThemeToggle />
-          </div>
+        <div className="px-2">
           <Button
             variant="ghost"
             className="w-full flex items-center justify-start"

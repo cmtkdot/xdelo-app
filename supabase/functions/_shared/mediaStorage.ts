@@ -1,20 +1,19 @@
-
-import { supabaseClient } from "./supabase.ts"; // Import the singleton client
-import {
-  xdelo_detectMimeType,
+import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
+import { 
   xdelo_downloadMediaFromTelegram,
-  xdelo_uploadMediaToStorage
+  xdelo_uploadMediaToStorage,
+  xdelo_detectMimeType
 } from "./mediaUtils.ts";
 
 /**
  * Find an existing file in the database by file_unique_id
  */
 export async function xdelo_findExistingFile(
+  supabase: SupabaseClient,
   fileUniqueId: string
 ): Promise<{ exists: boolean; message?: any }> {
   try {
-    // Use the imported singleton client
-    const { data, error } = await supabaseClient
+    const { data, error } = await supabase
       .from('messages')
       .select('*')
       .eq('file_unique_id', fileUniqueId)
@@ -45,21 +44,32 @@ export async function xdelo_processMessageMedia(
   fileUniqueId: string,
   telegramBotToken: string,
   messageId?: string
-): Promise<{
-  success: boolean;
-  isDuplicate: boolean;
-  fileInfo: any;
-  error?: string
+): Promise<{ 
+  success: boolean; 
+  isDuplicate: boolean; 
+  fileInfo: any; 
+  error?: string 
 }> {
   try {
-    // First check if this is a duplicate file using the singleton client
+    // First check if this is a duplicate file
     const { exists, message: existingMessage } = await xdelo_findExistingFile(
+      // Get Supabase client
+      createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+        {
+          auth: {
+            persistSession: false,
+            autoRefreshToken: false
+          }
+        }
+      ),
       fileUniqueId
     );
 
     if (exists && existingMessage) {
       console.log(`Found existing file: ${fileUniqueId}`);
-
+      
       // Return existing file info
       return {
         success: true,
@@ -75,7 +85,7 @@ export async function xdelo_processMessageMedia(
 
     // Detect MIME type
     const detectedMimeType = xdelo_detectMimeType(message);
-
+    
     // Download from Telegram
     const downloadResult = await xdelo_downloadMediaFromTelegram(
       fileId,
@@ -83,11 +93,11 @@ export async function xdelo_processMessageMedia(
       detectedMimeType,
       telegramBotToken
     );
-
+    
     if (!downloadResult.success || !downloadResult.blob) {
       throw new Error(`Failed to download media: ${downloadResult.error || 'Unknown error'}`);
     }
-
+    
     // Upload to Supabase Storage
     const uploadResult = await xdelo_uploadMediaToStorage(
       downloadResult.storagePath || `${fileUniqueId}.bin`,
@@ -95,11 +105,11 @@ export async function xdelo_processMessageMedia(
       downloadResult.mimeType || detectedMimeType,
       messageId
     );
-
+    
     if (!uploadResult.success) {
       throw new Error(`Failed to upload media: ${uploadResult.error || 'Unknown error'}`);
     }
-
+    
     // Return the file info
     return {
       success: true,

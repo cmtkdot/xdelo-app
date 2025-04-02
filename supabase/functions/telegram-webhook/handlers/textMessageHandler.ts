@@ -1,125 +1,110 @@
 
-/**
- * Handler for non-media messages
- */
-import { MessageContext, TelegramMessage } from "../types.ts";
-import { buildTelegramMessageUrl } from "../utils/urlBuilder.ts";
-import { isMessageForwarded } from "../utils/messageUtils.ts";
-import { createMessage } from "../services/databaseService.ts";
-import { createSuccessResponse, createTelegramErrorResponse } from "../services/responseService.ts";
-import { logEvent, logErrorEvent } from "../services/loggingService.ts";
+import { corsHeaders } from '../../_shared/cors.ts';
+import { TelegramMessage, MessageContext } from '../types.ts';
+import { createNonMediaMessage } from '../dbOperations.ts';
+import { 
+  constructTelegramMessageUrl, 
+  isMessageForwarded, 
+  extractTelegramMetadata,
+  logProcessingEvent 
+} from '../../_shared/consolidatedMessageUtils.ts';
 
-/**
- * Handler for text/other messages
- */
-export async function handleOtherMessage(
-  message: TelegramMessage,
-  context: MessageContext
-): Promise<Response> {
+export async function handleOtherMessage(message: TelegramMessage, context: MessageContext): Promise<Response> {
   try {
     const { isChannelPost, correlationId, logger } = context;
+    // Use the utility function to determine if message is forwarded
     const isForwarded = isMessageForwarded(message);
-
-    logger?.info(
-      `📝 Processing non-media message ${message.message_id} in chat ${message.chat.id}`,
-      {
-        message_text: message.text
-          ? `${message.text.substring(0, 50)}${
-              message.text.length > 50 ? "..." : ""
-            }`
-          : null,
-        message_type: isChannelPost ? "channel_post" : "message",
-        is_forwarded: isForwarded,
-      }
-    );
-
-    // Generate message URL
-    const message_url = buildTelegramMessageUrl(message.chat.id, message.message_id);
-
-    // Create message record
-    const {
-      id: messageId,
-      success,
-      error_message,
-    } = await createMessage(
-      {
-        telegram_message_id: message.message_id,
-        chat_id: message.chat.id,
-        chat_type: message.chat.type,
-        chat_title: message.chat.title,
-        message_type: isChannelPost ? "channel_post" : "message",
-        text: message.text || "",
-        telegram_data: message,
-        processing_state: "pending", 
-        is_forward: isForwarded,
-        correlation_id: correlationId,
-        message_url: message_url,
-      },
-      logger
-    );
-
+    
+    // Log the start of message processing
+    logger?.info(`📝 Processing non-media message ${message.message_id} in chat ${message.chat.id}`, {
+      message_text: message.text ? `${message.text.substring(0, 50)}${message.text.length > 50 ? '...' : ''}` : null,
+      message_type: isChannelPost ? 'channel_post' : 'message',
+      is_forwarded: isForwarded,
+    });
+    
+    // Generate message URL using consolidated utility function
+    const message_url = constructTelegramMessageUrl(message.chat.id, message.message_id);
+    
+    // Extract essential telegram metadata instead of storing the entire telegram object
+    const telegramMetadata = extractTelegramMetadata(message);
+    
+    // Create message record with optimized operation
+    const { id: messageId, success, error } = await createNonMediaMessage({
+      telegram_message_id: message.message_id,
+      chat_id: message.chat.id,
+      chat_type: message.chat.type,
+      chat_title: message.chat.title,
+      message_type: isChannelPost ? 'channel_post' : 'message',
+      message_text: message.text || message.caption || '',
+      telegram_data: message,           // Still keep this for backward compatibility
+      telegram_metadata: telegramMetadata, // Add the extracted metadata
+      processing_state: 'completed',
+      is_forward: isForwarded,
+      correlation_id: correlationId,
+      message_url: message_url
+    });
+      
     if (!success || !messageId) {
-      logger?.error(`❌ Failed to store text message in database`, { error: error_message });
-      throw new Error(error_message || "Failed to create message record");
+      logger?.error(`❌ Failed to store text message in database`, { error });
+      throw new Error(error || 'Failed to create message record');
     }
-
+    
     // Log successful processing
-    await logEvent(
+    await logProcessingEvent(
       "message_created",
       messageId,
       correlationId,
       {
         telegram_message_id: message.message_id,
         chat_id: message.chat.id,
-        message_type: "text",
+        message_type: 'text',
         is_forward: isForwarded,
-        message_url: message_url,
+        message_url: message_url
       }
     );
-
-    logger?.success(
-      `✅ Successfully processed text message ${message.message_id}`,
-      {
-        message_id: message.message_id,
-        db_id: messageId,
-        message_url: message_url,
-      }
-    );
-
-    return createSuccessResponse({
-      success: true,
-      messageId,
-      correlationId,
-      message_url: message_url,
-    });
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    const errorStack = error instanceof Error ? error.stack : undefined;
-
-    context.logger?.error(`❌ Error processing non-media message: ${errorMessage}`, {
-      error: errorMessage,
-      stack: errorStack,
+    
+    logger?.success(`✅ Successfully processed text message ${message.message_id}`, {
       message_id: message.message_id,
+      db_id: messageId,
+      message_url: message_url
     });
-
+    
+    return new Response(
+      JSON.stringify({ 
+        success: true, 
+        messageId, 
+        correlationId,
+        message_url: message_url 
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  } catch (error) {
+    context.logger?.error(`❌ Error processing non-media message:`, { 
+      error: error.message,
+      stack: error.stack,
+      message_id: message.message_id
+    });
+    
     // Log the error
-    try {
-      await logErrorEvent(
-        "message_processing_error",
-        "system",
-        context.correlationId,
-        error,
-        {
-          telegram_message_id: message.message_id,
-          chat_id: message.chat.id,
-          handler_type: "other_message",
-        }
-      );
-    } catch (logError) {
-      console.error(`Failed to log processing error to database: ${logError instanceof Error ? logError.message : String(logError)}`);
-    }
-
-    // Return Telegram compatible error response (status 200)
-    return createTelegramErrorResponse(error, context.correlationId);
+    await logProcessingEvent(
+      "message_processing_error",
+      "system",
+      context.correlationId,
+      {
+        telegram_message_id: message.message_id,
+        chat_id: message.chat.id,
+        handler_type: 'other_message'
+      },
+      error.message
+    );
+    
+    return new Response(
+      JSON.stringify({ 
+        success: false, 
+        error: error.message || 'Unknown error processing message',
+        correlationId: context.correlationId
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+    );
   }
 }

@@ -1,0 +1,21 @@
+
+{
+  "extends": "./tsconfig.json",
+  "exclude": ["supabase/functions/**/*", "node_modules", "dist", "coverage", "*.test.ts", "*.test.tsx"],
+  "compilerOptions": {
+    "incremental": true,
+    "tsBuildInfoFile": "./.tsbuildinfo",
+    "noEmit": false,
+    "sourceMap": true,
+    "declaration": true,
+    "declarationMap": true,
+    "importHelpers": true,
+    "removeComments": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "composite": true,
+    "skipLibCheck": true,
+    "verbatimModuleSyntax": true,
+    "noErrorTruncation": true
+  }
+}

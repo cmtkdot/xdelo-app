@@ -1,393 +1,191 @@
 
-/**
- * Handler for media messages
- */
-import { RetryHandler, shouldRetryOperation } from "../../_shared/retryUtils.ts";
-import { supabaseClient } from "../../_shared/supabase.ts";
-import {
-  checkExistingMessage,
-  checkMediaGroupDuplicate,
-  createMessage,
-  handleEditedMessage
-} from "../services/databaseService.ts";
-import { logErrorEvent, logEvent } from "../services/loggingService.ts";
-import { processMessageMedia } from "../services/mediaService.ts";
-import {
-  createSuccessResponse,
-  createTelegramErrorResponse
-} from "../services/responseService.ts";
-import { MessageContext, MessageProcessResult, TelegramMessage } from "../types.ts";
-import { buildTelegramMessageUrl } from "../utils/urlBuilder.ts";
+import { corsHeaders } from '../../_shared/cors.ts';
+import { TelegramMessage, MessageContext } from '../types.ts';
+import { 
+  constructTelegramMessageUrl,
+  isMessageForwarded,
+  extractTelegramMetadata,
+  logProcessingEvent 
+} from '../../_shared/consolidatedMessageUtils.ts';
+import { createMediaMessage, syncMediaGroupContent } from '../dbOperations.ts';
 
-/**
- * Main handler for media messages (new or edited)
- */
-export async function handleMediaMessage(
-  message: TelegramMessage,
-  context: MessageContext
-): Promise<Response> {
+export async function handleMediaMessage(message: TelegramMessage, context: MessageContext): Promise<Response> {
   try {
-    const { correlationId, isEdit, previousMessage, logger } = context;
-
-    logger?.info(`Processing ${isEdit ? "edited" : "new"} media message`, {
-      message_id: message.message_id,
-      chat_id: message.chat.id,
-    });
-
-    let result: MessageProcessResult;
-
-    if (isEdit) {
-      result = await handleEditedMediaMessage(message, context);
-    } else {
-      result = await handleNewMediaMessage(message, context);
+    const { isChannelPost, correlationId, logger } = context;
+    
+    // Determine if message is forwarded
+    const isForwarded = isMessageForwarded(message);
+    
+    // Log the start of processing using object notation for better readability
+    if (logger) {
+      logger.info(`Processing media message ${message.message_id} in chat ${message.chat.id}`, {
+        has_photo: !!message.photo,
+        has_video: !!message.video,
+        has_document: !!message.document,
+        media_group_id: message.media_group_id,
+        message_type: isChannelPost ? 'channel_post' : 'message',
+        is_forwarded: isForwarded,
+      });
     }
-
-    if (!result.success) {
-      throw new Error(result.error || "Unknown error processing media message");
+    
+    // Generate message URL using consolidated function
+    const message_url = constructTelegramMessageUrl(message.chat.id, message.message_id);
+    
+    // Process based on media type
+    let file_id, file_unique_id, width, height, duration, mime_type, file_size;
+    
+    // Handle photos (use the largest size)
+    if (message.photo) {
+      const largestPhoto = message.photo[message.photo.length - 1];
+      file_id = largestPhoto.file_id;
+      file_unique_id = largestPhoto.file_unique_id;
+      width = largestPhoto.width;
+      height = largestPhoto.height;
+    } 
+    // Handle videos
+    else if (message.video) {
+      file_id = message.video.file_id;
+      file_unique_id = message.video.file_unique_id;
+      width = message.video.width;
+      height = message.video.height;
+      duration = message.video.duration;
+      mime_type = message.video.mime_type;
+      file_size = message.video.file_size;
+    } 
+    // Handle documents (could be any file type)
+    else if (message.document) {
+      file_id = message.document.file_id;
+      file_unique_id = message.document.file_unique_id;
+      mime_type = message.document.mime_type;
+      file_size = message.document.file_size;
     }
-
-    return createSuccessResponse({
-      success: true,
-      id: result.id,
-      correlationId,
-      status: result.status,
-      action: result.action,
-      edit_history_id: result.editHistoryId,
-      edit_count: result.editCount,
-      needs_processing: result.needsProcessing
-    });
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-
-    context.logger?.error(`Error processing media message: ${errorMessage}`, {
-      error: error instanceof Error ? error : { message: errorMessage },
-      message_id: message.message_id,
-      chat_id: message.chat?.id,
-    });
-
-    try {
-      await logErrorEvent(
-        "media_processing_error",
-        message.message_id.toString(),
-        context.correlationId,
-        error,
-        {
-          message_id: message.message_id,
-          chat_id: message.chat?.id,
-        }
-      );
-    } catch (logError) {
-      context.logger?.error(
-        `Failed to log error to database: ${logError instanceof Error ? logError.message : String(logError)}`
-      );
-    }
-
-    // Return Telegram compatible error response (status 200)
-    return createTelegramErrorResponse(error, context.correlationId);
-  }
-}
-
-/**
- * Handler for edited media messages
- */
-async function handleEditedMediaMessage(
-  message: TelegramMessage,
-  context: MessageContext
-): Promise<MessageProcessResult> {
-  const { correlationId, logger } = context;
-  const isChannelPost = message.sender_chat?.type === 'channel';
-  const editSource = isChannelPost ? 'channel' : 'user';
-
-  // Fetch existing message
-  const { exists, id: existingMessageId } = await checkExistingMessage(
-    message.message_id,
-    message.chat.id
-  );
-
-  if (exists && existingMessageId) {
-    logger?.info(`Processing edit for message ${message.message_id} (DB ID: ${existingMessageId})`);
-
-    // Process media with retry logic
-    const retry = new RetryHandler({ maxAttempts: 3 });
-    const mediaResult = await retry.execute(
-      () => processMessageMedia(message),
-      shouldRetryOperation
-    );
-
-    if (!mediaResult.success) {
-      throw new Error(`Failed to process media during edit: ${mediaResult.error}`);
-    }
-
-    // Call the enhanced duplicate handler which handles both edits and duplicates
-    const { data: editResult, error } = await supabaseClient.rpc('md_handle_duplicate_media_message', {
-      p_file_unique_id: mediaResult.mediaData.file_unique_id,
-      p_chat_id: message.chat.id,
-      p_telegram_message_id: message.message_id,
-      p_media_data: {
-        ...mediaResult.mediaData,
-        is_edit: true,
-        edit_source: editSource,
-        is_channel_post: isChannelPost,
-        correlation_id: correlationId,
-        telegram_data: message // Include full original message
-      }
-    }).select('*').single();
-
-    if (error) {
-      throw new Error(`Failed to update message: ${error.message}`);
-    }
-
-    if (!editResult || editResult.status === 'error') {
-      throw new Error(editResult?.message || 'Unknown error during message edit');
-    }
-
-    logger?.success(`Successfully processed message edit`, {
-      message_id: existingMessageId,
-      status: editResult.status,
-      edit_count: editResult.edit_count
-    });
-
-    // Log edit event
-    await logEvent(
-      "message_media_edited",
-      existingMessageId,
-      correlationId,
-      {
-        edit_history_id: editResult.edit_history_id,
-        message_id: message.message_id,
-        chat_id: message.chat.id,
-        status: editResult.status,
-        needs_processing: editResult.needs_processing
-      }
-    );
-
-    return {
-      success: true,
-      id: existingMessageId,
-      status: editResult.status,
-      action: 'updated',
-      editHistoryId: editResult.edit_history_id,
-      editCount: editResult.edit_count,
-      needsProcessing: editResult.needs_processing
-    };
-  } else {
-    // If message not found, handle as new message with is_edit flag
-    logger?.warn(
-      `Original message not found for edit ${message.message_id}. Handling as new message with is_edit=true.`
-    );
-
-    // Process media with retry logic
-    const retry = new RetryHandler({ maxAttempts: 3 });
-    const mediaResult = await retry.execute(
-      () => processMessageMedia(message),
-      shouldRetryOperation
-    );
-
-    if (!mediaResult.success) {
-      throw new Error(`Failed to process media: ${mediaResult.error}`);
-    }
-
-    // Add edit flags to the media data
-    const editMediaData = {
-      ...mediaResult.mediaData,
-      is_edit: true,
-      edit_source: editSource,
-      is_channel_post: isChannelPost,
-      correlation_id: correlationId
-    };
-
-    // Create new message record
-    const { success, id, status, error_message } = await createMessage({
-      ...editMediaData,
+    
+    // Extract essential telegram metadata
+    const telegramMetadata = extractTelegramMetadata(message);
+    
+    // Create message record
+    const { id: messageId, success, error } = await createMediaMessage({
       telegram_message_id: message.message_id,
       chat_id: message.chat.id,
-      file_unique_id: message.photo
-        ? message.photo[message.photo.length - 1].file_unique_id
-        : message.video?.file_unique_id || message.document?.file_unique_id
-    }, logger);
-
-    if (!success || !id) {
-      throw new Error(error_message || "Failed to create message record during edit fallback");
+      chat_type: message.chat.type,
+      chat_title: message.chat.title,
+      caption: message.caption || '',
+      file_id,
+      file_unique_id,
+      media_group_id: message.media_group_id,
+      mime_type,
+      file_size,
+      width,
+      height,
+      duration,
+      telegram_data: message,
+      telegram_metadata: telegramMetadata,
+      processing_state: 'initialized',
+      is_forward: isForwarded,
+      correlation_id: correlationId,
+      message_url: message_url
+    });
+      
+    if (!success || !messageId) {
+      if (logger) {
+        logger.error(`Failed to store media message in database`, { error });
+      }
+      throw new Error(error || 'Failed to create message record');
     }
-
-    logger?.success(`Created new message from edit (ID: ${id})`);
-
-    // Log the event
-    await logEvent(
-      "message_created_from_edit_fallback",
-      id,
+    
+    // Log successful processing using consolidated logging
+    await logProcessingEvent(
+      "media_message_created",
+      messageId,
       correlationId,
       {
-        message_id: message.message_id,
-        chat_id: message.chat.id
+        telegram_message_id: message.message_id,
+        chat_id: message.chat.id,
+        media_type: message.photo ? 'photo' : message.video ? 'video' : 'document',
+        media_group_id: message.media_group_id,
+        is_forward: isForwarded,
+        message_url: message_url
       }
     );
-
-    return {
-      success: true,
-      id,
-      status,
-      action: 'created_from_edit',
-      needsProcessing: true
-    };
-  }
-}
-
-/**
- * Handler for new media messages
- */
-async function handleNewMediaMessage(
-  message: TelegramMessage,
-  context: MessageContext
-): Promise<MessageProcessResult> {
-  const { correlationId, logger } = context;
-  const isChannelPost = message.sender_chat?.type === 'channel';
-  const messageUrl = buildTelegramMessageUrl(message.chat.id, message.message_id);
-
-  logger?.info(`Processing new media message: ${message.message_id}`, {
-    chat_id: message.chat.id,
-    message_url: messageUrl,
-  });
-
-  // Check for existing message first
-  const { exists: messageExists, id: existingMessageId, caption: existingCaption } = await checkExistingMessage(
-    message.message_id,
-    message.chat.id
-  );
-
-  if (messageExists && existingMessageId) {
-    logger?.info(`Message ${message.message_id} already exists (DB ID: ${existingMessageId})`);
-
-    // For media groups, skip processing if message exists (no captions allowed)
+    
+    if (logger) {
+      logger.success(`Successfully processed media message ${message.message_id}`, {
+        message_id: message.message_id,
+        db_id: messageId,
+        media_group_id: message.media_group_id,
+        message_url: message_url
+      });
+    }
+    
+    // If part of a media group, check if we have other messages that have analyzed content
     if (message.media_group_id) {
-      return {
-        success: true,
-        id: existingMessageId,
-        status: 'existing',
-        action: 'skipped',
-        needsProcessing: false
-      };
-    }
-
-    // For non-media group messages with caption
-    if (message.caption) {
-      // If caption is the same, skip processing
-      if (existingCaption === message.caption) {
-        return {
-          success: true,
-          id: existingMessageId,
-          status: 'existing',
-          action: 'skipped',
-          needsProcessing: false
-        };
+      if (logger) {
+        logger.info(`Media message ${message.message_id} belongs to group ${message.media_group_id}`);
       }
-
-      // If caption changed, update it without creating edit history
-      const { success, error_message } = await supabaseClient
-        .from('messages')
-        .update({
-          caption: message.caption,
-          processing_state: 'pending',
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', existingMessageId);
-
-      if (!success) {
-        throw new Error(error_message || "Failed to update message caption");
-      }
-
-      return {
-        success: true,
-        id: existingMessageId,
-        status: 'updated',
-        action: 'caption_updated',
-        needsProcessing: true
-      };
-    }
-
-    // For non-media group messages without caption, skip processing
-    return {
-      success: true,
-      id: existingMessageId,
-      status: 'existing',
-      action: 'skipped',
-      needsProcessing: false
-    };
-  }
-
-  // Check for media group duplicates
-  if (message.media_group_id) {
-    const telegramFile = message.photo
-      ? message.photo[message.photo.length - 1]
-      : message.video || message.document;
-
-    if (telegramFile?.file_unique_id) {
-      const { exists: duplicateExists, id: duplicateId } = await checkMediaGroupDuplicate(
-        message.media_group_id,
-        telegramFile.file_unique_id
-      );
-
-      if (duplicateExists && duplicateId) {
-        logger?.warn(`Duplicate media detected in media group`, {
-          existing_id: duplicateId,
-          file_unique_id: telegramFile.file_unique_id,
-          media_group_id: message.media_group_id
-        });
-
-        return {
-          success: true,
-          id: duplicateId,
-          status: 'duplicate',
-          action: 'skipped',
-          needsProcessing: false
-        };
+      
+      // Try to sync content from existing messages in the group
+      try {
+        // Find a message with caption and sync from it
+        const { success: syncSuccess, error: syncError, updatedCount } = await syncMediaGroupContent(
+          messageId,
+          message.media_group_id,
+          correlationId
+        );
+        
+        if (syncSuccess && updatedCount && updatedCount > 0) {
+          if (logger) {
+            logger.info(`Synced content to ${updatedCount} messages in media group ${message.media_group_id}`);
+          }
+        } else if (syncError) {
+          if (logger) {
+            logger.warn(`Media group sync warning: ${syncError}`);
+          }
+        }
+      } catch (syncError) {
+        if (logger) {
+          logger.warn(`Failed to sync media group: ${syncError.message}`);
+        }
       }
     }
-  }
-
-  // Process media
-  const mediaResult = await processMessageMedia(message);
-
-  if (!mediaResult.success) {
-    throw new Error(`Failed to process media: ${mediaResult.error}`);
-  }
-
-  // Create message in database
-  const { success, id, status, error_message } = await createMessage({
-    ...mediaResult.mediaData,
-    is_channel_post: isChannelPost,
-    correlation_id: correlationId,
-    telegram_message_id: message.message_id,
-    chat_id: message.chat.id,
-    file_unique_id: message.photo
-      ? message.photo[message.photo.length - 1].file_unique_id
-      : message.video?.file_unique_id || message.document?.file_unique_id
-  }, logger);
-
-  if (!success || !id) {
-    throw new Error(error_message || "Failed to create message record");
-  }
-
-  logger?.success(`Successfully processed new media message. DB ID: ${id}`);
-
-  // Log event
-  const eventType = status === 'new' ? "message_created" : "message_duplicate_handled";
-  await logEvent(
-    eventType,
-    id,
-    correlationId,
-    {
-      rpc_status: status,
-      message_id: message.message_id,
-      chat_id: message.chat.id
+    
+    return new Response(
+      JSON.stringify({ 
+        success: true, 
+        messageId, 
+        correlationId,
+        message_url: message_url 
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  } catch (error) {
+    if (context.logger) {
+      context.logger.error(`Error processing media message: ${error.message}`, { 
+        error: error.stack,
+        message_id: message.message_id,
+        chat_id: message.chat.id
+      });
     }
-  );
-
-  return {
-    success: true,
-    id,
-    status,
-    action: status === 'new' ? 'created' : 'updated',
-    needsProcessing: status === 'new'
-  };
+    
+    // Log the error using consolidated logging
+    await logProcessingEvent(
+      "media_message_processing_error",
+      "system",
+      context.correlationId,
+      {
+        telegram_message_id: message.message_id,
+        chat_id: message.chat.id,
+        media_type: message.photo ? 'photo' : message.video ? 'video' : 'document'
+      },
+      error.message
+    );
+    
+    return new Response(
+      JSON.stringify({ 
+        success: false, 
+        error: error.message || 'Unknown error processing media message',
+        correlationId: context.correlationId
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+    );
+  }
 }

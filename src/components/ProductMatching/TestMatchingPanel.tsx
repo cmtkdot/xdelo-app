@@ -11,7 +11,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { Loader2, Search } from "lucide-react";
 import { TestResultsDisplay } from "./TestResultsDisplay";
 import { fetchMatchingConfig } from "@/lib/productMatchingConfig";
-import { GlProduct } from "@/integrations/supabase/databaseExtensions";
 
 interface TestResult {
   messageId: string;
@@ -30,15 +29,7 @@ export const TestMatchingPanel = () => {
   const [selectedMessageId, setSelectedMessageId] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
-  const [messages, setMessages] = useState<{
-    id: string;
-    caption?: string;
-    analyzed_content?: {
-      product_name?: string;
-      vendor_uid?: string;
-      purchase_date?: string;
-    };
-  }[]>([]);
+  const [messages, setMessages] = useState<any[]>([]);
   const [result, setResult] = useState<TestResult | null>(null);
   const [customText, setCustomText] = useState("");
   const [useCustomText, setUseCustomText] = useState(false);
@@ -126,12 +117,12 @@ export const TestMatchingPanel = () => {
       
       // If we have a match
       if (matchingResult?.bestMatch) {
-        // Get product details using functions.invoke to bypass type issues
-        const { data: products } = await supabase.functions.invoke('gl-products-lookup', {
-          body: { productIds: [matchingResult.bestMatch.product_id] }
-        });
-        
-        const product = products?.length > 0 ? products[0] : null;
+        // Get product details
+        const { data: product } = await supabase
+          .from('gl_products')
+          .select('new_product_name, id')
+          .eq('id', matchingResult.bestMatch.product_id)
+          .single();
           
         setResult({
           messageId: useCustomText ? 'custom-text' : selectedMessageId,

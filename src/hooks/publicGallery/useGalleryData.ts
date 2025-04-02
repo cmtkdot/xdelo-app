@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+
+import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Message } from '@/types';
 import { toast } from 'sonner';
@@ -23,37 +24,31 @@ export function useGalleryData({
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [hasMoreItems, setHasMoreItems] = useState(true);
   const [vendors, setVendors] = useState<string[]>([]);
-  const [isLoadingVendors, setIsLoadingVendors] = useState(false);
 
-  const fetchVendors = useCallback(async () => {
+  // Fetch available vendors for filter
+  const fetchVendors = async () => {
     try {
-      setIsLoadingVendors(true);
       const { data, error } = await supabase
         .from('messages')
         .select('vendor_uid')
+        .is('deleted_from_telegram', false)
         .not('vendor_uid', 'is', null)
-        .order('vendor_uid')
-        .limit(100);
+        .order('vendor_uid');
 
       if (error) {
-        console.error('Error fetching vendors:', error);
+        console.error("Error fetching vendors:", error);
         return;
       }
 
-      const uniqueVendors = [...new Set(
-        data
-          .map(item => item.vendor_uid)
-          .filter(Boolean)
-          .map(item => String(item))
-      )];
-      
-      setVendors(uniqueVendors);
-    } catch (error) {
-      console.error('Error in fetchVendors:', error);
-    } finally {
-      setIsLoadingVendors(false);
+      if (data) {
+        // Extract unique vendor values
+        const uniqueVendors = [...new Set(data.map(item => item.vendor_uid).filter(Boolean))];
+        setVendors(uniqueVendors);
+      }
+    } catch (err) {
+      console.error("Error in fetchVendors:", err);
     }
-  }, []);
+  };
 
   const fetchMessages = async (fetchPage = 1, append = false) => {
     if (fetchPage === 1) {
@@ -63,17 +58,21 @@ export function useGalleryData({
     }
 
     try {
+      // Build the base query
       let query = supabase
         .from('messages')
         .select('*')
         .is('deleted_from_telegram', false);
 
+      // Apply vendor filter if any
       if (vendorFilter.length > 0) {
         query = query.in('vendor_uid', vendorFilter);
       }
 
+      // Apply sort order
       query = query.order(dateField, { ascending: sortOrder === 'asc' });
 
+      // Apply pagination
       query = query.range((fetchPage - 1) * itemsPerPage, fetchPage * itemsPerPage - 1);
 
       const { data, error } = await query;
@@ -85,6 +84,7 @@ export function useGalleryData({
       }
 
       if (data) {
+        // Use type assertion to convert database response to Message[]
         const newMessages = data as unknown as Message[];
         
         if (newMessages.length < itemsPerPage) {
@@ -105,11 +105,13 @@ export function useGalleryData({
     }
   };
 
+  // Load initial data
   useEffect(() => {
     fetchMessages(page);
     fetchVendors();
   }, [vendorFilter, dateField, sortOrder, page]);
 
+  // Delete a message - updates local state
   const deleteMessage = (id: string) => {
     setMessages(prev => prev.filter(message => message.id !== id));
   };

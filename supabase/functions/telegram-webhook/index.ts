@@ -1,221 +1,181 @@
 
-/**
- * Main entry point for the Telegram webhook
- */
-import { serve } from "https://deno.land/std@0.217.0/http/server.ts";
-import { createHandler, SecurityLevel, RequestMetadata } from "../_shared/unifiedHandler.ts";
-import { isMessageForwarded } from "./utils/messageUtils.ts";
-import { logEvent, logErrorEvent } from "./services/loggingService.ts";
-import { checkExistingMessage } from "./services/databaseService.ts";
-import { handleEditedMessage, handleMediaMessage, handleOtherMessage } from "./handlers/index.ts";
-import { createTelegramErrorResponse } from "./services/responseService.ts";
-import { Logger } from "./utils/logger.ts";
+import { serve } from "https://deno.land/std@0.208.0/http/server.ts";
+import { handleMediaMessage } from './handlers/mediaMessageHandler.ts';
+import { handleOtherMessage } from './handlers/textMessageHandler.ts';
+import { handleEditedMessage } from './handlers/editedMessageHandler.ts';
+import { corsHeaders } from '../_shared/cors.ts';
+import { logProcessingEvent } from '../_shared/consolidatedMessageUtils.ts';
+import { Logger } from './utils/logger.ts';
+import { isMessageForwarded } from '../_shared/consolidatedMessageUtils.ts';
 
-// Define the core handler logic
-const webhookHandler = async (req: Request, metadata: RequestMetadata) => {
-  // Create a logger using the correlation ID from metadata
-  const logger = new Logger(metadata.correlationId, "telegram-webhook");
+serve(async (req: Request) => {
+  // Generate a correlation ID for tracing
+  const correlationId = crypto.randomUUID();
+  
+  // Create a main logger for this request
+  const logger = new Logger(correlationId, 'telegram-webhook');
+  
+  // Handle CORS preflight requests
+  if (req.method === 'OPTIONS') {
+    logger.debug('Received OPTIONS request, returning CORS headers');
+    return new Response(null, { headers: corsHeaders });
+  }
 
   try {
-    // Log webhook received event
-    logger.info("Webhook received", {
-      method: metadata.method,
-      path: metadata.path,
+    // Log webhook received event with basic info only
+    logger.info('Webhook received', {
+      method: req.method,
+      url: req.url,
     });
-
-    await logEvent(
+    
+    await logProcessingEvent(
       "webhook_received",
       "system",
-      metadata.correlationId,
+      correlationId,
       {
         source: "telegram-webhook",
-        timestamp: new Date().toISOString(),
+        timestamp: new Date().toISOString()
       }
     );
 
-    // Parse the update from Telegram
+    // Parse the update from Telegram with timeout
     let update;
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000);
       update = await req.json();
       clearTimeout(timeoutId);
-
-      logger.info("Received Telegram update", {
+      
+      logger.info('Received Telegram update', { 
         update_id: update.update_id,
-        update_type: Object.keys(update)
-          .filter((k) => k !== "update_id")
-          .join(", "),
+        update_type: Object.keys(update).filter(k => k !== 'update_id').join(', ')
       });
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      const errorName = error instanceof Error ? error.name : "UnknownError";
-      logger.error("Failed to parse request body", { error: errorMessage });
-      
-      throw new Error(errorName === "AbortError" 
-        ? "Request timeout parsing JSON" 
-        : `Invalid JSON in request body: ${errorMessage}`);
+      logger.error('Failed to parse request body', { error: error.message });
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: error.name === 'AbortError' ? 'Request timeout parsing JSON' : 'Invalid JSON in request body',
+        correlationId
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 400
+      });
     }
 
-    // Get the message object
-    const message =
-      update.message ||
-      update.edited_message ||
-      update.channel_post ||
-      update.edited_channel_post;
-      
+    // Get the message object, checking for different types of updates
+    const message = update.message || update.edited_message || update.channel_post || update.edited_channel_post;
     if (!message) {
-      logger.warn("No processable content in update", {
-        update_keys: Object.keys(update),
+      logger.warn('No processable content in update', { update_keys: Object.keys(update) });
+      return new Response(JSON.stringify({ 
+        success: false, 
+        message: "No processable content",
+        correlationId
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 400
       });
-      throw new Error("No processable content in update");
     }
-
-    // --- Check Retry Limit ---
-    const MAX_RETRIES = 3;
-    
-    // Check if message already exists and has reached retry limit
-    const { exists, id: existingId, retryCount } = await checkExistingMessage(
-      message.message_id,
-      message.chat?.id
-    );
-
-    if (exists && (retryCount || 0) >= MAX_RETRIES) {
-      logger.warn(`Max retries (${MAX_RETRIES}) reached for message ${message.message_id}. Skipping processing.`, {
-        message_id: message.message_id,
-        chat_id: message.chat?.id,
-        retry_count: retryCount,
-      });
-      
-      await logEvent(
-        "max_retries_reached",
-        existingId || message.message_id.toString(),
-        metadata.correlationId,
-        {
-          message_id: message.message_id,
-          chat_id: message.chat?.id,
-          retry_count: retryCount,
-        }
-      );
-      
-      // Return 200 OK to Telegram to stop further retries
-      return new Response(
-        JSON.stringify({ 
-          success: true, 
-          message: "Max retries reached, skipping.", 
-          correlationId: metadata.correlationId 
-        }), 
-        { 
-          status: 200, 
-          headers: { 'Content-Type': 'application/json' } 
-        }
-      );
-    }
-    // --- End Retry Limit Check ---
 
     // Determine message context
     const context = {
       isChannelPost: !!update.channel_post || !!update.edited_channel_post,
       isForwarded: isMessageForwarded(message),
-      correlationId: metadata.correlationId,
+      correlationId,
       isEdit: !!update.edited_message || !!update.edited_channel_post,
       previousMessage: update.edited_message || update.edited_channel_post,
-      logger,
-      startTime: new Date().toISOString(),
-      metadata
+      logger, // Add logger to context so handlers can use it
+      startTime: new Date().toISOString() // Add startTime as ISO string to track processing duration
     };
 
-    // Log message details
-    logger.info("Processing message", {
+    // Log message details with sensitive data masked
+    logger.info('Processing message', {
       message_id: message.message_id,
       chat_id: message.chat?.id,
+      chat_type: message.chat?.type,
+      is_edit: context.isEdit,
+      is_forwarded: context.isForwarded,
+      has_media: !!(message.photo || message.video || message.document),
+      has_caption: !!message.caption,
+      caption_length: message.caption?.length,
+      media_group_id: message.media_group_id,
+      media_type: message.photo ? 'photo' : message.video ? 'video' : message.document ? 'document' : 'none'
     });
 
     // Handle different message types
+    let response;
+    
     try {
-      // Determine if the message (new or edited) contains media
-      const hasMedia = !!(message.photo || message.video || message.document);
-
-      let response;
-      
+      // Handle edited messages
       if (context.isEdit) {
-        // Handle edited messages
-        if (hasMedia) {
-          // Edited message WITH media -> media handler
-          logger.info("Routing edited message with media to media message handler");
-          response = await handleMediaMessage(message, context);
-        } else {
-          // Edited message WITHOUT media -> generic edit handler
-          logger.info("Routing edited message without media to edited message handler");
-          response = await handleEditedMessage(message, context);
-        }
-      } else {
-        // Handle new messages
-        if (hasMedia) {
-          // New message WITH media -> media handler
-          logger.info("Routing new media message to media message handler");
-          response = await handleMediaMessage(message, context);
-        } else {
-          // New message WITHOUT media -> text handler
-          logger.info("Routing new text message to text message handler");
-          response = await handleOtherMessage(message, context);
-        }
+        logger.info('Routing to edited message handler', { message_id: message.message_id });
+        response = await handleEditedMessage(message, context);
       }
-
-      logger.info("Successfully processed message", {
+      // Handle media messages (photos, videos, documents)
+      else if (message.photo || message.video || message.document) {
+        logger.info('Routing to media message handler', { message_id: message.message_id });
+        response = await handleMediaMessage(message, context);
+      }
+      // Handle other types of messages
+      else {
+        logger.info('Routing to text message handler', { message_id: message.message_id });
+        response = await handleOtherMessage(message, context);
+      }
+      
+      logger.info('Successfully processed message', { 
         message_id: message.message_id,
-        processing_time: new Date().getTime() - new Date(context.startTime).getTime(),
+        chat_id: message.chat?.id,
+        processing_time: new Date().getTime() - new Date(context.startTime).getTime()
       });
-
-      // Return the raw response
+      
       return response;
     } catch (handlerError) {
-      const handlerErrorMessage = handlerError instanceof Error ? handlerError.message : String(handlerError);
-      const handlerErrorStack = handlerError instanceof Error ? handlerError.stack : undefined;
-      
-      logger.error("Error in message handler", {
-        error: handlerErrorMessage,
-        stack: handlerErrorStack,
-        message_id: message.message_id,
+      logger.error('Error in message handler', { 
+        error: handlerError.message,
+        stack: handlerError.stack,
+        message_id: message.message_id
       });
-
+      
       // Log the error to the database
-      await logErrorEvent(
+      await logProcessingEvent(
         "message_processing_failed",
         message.message_id.toString(),
-        metadata.correlationId,
-        handlerError,
+        correlationId,
         {
           message_id: message.message_id,
           chat_id: message.chat?.id,
-          handler_type: "message_handler"
-        }
+          is_edit: context.isEdit,
+          has_media: !!(message.photo || message.video || message.document),
+          handler_type: context.isEdit ? 'edited_message' : 
+                       (message.photo || message.video || message.document) ? 'media_message' : 'other_message',
+          error: handlerError.message
+        },
+        handlerError.message || "Unknown handler error"
       );
-
-      // Return Telegram compatible error response (status 200)
-      return createTelegramErrorResponse(handlerError, metadata.correlationId);
+      
+      // Return error response but with 200 status to acknowledge to Telegram
+      // (Telegram will retry if we return non-200 status)
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: handlerError.message,
+        correlationId
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200 // Still return 200 to prevent Telegram from retrying
+      });
     }
   } catch (error) {
-    const initialErrorMessage = error instanceof Error ? error.message : String(error);
-    const initialErrorStack = error instanceof Error ? error.stack : undefined;
-    
-    // Log any unexpected errors during initial processing
-    logger.error("Unhandled error during initial webhook processing", {
-      error: initialErrorMessage,
-      stack: initialErrorStack,
+    logger.error('Unhandled error processing webhook', { 
+      error: error.message,
+      stack: error.stack
     });
     
-    // Re-throw for the unified handler to catch and format
-    throw error;
+    return new Response(JSON.stringify({ 
+      success: false, 
+      error: error.message || 'Unknown error',
+      correlationId
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 500
+    });
   }
-};
-
-// Create the handler instance using the builder
-const handler = createHandler(webhookHandler)
-  .withMethods(['POST'])
-  .withSecurity(SecurityLevel.PUBLIC)
-  .withLogging(true)
-  .withMetrics(true);
-
-// Serve the built handler
-serve(handler.build());
+});

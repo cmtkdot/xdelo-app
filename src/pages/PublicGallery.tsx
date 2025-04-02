@@ -1,5 +1,5 @@
+
 import { Message } from "@/types";
-import { adaptMessage } from '@/lib/messageAdapter';
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from "sonner";
@@ -40,6 +40,7 @@ const PublicGallery = () => {
     deleteMessage
   } = usePublicGallery();
 
+  // Use the public viewer hook
   const {
     isOpen,
     currentGroup,
@@ -51,38 +52,45 @@ const PublicGallery = () => {
     goToPreviousGroup,
   } = usePublicViewer(mediaGroups);
 
+  // Function to find and open the correct group based on clicked item
   const handleMediaClick = (message: Message) => {
+    // Find which group this message belongs to
     const groupIndex = mediaGroups.findIndex(group => 
       group.some(item => item.id === message.id)
     );
     
     if (groupIndex !== -1) {
       const group = mediaGroups[groupIndex];
+      // Find index of this message within its group
       const messageIndex = group.findIndex(item => item.id === message.id);
       
+      // Open viewer with this group and position it at the clicked message
       openViewer(group, messageIndex);
     }
   };
 
+  // CRUD operations for messages
   const handleDeleteMessage = async (id: string) => {
     try {
+      // Find the message to delete
       const messageToDelete = messages.find(message => message.id === id);
       if (!messageToDelete) {
         toast.error("Message not found");
         return;
       }
       
+      // For UI responsiveness, update the local state immediately
       deleteMessage(id);
       
-      const adaptedMessage = adaptMessage(messageToDelete);
-      
-      await handleDelete(adaptedMessage, false);
+      // Now let the Telegram operations handle the actual deletion
+      await handleDelete(messageToDelete, false);
       
       toast.success("Item deleted successfully");
     } catch (error) {
       console.error("Error in delete operation:", error);
       toast.error("An error occurred during deletion");
       
+      // Revert the optimistic update if the deletion failed
       fetchMessages(currentPage);
     }
   };
@@ -141,6 +149,7 @@ const PublicGallery = () => {
             />
           )}
 
+          {/* Public Media Viewer */}
           <PublicMediaViewer
             isOpen={isOpen}
             onClose={closeViewer}

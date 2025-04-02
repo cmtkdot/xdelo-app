@@ -1,42 +1,31 @@
 
-// Types for useMediaUtils hook
+import { Message } from '@/types/entities/Message';
 
+/**
+ * Result type for media operations
+ */
+export interface RepairResult {
+  success: boolean;
+  message?: string;
+  successful?: number;
+  failed?: number;
+  error?: string;
+  data?: any;
+}
+
+/**
+ * Media processing state
+ */
 export interface MediaProcessingState {
   isProcessing: boolean;
   processingMessageIds: Record<string, boolean>;
 }
 
+/**
+ * Media processing state actions
+ */
 export interface MediaProcessingStateActions {
-  setIsProcessing: (isProcessing: boolean) => void;
-  addProcessingMessageId: (messageId: string) => void;
-  removeProcessingMessageId: (messageId: string) => void;
-}
-
-export interface MediaSyncOptions {
-  forceSync?: boolean;
-  syncEditHistory?: boolean;
-}
-
-export interface RepairResult {
-  success: boolean;
-  repaired?: number;
-  message?: string;
-  error?: string;
-  details?: Array<{
-    messageId: string;
-    success: boolean;
-    error?: string;
-    message?: string;
-  }>;
-  successful?: number;
-  failed?: number;
-}
-
-export interface CaptionFlowData {
-  success: boolean;
-  message: string;
-  message_id?: string;
-  media_group_synced?: boolean;
-  caption_updated?: boolean;
-  parsed_content?: any;
+  setIsProcessing: (value: boolean) => void;
+  addProcessingMessageId: (id: string) => void;
+  removeProcessingMessageId: (id: string) => void;
 }

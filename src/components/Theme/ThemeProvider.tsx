@@ -48,7 +48,7 @@ export function ThemeProvider({
 
   useEffect(() => {
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-
+    
     const handleChange = () => {
       if (theme === "system") {
         const root = window.document.documentElement;
