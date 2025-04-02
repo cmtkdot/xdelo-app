@@ -1,9 +1,6 @@
-
-import { 
-  logProcessingEvent, 
+import {
   extractTelegramMetadata,
-  createSupabaseClient,
-  supabaseClient as sharedSupabaseClient 
+  supabaseClient as sharedSupabaseClient
 } from '../_shared/consolidatedMessageUtils.ts';
 
 /**
@@ -114,12 +111,72 @@ export async function createMediaMessage(
     message_url?: string;
     telegram_metadata?: any;
   }
-): Promise<{ id?: string; success: boolean; error?: string }> {
+): Promise<{ id?: string; success: boolean; error?: string; is_duplicate?: boolean }> {
   try {
     // Extract essential metadata only
     const telegramMetadata = input.telegram_metadata || extractTelegramMetadata(input.telegram_data);
     
-    // Create the message record
+    // First, check if a message with this file_unique_id already exists
+    const { data: existingData, error: lookupError } = await supabaseClient
+      .from('messages')
+      .select('id, telegram_message_id, chat_id, caption, edit_count')
+      .eq('file_unique_id', input.file_unique_id)
+      .limit(1);
+    
+    if (lookupError) {
+      console.error('Error checking for existing message:', lookupError);
+      // Continue with insert attempt
+    }
+    
+    // If the file already exists, update it instead of inserting
+    if (existingData && existingData.length > 0) {
+      const existingMessage = existingData[0];
+      
+      // Update the existing record
+      const { data: updatedData, error: updateError } = await supabaseClient
+        .from('messages')
+        .update({
+          // Only update certain fields to preserve history
+          telegram_message_id: input.telegram_message_id,
+          chat_id: input.chat_id,
+          chat_type: input.chat_type,
+          chat_title: input.chat_title,
+          caption: input.caption || '',
+          media_group_id: input.media_group_id,
+          file_id: input.file_id, // Update with latest file_id
+          mime_type: input.mime_type || existingMessage.mime_type,
+          telegram_metadata: {
+            ...telegramMetadata,
+            previous_metadata: existingMessage.telegram_metadata
+          },
+          is_duplicate: true,
+          duplicate_reference_id: existingMessage.id,
+          processing_state: 'completed', // Mark as already processed
+          correlation_id: input.correlation_id,
+          message_url: input.message_url,
+          edit_count: (existingMessage.edit_count || 0) + 1,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', existingMessage.id)
+        .select('id')
+        .single();
+      
+      if (updateError) {
+        console.error('Failed to update existing message record:', updateError);
+        return { success: false, error: updateError.message };
+      }
+      
+      // Log that we found and updated a duplicate
+      console.log(`Found duplicate file_unique_id (${input.file_unique_id}). Updated existing record: ${existingMessage.id}`);
+      
+      return { 
+        id: existingMessage.id, 
+        success: true, 
+        is_duplicate: true 
+      };
+    }
+    
+    // If no existing message found, create a new one
     const { data, error } = await supabaseClient
       .from('messages')
       .insert({
@@ -150,6 +207,31 @@ export async function createMediaMessage(
       .single();
       
     if (error) {
+      // Handle specific case of duplicate file_unique_id constraint error
+      if (error.code === '23505' && error.message.includes('messages_file_unique_id_key')) {
+        // This is a race condition - the record was created after our check but before our insert
+        console.log('Race condition detected with duplicate file_unique_id. Attempting to find the record...');
+        
+        // Try to fetch the record again
+        const { data: raceData, error: raceLookupError } = await supabaseClient
+          .from('messages')
+          .select('id')
+          .eq('file_unique_id', input.file_unique_id)
+          .limit(1);
+          
+        if (!raceLookupError && raceData && raceData.length > 0) {
+          return { 
+            id: raceData[0].id, 
+            success: true, 
+            is_duplicate: true,
+            error: 'Duplicate detected and handled' 
+          };
+        }
+        
+        console.error('Failed to resolve race condition with duplicate file_unique_id:', error);
+        return { success: false, error: 'Duplicate file detected but could not resolve the reference.' };
+      }
+      
       console.error('Failed to create media message record:', error);
       return { success: false, error: error.message };
     }
