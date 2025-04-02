@@ -1,6 +1,16 @@
 import { serve } from "https://deno.land/std@0.208.0/http/server.ts";
+import { xdelo_processMessageMedia } from "../_shared/mediaUtils.ts";
 import { MessageContext, MessageInput, TelegramMessage } from "../_shared/types.ts";
-import { checkMessageExists, constructMessageUrl, corsHeaders, extractForwardInfo, formatErrorResponse, formatSuccessResponse, logEvent, supabaseClient } from "../_shared/utils.ts";
+import {
+  checkMessageExists,
+  constructMessageUrl,
+  corsHeaders,
+  extractForwardInfo,
+  formatErrorResponse,
+  formatSuccessResponse,
+  logEvent,
+  supabase as supabaseClient
+} from "../_shared/utils.ts";
 
 /**
  * Handler for new media messages (photos, videos, documents)
@@ -111,7 +121,90 @@ async function handleMediaMessage(message: TelegramMessage, context: MessageCont
     
     const messageId = data.id;
     
-    // Log successful processing
+    // Process media (download from Telegram and upload to storage)
+    const telegramBotToken = Deno.env.get('TELEGRAM_BOT_TOKEN');
+    if (!telegramBotToken) {
+      console.error('Missing TELEGRAM_BOT_TOKEN environment variable');
+      
+      await logEvent(
+        "media_processing_error",
+        messageId,
+        correlationId,
+        {
+          error: 'Missing TELEGRAM_BOT_TOKEN environment variable'
+        },
+        'Missing TELEGRAM_BOT_TOKEN environment variable'
+      );
+    } else {
+      try {
+        console.log(`Processing media for message ${message.message_id}, file ID: ${fileId}`);
+        
+        // Call the media processing function
+        const mediaResult = await xdelo_processMessageMedia(
+          message,
+          fileId,
+          fileUniqueId,
+          telegramBotToken,
+          messageId
+        );
+        
+        if (mediaResult.success) {
+          console.log(`Successfully processed media for message ${message.message_id}`);
+          
+          // If not already handled by processMessageMedia, update message with storage info
+          if (!mediaResult.isDuplicate) {
+            await supabaseClient
+              .from("messages")
+              .update({
+                storage_path: mediaResult.fileInfo.storage_path,
+                public_url: mediaResult.fileInfo.public_url,
+                mime_type: mediaResult.fileInfo.mime_type,
+                mime_type_verified: true,
+                storage_exists: true,
+                storage_path_standardized: true
+              })
+              .eq('id', messageId);
+          }
+          
+          await logEvent(
+            "media_processing_completed",
+            messageId,
+            correlationId,
+            {
+              storage_path: mediaResult.fileInfo.storage_path,
+              public_url: mediaResult.fileInfo.public_url,
+              is_duplicate: mediaResult.isDuplicate
+            }
+          );
+        } else {
+          console.error(`Failed to process media: ${mediaResult.error}`);
+          
+          await logEvent(
+            "media_processing_error",
+            messageId,
+            correlationId,
+            {
+              error: mediaResult.error
+            },
+            mediaResult.error
+          );
+        }
+      } catch (mediaError) {
+        console.error(`Error processing media: ${mediaError.message}`);
+        
+        await logEvent(
+          "media_processing_error",
+          messageId,
+          correlationId,
+          {
+            error: mediaError.message
+          },
+          mediaError.message
+        );
+      }
+    }
+    
+    // Log successful message creation
     await logEvent(
       context.isEdit ? "edited_media_message_created" : "media_message_created",
       messageId,
@@ -303,7 +396,7 @@ async function handleEditedMessage(message: TelegramMessage, context: MessageCon
     // Find the existing message in our database
     const { data: existingMessage, error: findError } = await supabaseClient
       .from("messages")
-      .select("id, processing_state, analyzed_content, media_group_id, text, caption, edit_count")
+      .select("id, processing_state, analyzed_content, media_group_id, text, caption, edit_count, file_id, file_unique_id")
       .eq("chat_id", message.chat.id)
       .eq("telegram_message_id", message.message_id)
       .maybeSingle();
@@ -343,7 +436,51 @@ async function handleEditedMessage(message: TelegramMessage, context: MessageCon
         (existingMessage.text !== messageData.text)
       );
       
-      if (contentChanged) {
+      // Check if media has changed (by comparing file_id)
+      let mediaChanged = false;
+      if (isMediaMessage) {
+        let currentFileId = '';
+        if (message.photo) {
+          const largestPhoto = message.photo[message.photo.length - 1];
+          currentFileId = largestPhoto.file_id;
+        } else if (message.video) {
+          currentFileId = message.video.file_id;
+        } else if (message.document) {
+          currentFileId = message.document.file_id;
+        }
+        
+        // Media is considered changed if file_id is different
+        mediaChanged = currentFileId !== existingMessage.file_id;
+        
+        if (mediaChanged) {
+          console.log(`Media has changed for message ${message.message_id}: previous=${existingMessage.file_id}, current=${currentFileId}`);
+          
+          // Update file_id and file_unique_id
+          if (message.photo) {
+            const largestPhoto = message.photo[message.photo.length - 1];
+            messageData.file_id = largestPhoto.file_id;
+            messageData.file_unique_id = largestPhoto.file_unique_id;
+            messageData.width = largestPhoto.width;
+            messageData.height = largestPhoto.height;
+            messageData.file_size = largestPhoto.file_size;
+          } else if (message.video) {
+            messageData.file_id = message.video.file_id;
+            messageData.file_unique_id = message.video.file_unique_id;
+            messageData.width = message.video.width;
+            messageData.height = message.video.height;
+            messageData.duration = message.video.duration;
+            messageData.mime_type = message.video.mime_type;
+            messageData.file_size = message.video.file_size;
+          } else if (message.document) {
+            messageData.file_id = message.document.file_id;
+            messageData.file_unique_id = message.document.file_unique_id;
+            messageData.mime_type = message.document.mime_type;
+            messageData.file_size = message.document.file_size;
+          }
+        }
+      }
+      
+      if (contentChanged || mediaChanged) {
         // Store previous analyzed content
         if (existingMessage.analyzed_content) {
           messageData.old_analyzed_content = existingMessage.old_analyzed_content || [];
@@ -367,6 +504,79 @@ async function handleEditedMessage(message: TelegramMessage, context: MessageCon
         return formatErrorResponse(updateError.message, correlationId);
       }
       
+      // Process media if it changed
+      if (isMediaMessage && mediaChanged) {
+        const telegramBotToken = Deno.env.get('TELEGRAM_BOT_TOKEN');
+        if (telegramBotToken) {
+          try {
+            console.log(`Processing updated media for message ${message.message_id}`);
+            
+            // Process updated media
+            let fileId = '', fileUniqueId = '';
+            if (message.photo) {
+              const largestPhoto = message.photo[message.photo.length - 1];
+              fileId = largestPhoto.file_id;
+              fileUniqueId = largestPhoto.file_unique_id;
+            } else if (message.video) {
+              fileId = message.video.file_id;
+              fileUniqueId = message.video.file_unique_id;
+            } else if (message.document) {
+              fileId = message.document.file_id;
+              fileUniqueId = message.document.file_unique_id;
+            }
+            
+            // Call the media processing function
+            const mediaResult = await xdelo_processMessageMedia(
+              message,
+              fileId,
+              fileUniqueId,
+              telegramBotToken,
+              existingMessage.id
+            );
+            
+            if (mediaResult.success) {
+              console.log(`Successfully processed updated media for message ${message.message_id}`);
+              
+              // Log the media update
+              await logEvent(
+                "media_update_completed",
+                existingMessage.id,
+                correlationId,
+                {
+                  storage_path: mediaResult.fileInfo.storage_path,
+                  public_url: mediaResult.fileInfo.public_url,
+                  is_duplicate: mediaResult.isDuplicate
+                }
+              );
+            } else {
+              console.error(`Failed to process updated media: ${mediaResult.error}`);
+              
+              await logEvent(
+                "media_update_error",
+                existingMessage.id,
+                correlationId,
+                {
+                  error: mediaResult.error
+                },
+                mediaResult.error
+              );
+            }
+          } catch (mediaError) {
+            console.error(`Error processing updated media: ${mediaError.message}`);
+            
+            await logEvent(
+              "media_update_error",
+              existingMessage.id,
+              correlationId,
+              {
+                error: mediaError.message
+              },
+              mediaError.message
+            );
+          }
+        }
+      }
+      
       // Log the edit operation
       await logEvent(
         "message_edited",
@@ -375,14 +585,16 @@ async function handleEditedMessage(message: TelegramMessage, context: MessageCon
         {
           telegram_message_id: message.message_id,
           chat_id: message.chat.id,
-          content_changed: contentChanged
+          content_changed: contentChanged,
+          media_changed: mediaChanged
         }
       );
       
       return formatSuccessResponse({ 
         messageId: existingMessage.id, 
         action: 'updated',
-        content_changed: contentChanged
+        content_changed: contentChanged,
+        media_changed: mediaChanged
       }, correlationId);
     } 
     // If message not found, create a new one
