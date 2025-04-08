@@ -1,7 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import type { AnalyzedContent, TelegramMessage } from './types.ts';
 
-// Define CORS headers for all responses
+// CORS headers for all responses
 export const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -365,4 +365,8 @@ export function extractMessageMetadata(message: any): Record<string, any> {
     return metadata;
   } catch (error) {
     console.error('Error extracting message metadata:', error);
+    return {};
+  }
+}
+
  
