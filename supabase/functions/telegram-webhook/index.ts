@@ -3,8 +3,8 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { corsHeaders, formatErrorResponse, formatSuccessResponse, checkMessageExists, supabase } from "../_shared/baseUtils.ts";
-import { xdelo_processMessageMedia } from "../_shared/mediaUtils.ts";
+import { corsHeaders, formatErrorResponse, formatSuccessResponse, checkMessageExists, supabase, logEvent } from "../_shared/core.ts";
+import { xdelo_processMessageMedia, xdelo_findMediaGroupMessages } from "../_shared/media.ts";
 import { MessageContext, MessageInput, TelegramMessage, MediaResult, MediaInfo } from "../_shared/types.ts";
 
 // Constants
