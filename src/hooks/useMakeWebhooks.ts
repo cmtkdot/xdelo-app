@@ -1,4 +1,3 @@
-
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { MakeWebhookConfig, MakeEventType } from '@/types/make';
@@ -59,9 +58,25 @@ export function useMakeWebhooks() {
   // Create a new webhook
   const createWebhook = useMutation({
     mutationFn: async (webhook: Omit<MakeWebhookConfig, 'id' | 'created_at' | 'updated_at'>) => {
+      // Ensure webhook has all required fields
+      if (!webhook.name || !webhook.url || !webhook.event_types) {
+        throw new Error('Missing required fields: name, url, or event_types');
+      }
+
       const { data, error } = await supabase
         .from('make_webhook_configs')
-        .insert(webhook)
+        .insert({
+          name: webhook.name,
+          description: webhook.description,
+          url: webhook.url,
+          event_types: webhook.event_types,
+          is_active: webhook.is_active !== undefined ? webhook.is_active : true,
+          field_selection: webhook.field_selection || null,
+          payload_template: webhook.payload_template || null,
+          transformation_code: webhook.transformation_code || null,
+          headers: webhook.headers || null,
+          retry_config: webhook.retry_config || null
+        })
         .select()
         .single();
       

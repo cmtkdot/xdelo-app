@@ -2,7 +2,24 @@
 import { xdelo_parseCaption } from "../_shared/captionParser.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
-import { AnalysisRequest, MediaGroupResult } from "./types.ts";
+
+interface AnalysisRequest {
+  messageId: string;
+  caption?: string;
+  media_group_id?: string;
+  queue_id?: string;
+  isEdit?: boolean;
+  correlationId?: string;
+  trigger_source?: string;
+  force_reprocess?: boolean;
+}
+
+interface MediaGroupResult {
+  success: boolean;
+  synced_count: number;
+  media_group_id: string;
+  error?: string;
+}
 
 // Set up CORS headers for browser clients
 const corsHeaders = {

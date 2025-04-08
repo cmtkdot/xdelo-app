@@ -175,10 +175,10 @@ export function useMakeTestPayloads() {
   const generateDefaultTemplates = useMutation({
     mutationFn: async () => {
       const templates = Object.values(MakeEventType).map(eventType => {
-        let templatePayload;
+        let templatePayload: any;
         
         switch(eventType) {
-          case 'message_received':
+          case MakeEventType.MESSAGE_RECEIVED:
             templatePayload = {
               message: {
                 id: "msg_123456",
@@ -201,7 +201,7 @@ export function useMakeTestPayloads() {
             };
             break;
             
-          case 'channel_joined':
+          case MakeEventType.CHANNEL_JOINED:
             templatePayload = {
               channel: {
                 id: "channel_456",
@@ -234,7 +234,7 @@ export function useMakeTestPayloads() {
         return {
           name: `Default ${eventType} Template`,
           description: `Default template for ${eventType} events`,
-          event_type: eventType,
+          event_type: eventType as string,
           payload: templatePayload,
           is_template: true
         };
@@ -275,4 +275,4 @@ export function useMakeTestPayloads() {
     deleteTestPayload,
     generateDefaultTemplates
   };
-} 
+}

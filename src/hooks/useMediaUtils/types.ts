@@ -13,10 +13,10 @@ export interface MediaRepairOptions {
 
 export interface RepairResult {
   success: boolean;
-  message: string;
-  messageId?: string;
-  updatedFields?: string[];
-  error?: string;
+  successCount: number;
+  failureCount: number;
+  errors: Record<string, string>;
+  messages: string[];
 }
 
 export interface BatchOperationResult {
@@ -43,4 +43,15 @@ export interface BatchValidationResult {
   validCount: number;
   invalidCount: number;
   results: MediaValidationResult[];
+}
+
+export interface MediaProcessingState {
+  isProcessing: boolean;
+  processingMessageIds: Record<string, boolean>;
+}
+
+export interface MediaProcessingStateActions {
+  setIsProcessing: (isProcessing: boolean) => void;
+  addProcessingMessageId: (id: string) => void;
+  removeProcessingMessageId: (id: string) => void;
 }

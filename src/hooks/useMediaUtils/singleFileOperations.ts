@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from '@/hooks/useToast';
@@ -205,3 +204,76 @@ export function useSingleFileOperations(): UseSingleFileOperationsResult {
     reuploadMediaFromTelegram
   };
 }
+
+// Export the individual functions for direct usage
+export const uploadFile = async (file: File, storagePath?: string): Promise<string | null> => {
+  try {
+    // Get current user ID from Supabase auth
+    const { data: { user } } = await supabase.auth.getUser();
+    const userId = user?.id;
+    
+    if (!userId) {
+      throw new Error("User ID not available");
+    }
+
+    const filePath = storagePath || `${userId}/${file.name}`;
+    const { data, error } = await supabase.storage
+      .from('message_media')
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: false
+      });
+
+    if (error) {
+      throw new Error(`File upload failed: ${error.message}`);
+    }
+
+    return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/message_media/${data.path}`;
+  } catch (error: any) {
+    console.error("File upload error:", error.message);
+    return null;
+  }
+};
+
+export const deleteFile = async (filePath: string): Promise<boolean> => {
+  try {
+    const { error } = await supabase.storage
+      .from('message_media')
+      .remove([filePath]);
+
+    if (error) {
+      throw new Error(`File deletion failed: ${error.message}`);
+    }
+
+    return true;
+  } catch (error: any) {
+    console.error("File deletion error:", error.message);
+    return false;
+  }
+};
+
+export const reuploadMediaFromTelegram = async (messageId: string): Promise<boolean> => {
+  try {
+    // Call the dedicated edge function for reuploading from Telegram
+    const { data, error } = await supabase.functions.invoke('xdelo_reupload_media', {
+      body: { 
+        messageId,
+        forceReupload: true,
+        skipExistingCheck: true
+      }
+    });
+    
+    if (error) {
+      throw new Error(`Reupload failed: ${error.message}`);
+    }
+    
+    if (!data?.success) {
+      throw new Error(data?.message || 'Reupload operation failed');
+    }
+    
+    return true;
+  } catch (error) {
+    console.error("Error reuploading media:", error);
+    return false;
+  }
+};
