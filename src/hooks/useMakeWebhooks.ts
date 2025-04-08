@@ -3,6 +3,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { MakeWebhookConfig, MakeEventType } from '@/types/make';
 import { useToast } from '@/hooks/useToast';
+import { Database } from '@/integrations/supabase/database.types';
+
+type MakeWebhookConfigRow = Database['public']['Tables']['make_webhook_configs']['Row'];
 
 /**
  * Hook to manage Make webhooks
@@ -12,20 +15,14 @@ export function useMakeWebhooks() {
   const { toast } = useToast();
 
   // Helper function to transform database records to the expected type
-  const transformWebhookData = (data: any[]): MakeWebhookConfig[] => {
+  const transformWebhookData = (data: MakeWebhookConfigRow[]): MakeWebhookConfig[] => {
     return data.map(webhook => ({
-      id: webhook.id,
-      name: webhook.name,
-      url: webhook.url,
-      event_types: webhook.event_types || [],
-      is_active: webhook.is_active ?? false,
+      ...webhook,
       field_selection: webhook.field_selection || null,
       payload_template: webhook.payload_template || null,
       transformation_code: webhook.transformation_code || null,
       headers: webhook.headers || null,
-      retry_config: webhook.retry_config || null,
-      created_at: webhook.created_at,
-      updated_at: webhook.updated_at
+      retry_config: webhook.retry_config || null
     }));
   };
 
@@ -34,9 +31,13 @@ export function useMakeWebhooks() {
     useQuery({
       queryKey: ['make-webhooks'],
       queryFn: async (): Promise<MakeWebhookConfig[]> => {
-        // Mock response for now - table doesn't exist yet
-        console.log('Fetching webhooks (mock)');
-        return [];
+        const { data, error } = await supabase
+          .from('make_webhook_configs')
+          .select('*')
+          .order('created_at', { ascending: false });
+        
+        if (error) throw error;
+        return transformWebhookData(data as MakeWebhookConfigRow[]);
       },
       enabled,
     });
@@ -46,9 +47,14 @@ export function useMakeWebhooks() {
     useQuery({
       queryKey: ['make-webhooks', 'active'],
       queryFn: async (): Promise<MakeWebhookConfig[]> => {
-        // Mock response for now - table doesn't exist yet
-        console.log('Fetching active webhooks (mock)');
-        return [];
+        const { data, error } = await supabase
+          .from('make_webhook_configs')
+          .select('*')
+          .eq('is_active', true)
+          .order('created_at', { ascending: false });
+        
+        if (error) throw error;
+        return transformWebhookData(data as MakeWebhookConfigRow[]);
       },
       enabled,
     });
@@ -56,14 +62,30 @@ export function useMakeWebhooks() {
   // Create a new webhook
   const createWebhook = useMutation({
     mutationFn: async (webhook: Omit<MakeWebhookConfig, 'id' | 'created_at' | 'updated_at'>) => {
-      // Mock response for now - table doesn't exist yet
-      console.log('Creating webhook (mock):', webhook);
-      return {
-        ...webhook,
-        id: crypto.randomUUID(),
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      } as MakeWebhookConfig;
+      // Ensure webhook has all required fields
+      if (!webhook.name || !webhook.url || !webhook.event_types) {
+        throw new Error('Missing required fields: name, url, or event_types');
+      }
+
+      const { data, error } = await supabase
+        .from('make_webhook_configs')
+        .insert({
+          name: webhook.name,
+          description: webhook.description,
+          url: webhook.url,
+          event_types: webhook.event_types,
+          is_active: webhook.is_active !== undefined ? webhook.is_active : true,
+          field_selection: webhook.field_selection || null,
+          payload_template: webhook.payload_template || null,
+          transformation_code: webhook.transformation_code || null,
+          headers: webhook.headers || null,
+          retry_config: webhook.retry_config || null
+        } as any)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return transformWebhookData([data as MakeWebhookConfigRow])[0];
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['make-webhooks'] });
@@ -84,17 +106,15 @@ export function useMakeWebhooks() {
   // Update a webhook
   const updateWebhook = useMutation({
     mutationFn: async (webhook: Partial<MakeWebhookConfig> & { id: string }) => {
-      // Mock response for now - table doesn't exist yet
-      console.log('Updating webhook (mock):', webhook);
-      return {
-        id: webhook.id,
-        name: webhook.name || 'Unknown',
-        url: webhook.url || 'https://example.com',
-        event_types: webhook.event_types || [],
-        is_active: webhook.is_active ?? true,
-        updated_at: new Date().toISOString(),
-        created_at: new Date().toISOString()
-      } as MakeWebhookConfig;
+      const { data, error } = await supabase
+        .from('make_webhook_configs')
+        .update(webhook as any)
+        .eq('id', webhook.id)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return transformWebhookData([data as MakeWebhookConfigRow])[0];
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['make-webhooks'] });
@@ -115,17 +135,15 @@ export function useMakeWebhooks() {
   // Toggle a webhook's active state
   const toggleWebhook = useMutation({
     mutationFn: async ({ id, isActive }: { id: string; isActive: boolean }) => {
-      // Mock response for now - table doesn't exist yet
-      console.log('Toggling webhook (mock):', { id, isActive });
-      return {
-        id,
-        name: 'Mock Webhook',
-        url: 'https://example.com',
-        event_types: [],
-        is_active: isActive,
-        updated_at: new Date().toISOString(),
-        created_at: new Date().toISOString()
-      } as MakeWebhookConfig;
+      const { data, error } = await supabase
+        .from('make_webhook_configs')
+        .update({ is_active: isActive } as any)
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return transformWebhookData([data as MakeWebhookConfigRow])[0];
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['make-webhooks'] });
@@ -146,8 +164,12 @@ export function useMakeWebhooks() {
   // Delete a webhook
   const deleteWebhook = useMutation({
     mutationFn: async (id: string) => {
-      // Mock response for now - table doesn't exist yet
-      console.log('Deleting webhook (mock):', id);
+      const { error } = await supabase
+        .from('make_webhook_configs')
+        .delete()
+        .eq('id', id);
+      
+      if (error) throw error;
       return id;
     },
     onSuccess: (id) => {
@@ -169,9 +191,16 @@ export function useMakeWebhooks() {
   // Test a webhook
   const testWebhook = useMutation({
     mutationFn: async ({ id, payload }: { id: string; payload?: Record<string, any> }) => {
-      // Mock response for now - edge function doesn't exist yet
-      console.log('Testing webhook (mock):', { id, payload });
-      return { success: true };
+      // Implement via edge function call
+      const { data, error } = await supabase.functions.invoke('make-webhook-tester', {
+        body: {
+          webhookId: id,
+          testPayload: payload || { test: true, timestamp: new Date().toISOString() }
+        }
+      });
+      
+      if (error) throw error;
+      return data;
     },
     onSuccess: () => {
       toast({

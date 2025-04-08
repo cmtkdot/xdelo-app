@@ -1,121 +1,348 @@
-import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/hooks/useToast';
-import { LogEventType } from './types';
-import { RepairResult } from './types';
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import { RepairResult } from "./types";
+
+interface BatchOperationOptions {
+  onProgress?: (progress: number) => void;
+  onComplete?: () => void;
+  onError?: (error: string) => void;
+  batchSize?: number;
+}
 
 /**
- * Standardize storage paths for batch of media files
+ * Repair storage paths for messages
+ */
+export async function repairMessageStoragePaths(
+  messageIds: string[],
+  options: BatchOperationOptions = {}
+): Promise<RepairResult> {
+  const { onProgress, onComplete, onError, batchSize = 10 } = options;
+  let successCount = 0;
+  let failureCount = 0;
+  const errors: Record<string, string> = {};
+  const successMessages: string[] = [];
+
+  const totalMessages = messageIds.length;
+  let processedCount = 0;
+
+  for (let i = 0; i < messageIds.length; i += batchSize) {
+    const batch = messageIds.slice(i, i + batchSize);
+
+    try {
+      const { data, error } = await supabase.functions.invoke("repair-storage-path", {
+        body: { messageIds: batch },
+      });
+
+      if (error) {
+        batch.forEach((id) => {
+          errors[id] = error.message;
+          failureCount++;
+        });
+        onError?.(error.message);
+      } else {
+        if (data && data.repaired) {
+          data.repaired.forEach((messageId: string) => {
+            successCount++;
+            successMessages.push(`Repaired storage path for message ${messageId}`);
+          });
+        }
+        if (data && data.errors) {
+          Object.entries(data.errors).forEach(([messageId, errorMessage]) => {
+            errors[messageId] = errorMessage as string;
+            failureCount++;
+          });
+        }
+      }
+    } catch (e: any) {
+      batch.forEach((id) => {
+        errors[id] = e.message;
+        failureCount++;
+      });
+      onError?.(e.message);
+    }
+
+    processedCount += batch.length;
+    const progress = (processedCount / totalMessages) * 100;
+    onProgress?.(progress);
+  }
+
+  onComplete?.();
+
+  return {
+    success: successCount > 0,
+    successCount,
+    failureCount,
+    errors,
+    messages: successMessages
+  };
+}
+
+/**
+ * Redownload media for messages
+ */
+export async function redownloadMessageMedia(
+  messageIds: string[],
+  options: BatchOperationOptions = {}
+): Promise<RepairResult> {
+  const { onProgress, onComplete, onError, batchSize = 10 } = options;
+  let successCount = 0;
+  let failureCount = 0;
+  const errors: Record<string, string> = {};
+  const successMessages: string[] = [];
+
+  const totalMessages = messageIds.length;
+  let processedCount = 0;
+
+  for (let i = 0; i < messageIds.length; i += batchSize) {
+    const batch = messageIds.slice(i, i + batchSize);
+
+    try {
+      const { data, error } = await supabase.functions.invoke("redownload-media", {
+        body: { messageIds: batch },
+      });
+
+      if (error) {
+        batch.forEach((id) => {
+          errors[id] = error.message;
+          failureCount++;
+        });
+        onError?.(error.message);
+      } else {
+        if (data && data.redownloaded) {
+          data.redownloaded.forEach((messageId: string) => {
+            successCount++;
+            successMessages.push(`Redownloaded media for message ${messageId}`);
+          });
+        }
+        if (data && data.errors) {
+          Object.entries(data.errors).forEach(([messageId, errorMessage]) => {
+            errors[messageId] = errorMessage as string;
+            failureCount++;
+          });
+        }
+      }
+    } catch (e: any) {
+      batch.forEach((id) => {
+        errors[id] = e.message;
+        failureCount++;
+      });
+      onError?.(e.message);
+    }
+
+    processedCount += batch.length;
+    const progress = (processedCount / totalMessages) * 100;
+    onProgress?.(progress);
+  }
+
+  onComplete?.();
+
+  return {
+    success: successCount > 0,
+    successCount,
+    failureCount,
+    errors,
+    messages: successMessages
+  };
+}
+
+/**
+ * Standardize storage paths for messages
  */
 export async function standardizeStoragePaths(
-  limit: number = 100
+  messageIds: string[],
+  options: BatchOperationOptions = {}
 ): Promise<RepairResult> {
+  const { onProgress, onComplete, onError, batchSize = 10 } = options;
+  let successCount = 0;
+  let failureCount = 0;
+  const errors: Record<string, string> = {};
+  const successMessages: string[] = [];
+
+  const totalMessages = messageIds.length;
+  let processedCount = 0;
+
+  for (let i = 0; i < messageIds.length; i += batchSize) {
+    const batch = messageIds.slice(i, i + batchSize);
+
+    try {
+      const { data, error } = await supabase.functions.invoke("standardize-storage-path", {
+        body: { messageIds: batch },
+      });
+
+      if (error) {
+        batch.forEach((id) => {
+          errors[id] = error.message;
+          failureCount++;
+        });
+        onError?.(error.message);
+      } else {
+        if (data && data.standardized) {
+          data.standardized.forEach((messageId: string) => {
+            successCount++;
+            successMessages.push(`Standardized storage path for message ${messageId}`);
+          });
+        }
+        if (data && data.errors) {
+          Object.entries(data.errors).forEach(([messageId, errorMessage]) => {
+            errors[messageId] = errorMessage as string;
+            failureCount++;
+          });
+        }
+      }
+    } catch (e: any) {
+      batch.forEach((id) => {
+        errors[id] = e.message;
+        failureCount++;
+      });
+      onError?.(e.message);
+    }
+
+    processedCount += batch.length;
+    const progress = (processedCount / totalMessages) * 100;
+    onProgress?.(progress);
+  }
+
+  onComplete?.();
+
+  return {
+    success: successCount > 0,
+    successCount,
+    failureCount,
+    errors,
+    messages: successMessages
+  };
+}
+
+/**
+ * Fix audit log UUIDs
+ */
+export async function fixAuditLogUuids() {
   try {
-    console.log(`Standardizing storage paths for up to ${limit} messages`);
-    
-    // Call the edge function to standardize storage paths
-    const { data, error } = await supabase.functions.invoke('xdelo_standardize_storage_paths', {
-      body: { limit }
-    });
-    
+    const { data, error } = await supabase.rpc("xdelo_fix_audit_log_uuids");
+
     if (error) {
-      throw new Error(error.message || 'Failed to standardize storage paths');
+      toast.error(`Error fixing audit log UUIDs: ${error.message}`);
+      return;
     }
-    
-    if (data?.success) {
-      return {
-        success: true,
-        message: `Successfully standardized paths for ${data.successful || 0} files.`,
-        successful: data.successful,
-        failed: data.failed
-      };
-    } else {
-      throw new Error(data?.message || 'Failed to standardize storage paths');
-    }
-  } catch (error) {
-    console.error('Error standardizing storage paths:', error);
-    
-    return {
-      success: false,
-      message: error.message || 'Unknown error occurred',
-      error: error.message
-    };
+
+    toast.success(`Successfully fixed ${data?.fixed_count || 0} audit log UUIDs`);
+  } catch (e: any) {
+    toast.error(`Error fixing audit log UUIDs: ${e.message}`);
   }
 }
 
 /**
- * Fix media URLs for storage files
+ * Migrate telegram data to metadata
+ */
+export async function migrateTelegramDataToMetadata() {
+  try {
+    const { data, error } = await supabase.rpc("xdelo_migrate_telegram_data_to_metadata");
+
+    if (error) {
+      toast.error(`Error migrating telegram data to metadata: ${error.message}`);
+      return;
+    }
+
+    toast.success(`Successfully migrated ${data?.migrated_count || 0} telegram records`);
+  } catch (e: any) {
+    toast.error(`Error migrating telegram data to metadata: ${e.message}`);
+  }
+}
+
+/**
+ * Fix media URLs across the database
  */
 export async function fixMediaUrls(
-  limit: number = 100
+  messageIds: string[],
+  options: BatchOperationOptions = {}
 ): Promise<RepairResult> {
+  const { onProgress, onComplete, onError, batchSize = 10 } = options;
+  let successCount = 0;
+  let failureCount = 0;
+  const errors: Record<string, string> = {};
+  const successMessages: string[] = [];
+
   try {
-    console.log(`Fixing media URLs for up to ${limit} messages`);
-    
-    // Call the edge function to fix media URLs
-    const { data, error } = await supabase.functions.invoke('xdelo_fix_media_urls', {
-      body: { limit }
+    const { data, error } = await supabase.functions.invoke("fix-media-urls", {
+      body: { messageIds }
     });
-    
+
     if (error) {
-      throw new Error(error.message || 'Failed to fix media URLs');
+      throw error;
     }
-    
-    if (data?.success) {
-      return {
-        success: true,
-        message: `Successfully fixed ${data.successful || 0} media URLs.`,
-        successful: data.successful,
-        failed: data.failed
-      };
-    } else {
-      throw new Error(data?.message || 'Failed to fix media URLs');
+
+    if (data && data.fixed) {
+      successCount = data.fixed.length;
+      data.fixed.forEach((messageId: string) => {
+        successMessages.push(`Fixed URLs for message ${messageId}`);
+      });
     }
-  } catch (error) {
-    console.error('Error fixing media URLs:', error);
-    
+    if (data && data.errors) {
+      failureCount = Object.keys(data.errors).length;
+      Object.entries(data.errors).forEach(([messageId, errorMessage]) => {
+        errors[messageId] = errorMessage as string;
+      });
+    }
+
+    onComplete?.();
+    return {
+      success: successCount > 0,
+      successCount,
+      failureCount,
+      errors,
+      messages: successMessages
+    };
+  } catch (e: any) {
+    if (onError) onError(e.message);
     return {
       success: false,
-      message: error.message || 'Unknown error occurred',
-      error: error.message
+      successCount: 0,
+      failureCount: messageIds.length,
+      errors: messageIds.reduce((acc, id) => ({ ...acc, [id]: e.message }), {}),
+      messages: []
     };
   }
 }
 
 /**
- * Repair media batch with various fixes
+ * Repair media batch
  */
 export async function repairMediaBatch(
-  messageIds: string[]
+  messageIds: string[],
+  options: BatchOperationOptions & {
+    redownload?: boolean;
+    validateMime?: boolean;
+    standardizePath?: boolean;
+    force?: boolean;
+  } = {}
 ): Promise<RepairResult> {
+  const { onProgress, onComplete, onError, batchSize = 10 } = options;
+
   try {
-    console.log(`Repairing media batch for ${messageIds.length} messages`);
-    
-    // Call the edge function to repair media batch
-    const { data, error } = await supabase.functions.invoke('xdelo_repair_media_batch', {
-      body: { messageIds }
+    const { data, error } = await supabase.functions.invoke("repair-media-batch", {
+      body: { 
+        messageIds,
+        redownload: options.redownload,
+        validateMime: options.validateMime,
+        standardizePath: options.standardizePath,
+        force: options.force
+      }
     });
-    
+
     if (error) {
-      throw new Error(error.message || 'Failed to repair media batch');
+      throw error;
     }
-    
-    if (data?.success) {
-      return {
-        success: true,
-        message: `Successfully repaired ${data.successful} of ${messageIds.length} files.`,
-        successful: data.successful,
-        failed: data.failed
-      };
-    } else {
-      throw new Error(data?.message || 'Failed to repair media batch');
-    }
-  } catch (error) {
-    console.error('Error repairing media batch:', error);
-    
+
+    onComplete?.();
+    return data as RepairResult;
+  } catch (e: any) {
+    if (onError) onError(e.message);
     return {
       success: false,
-      message: error.message || 'Unknown error occurred',
-      error: error.message
+      successCount: 0,
+      failureCount: messageIds.length,
+      errors: messageIds.reduce((acc, id) => ({ ...acc, [id]: e.message }), {}),
+      messages: []
     };
   }
 }
@@ -124,42 +351,29 @@ export async function repairMediaBatch(
  * Process all pending messages
  */
 export async function processAllPendingMessages(
-  limit: number = 50
-): Promise<RepairResult> {
+  options: { 
+    limit?: number;
+    onProgress?: (progress: number, total: number) => void;
+  } = {}
+): Promise<{ processed: number; errors: number; }> {
   try {
-    console.log(`Processing up to ${limit} pending messages`);
-    
-    // Call the edge function to process all pending messages
-    const { data, error } = await supabase.functions.invoke('xdelo_process_pending_messages', {
-      body: { limit }
+    const { data, error } = await supabase.functions.invoke("process-pending-messages", {
+      body: { limit: options.limit || 50 }
     });
-    
+
     if (error) {
-      throw new Error(error.message || 'Failed to process pending messages');
+      throw error;
     }
-    
-    if (data?.success) {
-      return {
-        success: true,
-        message: `Processed ${data.successful || 0} of ${data.total || 0} messages`,
-        successful: data.successful,
-        failed: data.failed
-      };
-    } else if (data?.message === "No pending messages found") {
-      return {
-        success: true,
-        message: "No pending messages found"
-      };
-    } else {
-      throw new Error(data?.message || 'Processing failed');
-    }
-  } catch (error) {
-    console.error("Error processing pending messages:", error);
-    
+
     return {
-      success: false,
-      message: error.message || "Unknown error during batch processing",
-      error: error.message
+      processed: data.processed || 0,
+      errors: data.errors || 0
+    };
+  } catch (e: any) {
+    toast.error(`Failed to process pending messages: ${e.message}`);
+    return {
+      processed: 0,
+      errors: 1
     };
   }
 }
