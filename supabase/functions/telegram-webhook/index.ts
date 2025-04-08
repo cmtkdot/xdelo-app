@@ -486,31 +486,179 @@ async function handleForwardedMessage(
 }
 
 /**
- * Update handleNewMediaMessage to handle forwards
+ * Validate media content and handle edge cases
+ */
+async function validateMediaContent(
+  message: TelegramMessage,
+  mediaContent: any,
+  correlationId: string
+): Promise<{ isValid: boolean; error?: string }> {
+  // Check for zero-sized files
+  if (mediaContent.file_size === 0) {
+    await logMessageEvent('media_validation_failed', message.message_id.toString(), {
+      correlationId,
+      errorMessage: 'Zero-sized file detected',
+      metadata: { file_unique_id: mediaContent.file_unique_id },
+      telegramMessageId: message.message_id,
+      chatId: message.chat.id
+    });
+    return { isValid: false, error: 'Zero-sized file detected' };
+  }
+
+  // Check for unsupported mime types
+  if (mediaContent.mime_type && !mediaContent.mime_type.match(/^(image|video|application)\//)) {
+    await logMessageEvent('media_validation_failed', message.message_id.toString(), {
+      correlationId,
+      errorMessage: 'Unsupported mime type',
+      metadata: { 
+        mime_type: mediaContent.mime_type,
+        file_unique_id: mediaContent.file_unique_id 
+      },
+      telegramMessageId: message.message_id,
+      chatId: message.chat.id
+    });
+    return { isValid: false, error: 'Unsupported mime type' };
+  }
+
+  // Check for corrupted media groups
+  if (message.media_group_id) {
+    const { data: groupMessages } = await supabase
+      .from('messages')
+      .select('processing_state, error_message')
+      .eq('media_group_id', message.media_group_id);
+
+    const hasFailedMessages = groupMessages?.some(m => 
+      m.processing_state === 'failed' || m.error_message
+    );
+
+    if (hasFailedMessages) {
+      await logMessageEvent('media_group_validation_failed', message.message_id.toString(), {
+        correlationId,
+        errorMessage: 'Media group contains failed messages',
+        metadata: { 
+          media_group_id: message.media_group_id,
+          file_unique_id: mediaContent.file_unique_id 
+        },
+        telegramMessageId: message.message_id,
+        chatId: message.chat.id
+      });
+      return { isValid: false, error: 'Media group contains failed messages' };
+    }
+  }
+
+  return { isValid: true };
+}
+
+/**
+ * Handle media processing retries
+ */
+async function handleMediaProcessingRetry(
+  message: TelegramMessage,
+  mediaContent: any,
+  correlationId: string,
+  attempt: number = 1
+): Promise<MediaResult> {
+  const maxRetries = 3;
+  const retryDelay = 1000 * Math.pow(2, attempt - 1); // Exponential backoff
+
+  try {
+    return await processMediaMessage(message, mediaContent, correlationId);
+  } catch (error) {
+    if (attempt >= maxRetries) {
+      await logMessageEvent('media_processing_failed', message.message_id.toString(), {
+        correlationId,
+        errorMessage: `Failed after ${maxRetries} attempts: ${error.message}`,
+        metadata: { 
+          file_unique_id: mediaContent.file_unique_id,
+          attempts: attempt
+        },
+        telegramMessageId: message.message_id,
+        chatId: message.chat.id
+      });
+      throw error;
+    }
+
+    await new Promise(resolve => setTimeout(resolve, retryDelay));
+    return handleMediaProcessingRetry(message, mediaContent, correlationId, attempt + 1);
+  }
+}
+
+/**
+ * Update handleNewMediaMessage with enhanced error handling
  */
 async function handleNewMediaMessage(message: TelegramMessage, context: MessageContext): Promise<MediaResult> {
   const { correlationId } = context;
 
-  // Extract media content
-  const mediaContent = message.photo ? 
-    message.photo[message.photo.length - 1] : 
-    message.video || message.document;
+  try {
+    // Extract media content with error handling
+    const mediaContent = message.photo ? 
+      message.photo[message.photo.length - 1] : 
+      message.video || message.document;
 
-  if (!mediaContent) {
-    throw new Error('No media content found in message');
+    if (!mediaContent) {
+      await logMessageEvent('media_extraction_failed', message.message_id.toString(), {
+        correlationId,
+        errorMessage: 'No media content found in message',
+        telegramMessageId: message.message_id,
+        chatId: message.chat.id
+      });
+      throw new Error('No media content found in message');
+    }
+
+    // Validate media content
+    const validation = await validateMediaContent(message, mediaContent, correlationId);
+    if (!validation.isValid) {
+      return { success: false, error: validation.error };
+    }
+
+    // Handle forwarded messages with retry
+    if (message.forward_origin) {
+      try {
+        return await handleForwardedMessage(message, mediaContent, context);
+      } catch (error) {
+        await logMessageEvent('forward_processing_failed', message.message_id.toString(), {
+          correlationId,
+          errorMessage: error.message,
+          metadata: { forward_origin: message.forward_origin },
+          telegramMessageId: message.message_id,
+          chatId: message.chat.id
+        });
+        throw error;
+      }
+    }
+
+    // Handle media group messages with retry
+    if (message.media_group_id) {
+      try {
+        return await handleMediaGroup(message, mediaContent, context);
+      } catch (error) {
+        await logMessageEvent('media_group_processing_failed', message.message_id.toString(), {
+          correlationId,
+          errorMessage: error.message,
+          metadata: { media_group_id: message.media_group_id },
+          telegramMessageId: message.message_id,
+          chatId: message.chat.id
+        });
+        throw error;
+      }
+    }
+
+    // Process regular media message with retry
+    return await handleMediaProcessingRetry(message, mediaContent, correlationId);
+
+  } catch (error) {
+    // Log the final error if all retries failed
+    await logMessageEvent('message_processing_failed', message.message_id.toString(), {
+      correlationId,
+      errorMessage: error.message,
+      metadata: { 
+        message_type: message.photo ? 'photo' : message.video ? 'video' : 'document'
+      },
+      telegramMessageId: message.message_id,
+      chatId: message.chat.id
+    });
+    return { success: false, error: error.message };
   }
-
-  // Handle forwarded messages
-  if (message.forward_origin) {
-    return handleForwardedMessage(message, mediaContent, context);
-  }
-
-  // Handle media group messages
-  if (message.media_group_id) {
-    return handleMediaGroup(message, mediaContent, context);
-  }
-
-  return processMediaMessage(message, mediaContent, correlationId);
 }
 
 /**
