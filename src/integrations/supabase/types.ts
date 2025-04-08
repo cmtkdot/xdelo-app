@@ -921,6 +921,306 @@ export type Database = {
         }
         Relationships: []
       }
+      make_automation_rules: {
+        Row: {
+          actions: Json
+          conditions: Json
+          created_at: string | null
+          description: string | null
+          event_type: Database["public"]["Enums"]["make_event_type"]
+          id: string
+          is_active: boolean | null
+          name: string
+          priority: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          actions?: Json
+          conditions?: Json
+          created_at?: string | null
+          description?: string | null
+          event_type: Database["public"]["Enums"]["make_event_type"]
+          id?: string
+          is_active?: boolean | null
+          name: string
+          priority?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          actions?: Json
+          conditions?: Json
+          created_at?: string | null
+          description?: string | null
+          event_type?: Database["public"]["Enums"]["make_event_type"]
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          priority?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      make_debug_events: {
+        Row: {
+          data: Json | null
+          event_type: string
+          id: string
+          level: string | null
+          session_id: string | null
+          timestamp: string | null
+        }
+        Insert: {
+          data?: Json | null
+          event_type: string
+          id?: string
+          level?: string | null
+          session_id?: string | null
+          timestamp?: string | null
+        }
+        Update: {
+          data?: Json | null
+          event_type?: string
+          id?: string
+          level?: string | null
+          session_id?: string | null
+          timestamp?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "make_debug_events_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "make_debug_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      make_debug_sessions: {
+        Row: {
+          config: Json | null
+          end_time: string | null
+          id: string
+          name: string
+          notes: string | null
+          start_time: string | null
+          status: string | null
+          webhook_id: string | null
+        }
+        Insert: {
+          config?: Json | null
+          end_time?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          start_time?: string | null
+          status?: string | null
+          webhook_id?: string | null
+        }
+        Update: {
+          config?: Json | null
+          end_time?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          start_time?: string | null
+          status?: string | null
+          webhook_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "make_debug_sessions_webhook_id_fkey"
+            columns: ["webhook_id"]
+            isOneToOne: false
+            referencedRelation: "make_webhook_configs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      make_event_logs: {
+        Row: {
+          completed_at: string | null
+          context: Json | null
+          created_at: string | null
+          duration_ms: number | null
+          error_message: string | null
+          event_type: string
+          id: string
+          message_id: string | null
+          next_retry_at: string | null
+          payload: Json | null
+          request_headers: Json | null
+          response_body: string | null
+          response_code: number | null
+          response_headers: Json | null
+          retry_count: number | null
+          severity: string | null
+          status: Database["public"]["Enums"]["make_log_status"]
+          tags: string[] | null
+          webhook_id: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          context?: Json | null
+          created_at?: string | null
+          duration_ms?: number | null
+          error_message?: string | null
+          event_type: string
+          id?: string
+          message_id?: string | null
+          next_retry_at?: string | null
+          payload?: Json | null
+          request_headers?: Json | null
+          response_body?: string | null
+          response_code?: number | null
+          response_headers?: Json | null
+          retry_count?: number | null
+          severity?: string | null
+          status?: Database["public"]["Enums"]["make_log_status"]
+          tags?: string[] | null
+          webhook_id?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          context?: Json | null
+          created_at?: string | null
+          duration_ms?: number | null
+          error_message?: string | null
+          event_type?: string
+          id?: string
+          message_id?: string | null
+          next_retry_at?: string | null
+          payload?: Json | null
+          request_headers?: Json | null
+          response_body?: string | null
+          response_code?: number | null
+          response_headers?: Json | null
+          retry_count?: number | null
+          severity?: string | null
+          status?: Database["public"]["Enums"]["make_log_status"]
+          tags?: string[] | null
+          webhook_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "make_event_logs_webhook_id_fkey"
+            columns: ["webhook_id"]
+            isOneToOne: false
+            referencedRelation: "make_webhook_configs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      make_telegram_events: {
+        Row: {
+          context: Json | null
+          created_at: string | null
+          event_type: string
+          id: string
+          message_id: string
+          payload: Json
+          webhook_results: Json | null
+        }
+        Insert: {
+          context?: Json | null
+          created_at?: string | null
+          event_type: string
+          id?: string
+          message_id: string
+          payload: Json
+          webhook_results?: Json | null
+        }
+        Update: {
+          context?: Json | null
+          created_at?: string | null
+          event_type?: string
+          id?: string
+          message_id?: string
+          payload?: Json
+          webhook_results?: Json | null
+        }
+        Relationships: []
+      }
+      make_test_payloads: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          event_type: string
+          id: string
+          is_template: boolean | null
+          name: string
+          payload: Json
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          event_type: string
+          id?: string
+          is_template?: boolean | null
+          name: string
+          payload: Json
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          event_type?: string
+          id?: string
+          is_template?: boolean | null
+          name?: string
+          payload?: Json
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      make_webhook_configs: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          event_types: string[]
+          field_selection: Json | null
+          headers: Json | null
+          id: string
+          is_active: boolean | null
+          name: string
+          payload_template: Json | null
+          retry_config: Json | null
+          transformation_code: string | null
+          updated_at: string | null
+          url: string
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          event_types: string[]
+          field_selection?: Json | null
+          headers?: Json | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          payload_template?: Json | null
+          retry_config?: Json | null
+          transformation_code?: string | null
+          updated_at?: string | null
+          url: string
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          event_types?: string[]
+          field_selection?: Json | null
+          headers?: Json | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          payload_template?: Json | null
+          retry_config?: Json | null
+          transformation_code?: string | null
+          updated_at?: string | null
+          url?: string
+        }
+        Relationships: []
+      }
       materialized_view_refresh_log: {
         Row: {
           last_refresh: string | null
@@ -979,7 +1279,6 @@ export type Database = {
           id: string
           is_channel_post: string | null
           is_duplicate: boolean | null
-          is_edit: boolean | null
           is_edited: boolean | null
           is_edited_channel_post: boolean | null
           is_forward: boolean | null
@@ -991,9 +1290,8 @@ export type Database = {
           last_error_at: string | null
           last_processing_attempt: string | null
           media_group_id: string | null
-          media_group_sync: boolean | null
+          media_group_sync: string | null
           message_caption_id: string | null
-          message_type: string
           message_url: string | null
           mime_type: string | null
           mime_type_original: string | null
@@ -1024,15 +1322,13 @@ export type Database = {
           redownload_reason: string | null
           redownload_strategy: string | null
           retry_count: number | null
-          storage_exists: boolean | null
+          storage_exists: string | null
           storage_path: string | null
-          storage_path_standardized: boolean | null
+          storage_path_standardized: string | null
           sync_attempt: number | null
           telegram_data: Json | null
           telegram_message_id: number | null
           telegram_metadata: Json | null
-          text: string | null
-          trigger_source: string | null
           update_id: string | null
           updated_at: string
           user_id: string | null
@@ -1075,7 +1371,6 @@ export type Database = {
           id?: string
           is_channel_post?: string | null
           is_duplicate?: boolean | null
-          is_edit?: boolean | null
           is_edited?: boolean | null
           is_edited_channel_post?: boolean | null
           is_forward?: boolean | null
@@ -1087,9 +1382,8 @@ export type Database = {
           last_error_at?: string | null
           last_processing_attempt?: string | null
           media_group_id?: string | null
-          media_group_sync?: boolean | null
+          media_group_sync?: string | null
           message_caption_id?: string | null
-          message_type: string
           message_url?: string | null
           mime_type?: string | null
           mime_type_original?: string | null
@@ -1120,15 +1414,13 @@ export type Database = {
           redownload_reason?: string | null
           redownload_strategy?: string | null
           retry_count?: number | null
-          storage_exists?: boolean | null
+          storage_exists?: string | null
           storage_path?: string | null
-          storage_path_standardized?: boolean | null
+          storage_path_standardized?: string | null
           sync_attempt?: number | null
           telegram_data?: Json | null
           telegram_message_id?: number | null
           telegram_metadata?: Json | null
-          text?: string | null
-          trigger_source?: string | null
           update_id?: string | null
           updated_at?: string
           user_id?: string | null
@@ -1171,7 +1463,6 @@ export type Database = {
           id?: string
           is_channel_post?: string | null
           is_duplicate?: boolean | null
-          is_edit?: boolean | null
           is_edited?: boolean | null
           is_edited_channel_post?: boolean | null
           is_forward?: boolean | null
@@ -1183,9 +1474,8 @@ export type Database = {
           last_error_at?: string | null
           last_processing_attempt?: string | null
           media_group_id?: string | null
-          media_group_sync?: boolean | null
+          media_group_sync?: string | null
           message_caption_id?: string | null
-          message_type?: string
           message_url?: string | null
           mime_type?: string | null
           mime_type_original?: string | null
@@ -1216,15 +1506,13 @@ export type Database = {
           redownload_reason?: string | null
           redownload_strategy?: string | null
           retry_count?: number | null
-          storage_exists?: boolean | null
+          storage_exists?: string | null
           storage_path?: string | null
-          storage_path_standardized?: boolean | null
+          storage_path_standardized?: string | null
           sync_attempt?: number | null
           telegram_data?: Json | null
           telegram_message_id?: number | null
           telegram_metadata?: Json | null
-          text?: string | null
-          trigger_source?: string | null
           update_id?: string | null
           updated_at?: string
           user_id?: string | null
@@ -1250,6 +1538,13 @@ export type Database = {
             foreignKeyName: "fk_message_caption"
             columns: ["message_caption_id"]
             isOneToOne: false
+            referencedRelation: "v_message_forwards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_message_caption"
+            columns: ["message_caption_id"]
+            isOneToOne: false
             referencedRelation: "v_messages_compatibility"
             referencedColumns: ["id"]
           },
@@ -1265,6 +1560,13 @@ export type Database = {
             columns: ["message_caption_id"]
             isOneToOne: false
             referencedRelation: "messages_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_message_caption_id_fkey"
+            columns: ["message_caption_id"]
+            isOneToOne: false
+            referencedRelation: "v_message_forwards"
             referencedColumns: ["id"]
           },
           {
@@ -1683,6 +1985,13 @@ export type Database = {
             columns: ["entity_id"]
             isOneToOne: false
             referencedRelation: "messages_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_unified_audit_logs_messages"
+            columns: ["entity_id"]
+            isOneToOne: false
+            referencedRelation: "v_message_forwards"
             referencedColumns: ["id"]
           },
           {
@@ -2140,6 +2449,13 @@ export type Database = {
             foreignKeyName: "fk_message_caption"
             columns: ["message_caption_id"]
             isOneToOne: false
+            referencedRelation: "v_message_forwards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_message_caption"
+            columns: ["message_caption_id"]
+            isOneToOne: false
             referencedRelation: "v_messages_compatibility"
             referencedColumns: ["id"]
           },
@@ -2155,6 +2471,13 @@ export type Database = {
             columns: ["message_caption_id"]
             isOneToOne: false
             referencedRelation: "messages_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_message_caption_id_fkey"
+            columns: ["message_caption_id"]
+            isOneToOne: false
+            referencedRelation: "v_message_forwards"
             referencedColumns: ["id"]
           },
           {
@@ -2350,15 +2673,24 @@ export type Database = {
         }
         Relationships: []
       }
-      v_media_group_consistency: {
+      v_message_forwards: {
         Row: {
-          caption_holders: number | null
-          consistency_status: string | null
-          distinct_analysis_count: number | null
-          has_incomplete_analysis: boolean | null
-          media_group_id: string | null
-          message_count: number | null
-          synced_messages: number | null
+          analyzed_content: Json | null
+          chat_id: number | null
+          created_at: string | null
+          file_unique_id: string | null
+          forward_chain: Json[] | null
+          forward_count: number | null
+          id: string | null
+          old_analyzed_content: Json[] | null
+          original_analyzed_content: Json | null
+          original_chat_id: number | null
+          original_message_id: string | null
+          original_telegram_message_id: number | null
+          processing_state:
+            | Database["public"]["Enums"]["processing_state_type"]
+            | null
+          telegram_message_id: number | null
         }
         Relationships: []
       }
@@ -2556,6 +2888,13 @@ export type Database = {
             foreignKeyName: "fk_unified_audit_logs_messages"
             columns: ["message_id"]
             isOneToOne: false
+            referencedRelation: "v_message_forwards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_unified_audit_logs_messages"
+            columns: ["message_id"]
+            isOneToOne: false
             referencedRelation: "v_messages_compatibility"
             referencedColumns: ["id"]
           },
@@ -2563,32 +2902,56 @@ export type Database = {
       }
     }
     Functions: {
-      binary_quantize: {
-        Args: { "": string } | { "": unknown }
-        Returns: unknown
-      }
+      binary_quantize:
+        | {
+            Args: {
+              "": string
+            }
+            Returns: unknown
+          }
+        | {
+            Args: {
+              "": unknown
+            }
+            Returns: unknown
+          }
       cleanup_orphaned_records: {
-        Args: { table_name: string }
+        Args: {
+          table_name: string
+        }
         Returns: number
       }
       compute_data_hash: {
-        Args: { data: Json }
+        Args: {
+          data: Json
+        }
         Returns: string
       }
       construct_purchase_order: {
-        Args: { analyzed_content: Json }
+        Args: {
+          analyzed_content: Json
+        }
         Returns: string
       }
       convert_estimate_to_invoice: {
-        Args: { estimate_id: string; user_email: string }
+        Args: {
+          estimate_id: string
+          user_email: string
+        }
         Returns: string
       }
       dates_within_range: {
-        Args: { date1: string; date2: string; days?: number }
+        Args: {
+          date1: string
+          date2: string
+          days?: number
+        }
         Returns: boolean
       }
       extract_media_dimensions: {
-        Args: { telegram_data: Json }
+        Args: {
+          telegram_data: Json
+        }
         Returns: {
           width: number
           height: number
@@ -2596,30 +2959,51 @@ export type Database = {
         }[]
       }
       generate_invoice_uid: {
-        Args: { account_uid: string; invoice_date: string }
+        Args: {
+          account_uid: string
+          invoice_date: string
+        }
         Returns: string
       }
       generate_po_uid: {
-        Args: { account_uid: string; po_date: string }
+        Args: {
+          account_uid: string
+          po_date: string
+        }
         Returns: string
       }
+      get_make_event_status_summary: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          status: string
+          count: number
+        }[]
+      }
       get_table_columns: {
-        Args: { table_name: string }
+        Args: {
+          table_name: string
+        }
         Returns: {
           column_name: string
           data_type: string
         }[]
       }
       gl_admin_execute_sql: {
-        Args: { sql_query: string }
+        Args: {
+          sql_query: string
+        }
         Returns: Json
       }
       gl_calculate_account_balance: {
-        Args: { account_id: string }
+        Args: {
+          account_id: string
+        }
         Returns: number
       }
       gl_calculate_product_inventory: {
-        Args: { product_id: string }
+        Args: {
+          product_id: string
+        }
         Returns: number
       }
       gl_get_account_stats: {
@@ -2719,7 +3103,9 @@ export type Database = {
         }[]
       }
       gl_get_table_columns: {
-        Args: { table_name: string }
+        Args: {
+          table_name: string
+        }
         Returns: {
           column_name: string
           data_type: string
@@ -2738,11 +3124,17 @@ export type Database = {
         Returns: string
       }
       gl_resolve_sync_error: {
-        Args: { p_error_id: string; p_resolution_notes?: string }
+        Args: {
+          p_error_id: string
+          p_resolution_notes?: string
+        }
         Returns: boolean
       }
       gl_suggest_column_mappings: {
-        Args: { p_supabase_table: string; p_glide_columns: Json }
+        Args: {
+          p_supabase_table: string
+          p_glide_columns: Json
+        }
         Returns: {
           glide_column_name: string
           suggested_supabase_column: string
@@ -2755,18 +3147,26 @@ export type Database = {
         Returns: undefined
       }
       gl_update_product_payment_status: {
-        Args: { product_id: string; new_status: string }
+        Args: {
+          product_id: string
+          new_status: string
+        }
         Returns: boolean
       }
       gl_validate_column_mapping: {
-        Args: { p_mapping_id: string }
+        Args: {
+          p_mapping_id: string
+        }
         Returns: {
           is_valid: boolean
           validation_message: string
         }[]
       }
       gl_validate_mapping_data: {
-        Args: { p_mapping: Json; p_editing?: boolean }
+        Args: {
+          p_mapping: Json
+          p_editing?: boolean
+        }
         Returns: {
           is_valid: boolean
           validation_message: string
@@ -2777,87 +3177,164 @@ export type Database = {
         Returns: undefined
       }
       glsync_get_account_summary: {
-        Args: { account_id: string }
+        Args: {
+          account_id: string
+        }
         Returns: Json
       }
       glsync_retry_failed_sync: {
-        Args: { p_mapping_id: string }
+        Args: {
+          p_mapping_id: string
+        }
         Returns: string
       }
       halfvec_avg: {
-        Args: { "": number[] }
+        Args: {
+          "": number[]
+        }
         Returns: unknown
       }
       halfvec_out: {
-        Args: { "": unknown }
+        Args: {
+          "": unknown
+        }
         Returns: unknown
       }
       halfvec_send: {
-        Args: { "": unknown }
+        Args: {
+          "": unknown
+        }
         Returns: string
       }
       halfvec_typmod_in: {
-        Args: { "": unknown[] }
+        Args: {
+          "": unknown[]
+        }
         Returns: number
       }
       hnsw_bit_support: {
-        Args: { "": unknown }
+        Args: {
+          "": unknown
+        }
         Returns: unknown
       }
       hnsw_halfvec_support: {
-        Args: { "": unknown }
+        Args: {
+          "": unknown
+        }
         Returns: unknown
       }
       hnsw_sparsevec_support: {
-        Args: { "": unknown }
+        Args: {
+          "": unknown
+        }
         Returns: unknown
       }
       hnswhandler: {
-        Args: { "": unknown }
+        Args: {
+          "": unknown
+        }
         Returns: unknown
       }
       is_customer: {
-        Args: { account_type: string }
+        Args: {
+          account_type: string
+        }
         Returns: boolean
       }
       is_vendor: {
-        Args: { account_type: string }
+        Args: {
+          account_type: string
+        }
         Returns: boolean
       }
       ivfflat_bit_support: {
-        Args: { "": unknown }
+        Args: {
+          "": unknown
+        }
         Returns: unknown
       }
       ivfflat_halfvec_support: {
-        Args: { "": unknown }
+        Args: {
+          "": unknown
+        }
         Returns: unknown
       }
       ivfflathandler: {
-        Args: { "": unknown }
+        Args: {
+          "": unknown
+        }
         Returns: unknown
       }
-      l2_norm: {
-        Args: { "": unknown } | { "": unknown }
+      l2_norm:
+        | {
+            Args: {
+              "": unknown
+            }
+            Returns: number
+          }
+        | {
+            Args: {
+              "": unknown
+            }
+            Returns: number
+          }
+      l2_normalize:
+        | {
+            Args: {
+              "": string
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              "": unknown
+            }
+            Returns: unknown
+          }
+        | {
+            Args: {
+              "": unknown
+            }
+            Returns: unknown
+          }
+      make_clean_event_logs: {
+        Args: {
+          older_than: string
+          webhook_id?: string
+          status?: string
+        }
         Returns: number
       }
-      l2_normalize: {
-        Args: { "": unknown } | { "": unknown } | { "": string }
-        Returns: unknown
-      }
       make_log_webhook_test: {
-        Args: { webhook_id: string; payload: Json }
+        Args: {
+          webhook_id: string
+          payload: Json
+        }
         Returns: string
       }
       make_process_telegram_message_event: {
-        Args: { message_id: string; event_type: string; context?: Json }
+        Args: {
+          message_id: string
+          event_type: string
+          context?: Json
+        }
         Returns: Json
       }
       make_test_webhook_field_mapping: {
-        Args: { webhook_id: string; message_id: string; event_type: string }
+        Args: {
+          webhook_id: string
+          message_id: string
+          event_type: string
+        }
         Returns: Json
       }
       match_documents: {
-        Args: { query_embedding: string; match_count?: number; filter?: Json }
+        Args: {
+          query_embedding: string
+          match_count?: number
+          filter?: Json
+        }
         Returns: {
           id: number
           content: string
@@ -2866,7 +3343,9 @@ export type Database = {
         }[]
       }
       pg_stat_statements: {
-        Args: { showtext: boolean }
+        Args: {
+          showtext: boolean
+        }
         Returns: Record<string, unknown>[]
       }
       pg_stat_statements_info: {
@@ -2874,11 +3353,17 @@ export type Database = {
         Returns: Record<string, unknown>
       }
       pg_stat_statements_reset: {
-        Args: { userid?: unknown; dbid?: unknown; queryid?: number }
+        Args: {
+          userid?: unknown
+          dbid?: unknown
+          queryid?: number
+        }
         Returns: undefined
       }
       process_webhook_event: {
-        Args: { p_event_id: string }
+        Args: {
+          p_event_id: string
+        }
         Returns: undefined
       }
       rebuild_calculated_fields: {
@@ -2905,11 +3390,19 @@ export type Database = {
         Returns: undefined
       }
       refresh_materialized_view: {
-        Args: { view_name: string }
+        Args: {
+          view_name: string
+        }
         Returns: undefined
       }
       refresh_purchase_order_summary: {
         Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      reorder_make_automation_rules: {
+        Args: {
+          rule_ids: string[]
+        }
         Returns: undefined
       }
       schedule_relationship_maintenance: {
@@ -2921,7 +3414,9 @@ export type Database = {
         Returns: undefined
       }
       search_related_records: {
-        Args: { search_term: string }
+        Args: {
+          search_term: string
+        }
         Returns: {
           record_type: string
           record_id: string
@@ -2932,68 +3427,83 @@ export type Database = {
         }[]
       }
       sparsevec_out: {
-        Args: { "": unknown }
+        Args: {
+          "": unknown
+        }
         Returns: unknown
       }
       sparsevec_send: {
-        Args: { "": unknown }
+        Args: {
+          "": unknown
+        }
         Returns: string
       }
       sparsevec_typmod_in: {
-        Args: { "": unknown[] }
+        Args: {
+          "": unknown[]
+        }
         Returns: number
       }
       update_estimate_totals: {
-        Args: { estimate_id: string }
+        Args: {
+          estimate_id: string
+        }
         Returns: undefined
       }
       update_invoice_totals: {
-        Args: { invoice_id: string }
+        Args: {
+          invoice_id: string
+        }
         Returns: undefined
       }
       update_po_totals: {
-        Args: { po_id: string }
+        Args: {
+          po_id: string
+        }
         Returns: undefined
       }
       vector_avg: {
-        Args: { "": number[] }
+        Args: {
+          "": number[]
+        }
         Returns: string
       }
-      vector_dims: {
-        Args: { "": string } | { "": unknown }
-        Returns: number
-      }
+      vector_dims:
+        | {
+            Args: {
+              "": string
+            }
+            Returns: number
+          }
+        | {
+            Args: {
+              "": unknown
+            }
+            Returns: number
+          }
       vector_norm: {
-        Args: { "": string }
+        Args: {
+          "": string
+        }
         Returns: number
       }
       vector_out: {
-        Args: { "": string }
+        Args: {
+          "": string
+        }
         Returns: unknown
       }
       vector_send: {
-        Args: { "": string }
+        Args: {
+          "": string
+        }
         Returns: string
       }
       vector_typmod_in: {
-        Args: { "": unknown[] }
+        Args: {
+          "": unknown[]
+        }
         Returns: number
-      }
-      xdelo_check_media_group_consistency: {
-        Args: { p_media_group_id: string; p_correlation_id?: string }
-        Returns: Json
-      }
-      xdelo_check_message_exists: {
-        Args: { p_chat_id: number; p_telegram_message_id: number }
-        Returns: boolean
-      }
-      xdelo_check_messages_needing_caption_sync: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          media_group_id: string
-          message_count: number
-          sync_status: Json
-        }[]
       }
       xdelo_cleanup_orphaned_audit_logs: {
         Args: Record<PropertyKey, never>
@@ -3002,13 +3512,20 @@ export type Database = {
         }[]
       }
       xdelo_clear_all_messages: {
-        Args:
-          | { p_confirm: string; p_correlation_id?: string }
-          | Record<PropertyKey, never>
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
+      xdelo_complete_message_processing: {
+        Args: {
+          p_message_id: string
+          p_analyzed_content: Json
+        }
         Returns: Json
       }
       xdelo_extract_telegram_metadata: {
-        Args: { p_telegram_data: Json }
+        Args: {
+          p_telegram_data: Json
+        }
         Returns: Json
       }
       xdelo_find_broken_media_groups: {
@@ -3022,19 +3539,16 @@ export type Database = {
         }[]
       }
       xdelo_find_caption_message: {
-        Args: { p_media_group_id: string }
+        Args: {
+          p_media_group_id: string
+        }
         Returns: string
       }
-      xdelo_find_orphaned_media_group_messages: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          media_group_id: string
-          message_count: number
-          issues: Json
-        }[]
-      }
       xdelo_find_valid_file_id: {
-        Args: { p_media_group_id: string; p_file_unique_id: string }
+        Args: {
+          p_media_group_id: string
+          p_file_unique_id: string
+        }
         Returns: string
       }
       xdelo_fix_audit_log_uuids: {
@@ -3044,7 +3558,9 @@ export type Database = {
         }[]
       }
       xdelo_fix_public_urls: {
-        Args: { p_limit?: number }
+        Args: {
+          p_limit?: number
+        }
         Returns: {
           message_id: string
           old_url: string
@@ -3052,7 +3568,9 @@ export type Database = {
         }[]
       }
       xdelo_get_incomplete_media_groups: {
-        Args: { limit_param?: number }
+        Args: {
+          limit_param?: number
+        }
         Returns: {
           media_group_id: string
           total_messages: number
@@ -3063,15 +3581,15 @@ export type Database = {
         }[]
       }
       xdelo_get_logger: {
-        Args: { p_correlation_id: string }
-        Returns: Json
-      }
-      xdelo_get_media_group_stats: {
-        Args: { p_media_group_id: string }
+        Args: {
+          p_correlation_id: string
+        }
         Returns: Json
       }
       xdelo_get_message_for_processing: {
-        Args: { p_message_id: string }
+        Args: {
+          p_message_id: string
+        }
         Returns: {
           id: string
           telegram_message_id: number
@@ -3085,7 +3603,9 @@ export type Database = {
         }[]
       }
       xdelo_get_message_forward_history: {
-        Args: { p_message_id: string }
+        Args: {
+          p_message_id: string
+        }
         Returns: {
           message_id: string
           telegram_message_id: number
@@ -3100,20 +3620,12 @@ export type Database = {
         Returns: Json
       }
       xdelo_handle_message_edit: {
-        Args:
-          | {
-              p_message_id: string
-              p_new_caption?: string
-              p_new_text?: string
-              p_edit_date?: string
-              p_correlation_id?: string
-            }
-          | {
-              p_message_id: string
-              p_caption: string
-              p_is_edit?: boolean
-              p_correlation_id?: string
-            }
+        Args: {
+          p_message_id: string
+          p_caption: string
+          p_is_edit?: boolean
+          p_correlation_id?: string
+        }
         Returns: Json
       }
       xdelo_handle_message_update: {
@@ -3126,11 +3638,15 @@ export type Database = {
         Returns: Json
       }
       xdelo_has_valid_caption: {
-        Args: { p_caption: string }
+        Args: {
+          p_caption: string
+        }
         Returns: boolean
       }
       xdelo_kill_long_queries: {
-        Args: { older_than_seconds?: number }
+        Args: {
+          older_than_seconds?: number
+        }
         Returns: {
           pid: number
           usename: string
@@ -3140,16 +3656,9 @@ export type Database = {
           killed: boolean
         }[]
       }
-      xdelo_log_event: {
-        Args:
-          | {
-              p_event_type: string
-              p_entity_id: string
-              p_correlation_id?: string
-              p_metadata?: Json
-              p_error_message?: string
-            }
-          | {
+      xdelo_log_event:
+        | {
+            Args: {
               p_event_type: Database["public"]["Enums"]["audit_event_type"]
               p_entity_id: string
               p_telegram_message_id?: number
@@ -3161,14 +3670,17 @@ export type Database = {
               p_user_id?: string
               p_error_message?: string
             }
-          | {
+            Returns: undefined
+          }
+        | {
+            Args: {
               p_event_type: string
               p_entity_id: string
               p_message_id?: string
               p_metadata?: Json
             }
-        Returns: string
-      }
+            Returns: undefined
+          }
       xdelo_log_event_flexible: {
         Args: {
           p_event_type: string
@@ -3184,10 +3696,17 @@ export type Database = {
         }
         Returns: undefined
       }
-      xdelo_log_message_operation: {
-        Args:
-          | { p_operation: string; p_message_id: string; p_details: Json }
-          | {
+      xdelo_log_message_operation:
+        | {
+            Args: {
+              p_operation: string
+              p_message_id: string
+              p_details: Json
+            }
+            Returns: undefined
+          }
+        | {
+            Args: {
               p_operation_type: Database["public"]["Enums"]["message_operation_type"]
               p_source_message_id: string
               p_target_message_id?: string
@@ -3198,8 +3717,8 @@ export type Database = {
               p_user_id?: string
               p_error_message?: string
             }
-        Returns: undefined
-      }
+            Returns: string
+          }
       xdelo_log_operation: {
         Args: {
           p_event_type: string
@@ -3215,18 +3734,29 @@ export type Database = {
         Args: {
           p_event_type: string
           p_entity_id: string
-          p_correlation_id?: string
+          p_correlation_id: string
           p_metadata?: Json
           p_error_message?: string
         }
-        Returns: undefined
+        Returns: string
       }
       xdelo_mark_for_redownload: {
-        Args: { p_message_id: string; p_reason?: string }
+        Args: {
+          p_message_id: string
+          p_reason?: string
+        }
         Returns: boolean
       }
+      xdelo_parse_caption: {
+        Args: {
+          p_caption: string
+        }
+        Returns: Json
+      }
       xdelo_prepare_message_for_webhook: {
-        Args: { message_id: string }
+        Args: {
+          message_id: string
+        }
         Returns: Json
       }
       xdelo_process_caption_workflow: {
@@ -3238,7 +3768,10 @@ export type Database = {
         Returns: Json
       }
       xdelo_repair_file: {
-        Args: { p_message_id: string; p_action: string }
+        Args: {
+          p_message_id: string
+          p_action: string
+        }
         Returns: Json
       }
       xdelo_repair_media_group_syncs: {
@@ -3249,44 +3782,47 @@ export type Database = {
           updated_count: number
         }[]
       }
-      xdelo_reset_stalled_messages: {
-        Args: { p_older_than_minutes?: number; p_correlation_id?: string }
-        Returns: Json
-      }
       xdelo_set_message_processing: {
-        Args: { p_message_id: string; p_correlation_id: string }
+        Args: {
+          p_message_id: string
+          p_correlation_id: string
+        }
         Returns: undefined
       }
       xdelo_standardize_file_extension: {
-        Args: { p_mime_type: string }
+        Args: {
+          p_mime_type: string
+        }
         Returns: string
       }
       xdelo_standardize_storage_path: {
-        Args: { p_file_unique_id: string; p_mime_type?: string }
+        Args: {
+          p_file_unique_id: string
+          p_mime_type?: string
+        }
         Returns: string
       }
-      xdelo_sync_media_group: {
+      xdelo_sync_media_group_content: {
         Args: {
           p_source_message_id: string
           p_media_group_id: string
-          p_correlation_id: string
+          p_correlation_id?: string
           p_force_sync?: boolean
           p_sync_edit_history?: boolean
         }
         Returns: Json
       }
-      xdelo_update_message_state: {
+      xdelo_update_product_matching_config: {
+        Args: {
+          p_config: Json
+        }
+        Returns: Json
+      }
+      xdelo_validate_message_ids: {
         Args: {
           p_message_id: string
-          p_new_state: string
-          p_correlation_id?: string
-          p_metadata?: Json
         }
         Returns: boolean
-      }
-      xdelo_update_product_matching_config: {
-        Args: { p_config: Json }
-        Returns: Json
       }
     }
     Enums: {
@@ -3432,29 +3968,27 @@ export type Database = {
   }
 }
 
-type DefaultSchema = Database[Extract<keyof Database, "public">]
+type PublicSchema = Database[Extract<keyof Database, "public">]
 
 export type Tables<
-  DefaultSchemaTableNameOrOptions extends
-    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+  PublicTableNameOrOptions extends
+    | keyof (PublicSchema["Tables"] & PublicSchema["Views"])
     | { schema: keyof Database },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof Database
-  }
-    ? keyof (Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-        Database[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+  TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
+    ? keyof (Database[PublicTableNameOrOptions["schema"]]["Tables"] &
+        Database[PublicTableNameOrOptions["schema"]]["Views"])
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
-  ? (Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-      Database[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+> = PublicTableNameOrOptions extends { schema: keyof Database }
+  ? (Database[PublicTableNameOrOptions["schema"]]["Tables"] &
+      Database[PublicTableNameOrOptions["schema"]]["Views"])[TableName] extends {
       Row: infer R
     }
     ? R
     : never
-  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])
-    ? (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+  : PublicTableNameOrOptions extends keyof (PublicSchema["Tables"] &
+        PublicSchema["Views"])
+    ? (PublicSchema["Tables"] &
+        PublicSchema["Views"])[PublicTableNameOrOptions] extends {
         Row: infer R
       }
       ? R
@@ -3462,22 +3996,20 @@ export type Tables<
     : never
 
 export type TablesInsert<
-  DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
+  PublicTableNameOrOptions extends
+    | keyof PublicSchema["Tables"]
     | { schema: keyof Database },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof Database
-  }
-    ? keyof Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+  TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
+    ? keyof Database[PublicTableNameOrOptions["schema"]]["Tables"]
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
-  ? Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+> = PublicTableNameOrOptions extends { schema: keyof Database }
+  ? Database[PublicTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Insert: infer I
     }
     ? I
     : never
-  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
-    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+  : PublicTableNameOrOptions extends keyof PublicSchema["Tables"]
+    ? PublicSchema["Tables"][PublicTableNameOrOptions] extends {
         Insert: infer I
       }
       ? I
@@ -3485,22 +4017,20 @@ export type TablesInsert<
     : never
 
 export type TablesUpdate<
-  DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
+  PublicTableNameOrOptions extends
+    | keyof PublicSchema["Tables"]
     | { schema: keyof Database },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof Database
-  }
-    ? keyof Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+  TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
+    ? keyof Database[PublicTableNameOrOptions["schema"]]["Tables"]
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
-  ? Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+> = PublicTableNameOrOptions extends { schema: keyof Database }
+  ? Database[PublicTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Update: infer U
     }
     ? U
     : never
-  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
-    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+  : PublicTableNameOrOptions extends keyof PublicSchema["Tables"]
+    ? PublicSchema["Tables"][PublicTableNameOrOptions] extends {
         Update: infer U
       }
       ? U
@@ -3508,23 +4038,21 @@ export type TablesUpdate<
     : never
 
 export type Enums<
-  DefaultSchemaEnumNameOrOptions extends
-    | keyof DefaultSchema["Enums"]
+  PublicEnumNameOrOptions extends
+    | keyof PublicSchema["Enums"]
     | { schema: keyof Database },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
-    schema: keyof Database
-  }
-    ? keyof Database[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+  EnumName extends PublicEnumNameOrOptions extends { schema: keyof Database }
+    ? keyof Database[PublicEnumNameOrOptions["schema"]]["Enums"]
     : never = never,
-> = DefaultSchemaEnumNameOrOptions extends { schema: keyof Database }
-  ? Database[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
-  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
-    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+> = PublicEnumNameOrOptions extends { schema: keyof Database }
+  ? Database[PublicEnumNameOrOptions["schema"]]["Enums"][EnumName]
+  : PublicEnumNameOrOptions extends keyof PublicSchema["Enums"]
+    ? PublicSchema["Enums"][PublicEnumNameOrOptions]
     : never
 
 export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
-    | keyof DefaultSchema["CompositeTypes"]
+    | keyof PublicSchema["CompositeTypes"]
     | { schema: keyof Database },
   CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
     schema: keyof Database
@@ -3533,157 +4061,6 @@ export type CompositeTypes<
     : never = never,
 > = PublicCompositeTypeNameOrOptions extends { schema: keyof Database }
   ? Database[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
-  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
-    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+  : PublicCompositeTypeNameOrOptions extends keyof PublicSchema["CompositeTypes"]
+    ? PublicSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
     : never
-
-export const Constants = {
-  public: {
-    Enums: {
-      account_type: ["Customer", "Vendor", "Customer & Vendor"],
-      audit_event_type: [
-        "message_created",
-        "message_updated",
-        "message_deleted",
-        "message_analyzed",
-        "webhook_received",
-        "media_group_synced",
-        "message_edited",
-        "media_group_history_synced",
-        "forward_media_synced",
-        "message_forwarded",
-        "trigger_auto_queue_activated",
-        "trigger_queue_error",
-        "media_group_content_synced",
-        "media_group_sync_error",
-        "message_queued_for_processing",
-        "direct_caption_analysis_triggered",
-        "caption_analysis_retry",
-        "direct_processing_error",
-        "analyze_message_started",
-        "analyze_message_failed",
-        "message_processing_completed",
-        "message_processing_failed",
-        "message_processing_retry",
-        "media_group_content_synced_direct",
-        "forward_status_changed",
-        "duplicate_detected",
-        "file_redownload_flagged",
-        "health_check_performed",
-        "edge_function_error",
-        "queue_processing_started",
-        "queue_processing_completed",
-        "caption_analysis_directly_triggered",
-        "caption_analysis_prepared",
-        "caption_analysis_error",
-        "edge_function_fallback",
-        "media_group_content_synced_batch",
-        "media_group_edit_synced",
-        "media_group_sync_triggered",
-        "media_group_edit_history_synced",
-        "media_group_sync_validated",
-        "media_group_sync_conflict",
-        "edit_content_propagated",
-        "media_group_version_updated",
-        "system_configuration_updated",
-        "message_processing_error",
-        "message_processing_started",
-      ],
-      client_type: ["Vendor", "Customer", "Customer & Vendor"],
-      document_status_type: ["draft", "pending", "paid", "void", "overdue"],
-      error_type: [
-        "VALIDATION_ERROR",
-        "TRANSFORM_ERROR",
-        "API_ERROR",
-        "RATE_LIMIT",
-        "NETWORK_ERROR",
-      ],
-      make_event_type: [
-        "message_received",
-        "channel_joined",
-        "channel_left",
-        "user_joined",
-        "user_left",
-        "media_received",
-        "command_received",
-        "message_edited",
-        "message_deleted",
-        "media_group_received",
-        "message_forwarded",
-        "caption_updated",
-        "processing_completed",
-      ],
-      make_log_status: ["pending", "success", "failed"],
-      message_operation_type: [
-        "message_create",
-        "message_update",
-        "message_delete",
-        "message_forward",
-        "message_edit",
-        "media_redownload",
-        "caption_change",
-        "media_change",
-        "group_sync",
-      ],
-      processing_state: [
-        "initialized",
-        "pending",
-        "processing",
-        "completed",
-        "partial_success",
-        "error",
-      ],
-      processing_state_type: [
-        "initialized",
-        "pending",
-        "processing",
-        "completed",
-        "error",
-      ],
-      sync_direction_type: ["to_supabase", "to_glide", "both"],
-      sync_operation: ["sync", "create", "update", "delete"],
-      sync_resolution_status: [
-        "pending",
-        "push_to_glide",
-        "delete_from_supabase",
-        "ignored",
-        "resolved",
-      ],
-      sync_status: ["pending", "synced", "error", "locked"],
-      sync_status_type: ["started", "processing", "completed", "failed"],
-      telegram_chat_type: [
-        "private",
-        "group",
-        "supergroup",
-        "channel",
-        "unknown",
-      ],
-      telegram_other_message_type: [
-        "text",
-        "callback_query",
-        "inline_query",
-        "chosen_inline_result",
-        "shipping_query",
-        "pre_checkout_query",
-        "poll",
-        "poll_answer",
-        "chat_join_request",
-        "my_chat_member",
-        "sticker",
-        "dice",
-        "location",
-        "contact",
-        "venue",
-        "game",
-        "chat_member",
-        "edited_channel_post",
-        "message_created",
-        "message_updated",
-        "message_deleted",
-        "message_analyzed",
-        "webhook_received",
-        "media_group_synced",
-      ],
-    },
-  },
-} as const
