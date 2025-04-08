@@ -1,11 +1,9 @@
 
 import { supabase } from "@/integrations/supabase/client";
-import { Database } from "@/integrations/supabase/database.types";
+import { Database } from "@/integrations/supabase/types";
 import { AnalyzedContent, MatchResult } from "@/types";
 import { SupabaseClient } from "@supabase/supabase-js";
 import { logEvent, LogEventType } from "@/lib/logUtils";
-
-type GlProductRow = Database['public']['Tables']['gl_products']['Row'];
 
 // Configuration
 const CONFIG = {
@@ -73,10 +71,7 @@ const findMatches = async (
 
     const matches: MatchResult[] = [];
 
-    // Type cast the products
-    const productRows = products as GlProductRow[];
-
-    for (const product of productRows) {
+    for (const product of products) {
       // Calculate matching confidence
       let confidence = 0;
       const matchedFields: string[] = [];

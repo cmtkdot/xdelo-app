@@ -1,25 +1,25 @@
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter as Router, Routes, Route, Navigate, Outlet, useNavigate } from "react-router-dom";
-import { SupabaseProvider } from "./integrations/supabase/SupabaseProvider";
-import { ThemeProvider } from "./components/Theme/ThemeProvider";
-import { NavigationProvider } from "./components/Layout/NavigationProvider";
-import { useState, useEffect, lazy, Suspense } from "react";
-import { supabase } from "./integrations/supabase/client";
 import type { Session } from "@supabase/supabase-js";
-import Auth from "./pages/Auth";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { lazy, Suspense, useEffect, useState } from "react";
+import { Navigate, Outlet, Route, BrowserRouter as Router, Routes, useNavigate } from "react-router-dom";
 import { MobileBottomNav } from "./components/Layout/MobileBottomNav";
-import { useIsMobile } from "./hooks/useMobile";
+import { NavigationProvider } from "./components/Layout/NavigationProvider";
+import { ThemeProvider } from "./components/Theme/ThemeProvider";
+import { supabase } from "./integrations/supabase/client";
+import { SupabaseProvider } from "./integrations/supabase/SupabaseProvider";
+import Auth from "./pages/Auth";
 
 // Import Dashboard directly to ensure it's properly loaded
 import Dashboard from "./pages/Dashboard";
+// Import Settings directly to fix dynamic import error
+import Settings from "./pages/Settings";
 
 // Lazy load other page components for better performance
 const MessagesEnhanced = lazy(() => import("./pages/MessagesEnhanced"));
 const MediaTable = lazy(() => import("./pages/MediaTable"));
 const AIChat = lazy(() => import("./pages/AIChat"));
-const Settings = lazy(() => import("./pages/Settings"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const PublicGallery = lazy(() => import("./pages/PublicGallery"));
 const ProductMatching = lazy(() => import('./pages/ProductMatching'));
@@ -167,9 +167,8 @@ function App() {
                       </Suspense>
                     } />
                     <Route path="/settings" element={
-                      <Suspense fallback={<PageLoader />}>
-                        <Settings />
-                      </Suspense>
+                      // Use Settings directly without Suspense
+                      <Settings />
                     } />
                     <Route path="/product-matching" element={
                       <Suspense fallback={<PageLoader />}>

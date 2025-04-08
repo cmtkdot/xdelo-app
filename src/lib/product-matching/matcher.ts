@@ -1,13 +1,12 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { SupabaseClient } from "@supabase/supabase-js";
 import { calculateStringSimilarity } from "./similarity";
 import { logEvent, LogEventType } from "@/lib/logUtils";
-import { Database } from "@/integrations/supabase/database.types";
+import { Database } from "@/integrations/supabase/types";
 import { BatchMatchResult, MatchLogMetadata, MatchResult, MatchableProduct, ProductMatchingConfig } from "./types";
 import { AnalyzedContent } from "@/types";
 import { fetchMatchingConfig } from "./config";
-
-type GlProductRow = Database['public']['Tables']['gl_products']['Row'];
 
 /**
  * Find matches for a message by ID
@@ -83,18 +82,9 @@ export async function findMatches(
       };
     }
 
-    // Cast the database result to our MatchableProduct type
-    const matchableProducts: MatchableProduct[] = (products as GlProductRow[]).map(p => ({
-      id: p.id,
-      new_product_name: p.new_product_name || '',
-      vendor_product_name: p.vendor_product_name || '',
-      vendor_uid: p.vendor_uid || '',
-      product_purchase_date: p.product_purchase_date || '',
-    }));
-    
-    // Match products
+    // Match products - cast the database result to our MatchableProduct type
     const { matches, bestMatch } = matchProductsToMessage(
-      matchableProducts,
+      products as unknown as MatchableProduct[],
       {
         productName: product_name,
         vendorUid: vendor_uid,
@@ -185,7 +175,7 @@ export function matchProductsToMessage(
         matchedFields.push('vendor_uid');
         matchDetails.vendorMatch = true;
         matchResults.vendor_uid.score = 1;
-      } else if (config.partialMatch.enabled && vendorUid.length >= (config.partialMatch.vendorMinLength || 2) && vendorIdToMatch) {
+      } else if (config.partialMatch.enabled && vendorUid.length >= config.partialMatch.vendorMinLength && vendorIdToMatch) {
         // Try partial vendor match (e.g., first few characters)
         const vendorPrefix = vendorUid.substring(0, Math.min(vendorUid.length, 3));
         if (vendorIdToMatch.startsWith(vendorPrefix)) {

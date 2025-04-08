@@ -1,57 +1,29 @@
 
-export interface MediaUtilsOptions {
-  maxRetries?: number;
-  useBatchOperations?: boolean;
-}
-
-export interface MediaRepairOptions {
-  redownload?: boolean;
-  validateMime?: boolean;
-  standardizePath?: boolean;
-  force?: boolean;
-}
-
-export interface RepairResult {
-  success: boolean;
-  successCount: number;
-  failureCount: number;
-  errors: Record<string, string>;
-  messages: string[];
-}
-
-export interface BatchOperationResult {
-  successCount: number;
-  failureCount: number;
-  results: RepairResult[];
-}
-
-export interface MediaValidationResult {
-  valid: boolean;
-  issues: string[];
-  messageId: string;
-  recommendedActions?: string[];
-}
-
-export interface ValidationOptions {
-  checkMimeType?: boolean;
-  checkStorage?: boolean;
-  checkPath?: boolean;
-  checkDimensions?: boolean;
-}
-
-export interface BatchValidationResult {
-  validCount: number;
-  invalidCount: number;
-  results: MediaValidationResult[];
-}
-
 export interface MediaProcessingState {
   isProcessing: boolean;
-  processingMessageIds: Record<string, boolean>;
+  processingMessageIds: string[];
 }
 
-export interface MediaProcessingStateActions {
+export interface MediaProcessingActions {
   setIsProcessing: (isProcessing: boolean) => void;
-  addProcessingMessageId: (id: string) => void;
-  removeProcessingMessageId: (id: string) => void;
+  addProcessingMessageId: (messageId: string) => void;
+  removeProcessingMessageId: (messageId: string) => void;
+}
+
+export enum LogEventType {
+  UPLOAD_STARTED = 'upload_started',
+  UPLOAD_COMPLETED = 'upload_completed',
+  UPLOAD_FAILED = 'upload_failed',
+  DOWNLOAD_STARTED = 'download_started',
+  DOWNLOAD_COMPLETED = 'download_completed',
+  DOWNLOAD_FAILED = 'download_failed',
+  DELETION_STARTED = 'deletion_started',
+  DELETION_COMPLETED = 'deletion_completed',
+  DELETION_FAILED = 'deletion_failed',
+  REUPLOAD_STARTED = 'reupload_started',
+  REUPLOAD_COMPLETED = 'reupload_completed',
+  REUPLOAD_FAILED = 'reupload_failed',
+  SYNC_STARTED = 'sync_started',
+  SYNC_COMPLETED = 'sync_completed',
+  SYNC_FAILED = 'sync_failed'
 }

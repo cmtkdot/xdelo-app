@@ -9,6 +9,39 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      analysis_queue: {
+        Row: {
+          attempts: number | null
+          created_at: string | null
+          error_message: string | null
+          id: string
+          last_attempt_at: string | null
+          message_id: string
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          attempts?: number | null
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          last_attempt_at?: string | null
+          message_id: string
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          attempts?: number | null
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          last_attempt_at?: string | null
+          message_id?: string
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       deleted_messages: {
         Row: {
           analyzed_content: Json | null
@@ -66,6 +99,846 @@ export type Database = {
           telegram_data?: Json | null
           telegram_message_id?: number | null
           user_id?: string | null
+        }
+        Relationships: []
+      }
+      gl_accounts: {
+        Row: {
+          account_name: string | null
+          accounts_uid: string | null
+          balance: number | null
+          client_type: string | null
+          created_at: string | null
+          date_added_client: string | null
+          email_of_who_added: string | null
+          glide_row_id: string | null
+          id: string
+          photo: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          account_name?: string | null
+          accounts_uid?: string | null
+          balance?: number | null
+          client_type?: string | null
+          created_at?: string | null
+          date_added_client?: string | null
+          email_of_who_added?: string | null
+          glide_row_id?: string | null
+          id: string
+          photo?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          account_name?: string | null
+          accounts_uid?: string | null
+          balance?: number | null
+          client_type?: string | null
+          created_at?: string | null
+          date_added_client?: string | null
+          email_of_who_added?: string | null
+          glide_row_id?: string | null
+          id?: string
+          photo?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      gl_connections: {
+        Row: {
+          api_key: string | null
+          app_id: string | null
+          app_name: string | null
+          created_at: string | null
+          id: string
+          last_sync: string | null
+          settings: Json | null
+          status: string | null
+        }
+        Insert: {
+          api_key?: string | null
+          app_id?: string | null
+          app_name?: string | null
+          created_at?: string | null
+          id: string
+          last_sync?: string | null
+          settings?: Json | null
+          status?: string | null
+        }
+        Update: {
+          api_key?: string | null
+          app_id?: string | null
+          app_name?: string | null
+          created_at?: string | null
+          id?: string
+          last_sync?: string | null
+          settings?: Json | null
+          status?: string | null
+        }
+        Relationships: []
+      }
+      gl_customer_credits: {
+        Row: {
+          created_at: string | null
+          date_of_payment: string | null
+          glide_row_id: string | null
+          id: string
+          payment_amount: number | null
+          payment_note: string | null
+          payment_type: string | null
+          rowid_accounts: string | null
+          rowid_estimates: string | null
+          rowid_invoices: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          date_of_payment?: string | null
+          glide_row_id?: string | null
+          id: string
+          payment_amount?: number | null
+          payment_note?: string | null
+          payment_type?: string | null
+          rowid_accounts?: string | null
+          rowid_estimates?: string | null
+          rowid_invoices?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          date_of_payment?: string | null
+          glide_row_id?: string | null
+          id?: string
+          payment_amount?: number | null
+          payment_note?: string | null
+          payment_type?: string | null
+          rowid_accounts?: string | null
+          rowid_estimates?: string | null
+          rowid_invoices?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      gl_customer_payments: {
+        Row: {
+          created_at: string | null
+          date_of_payment: string | null
+          email_of_user: string | null
+          glide_row_id: string | null
+          id: string
+          payment_amount: number | null
+          payment_note: string | null
+          rowid_accounts: string | null
+          rowid_invoices: string | null
+          type_of_payment: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          date_of_payment?: string | null
+          email_of_user?: string | null
+          glide_row_id?: string | null
+          id: string
+          payment_amount?: number | null
+          payment_note?: string | null
+          rowid_accounts?: string | null
+          rowid_invoices?: string | null
+          type_of_payment?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          date_of_payment?: string | null
+          email_of_user?: string | null
+          glide_row_id?: string | null
+          id?: string
+          payment_amount?: number | null
+          payment_note?: string | null
+          rowid_accounts?: string | null
+          rowid_invoices?: string | null
+          type_of_payment?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      gl_estimate_lines: {
+        Row: {
+          created_at: string | null
+          date_of_sale: string | null
+          glide_row_id: string | null
+          id: string
+          line_total: number | null
+          product_sale_note: string | null
+          qty_sold: number | null
+          rowid_estimate_lines: string | null
+          rowid_products: string | null
+          sale_product_name: string | null
+          selling_price: number | null
+          total_stock_after_sell: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          date_of_sale?: string | null
+          glide_row_id?: string | null
+          id: string
+          line_total?: number | null
+          product_sale_note?: string | null
+          qty_sold?: number | null
+          rowid_estimate_lines?: string | null
+          rowid_products?: string | null
+          sale_product_name?: string | null
+          selling_price?: number | null
+          total_stock_after_sell?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          date_of_sale?: string | null
+          glide_row_id?: string | null
+          id?: string
+          line_total?: number | null
+          product_sale_note?: string | null
+          qty_sold?: number | null
+          rowid_estimate_lines?: string | null
+          rowid_products?: string | null
+          sale_product_name?: string | null
+          selling_price?: number | null
+          total_stock_after_sell?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      gl_estimates: {
+        Row: {
+          add_note: boolean | null
+          balance: number | null
+          created_at: string | null
+          date_invoice_created_date: string | null
+          estimate_date: string | null
+          glide_pdf_url: string | null
+          glide_pdf_url2: string | null
+          glide_row_id: string | null
+          id: string
+          is_a_sample: boolean | null
+          rowid_accounts: string | null
+          rowid_invoices: string | null
+          status: string | null
+          total_amount: number | null
+          total_credits: number | null
+          updated_at: string | null
+          valid_final_create_invoice_clicked: boolean | null
+        }
+        Insert: {
+          add_note?: boolean | null
+          balance?: number | null
+          created_at?: string | null
+          date_invoice_created_date?: string | null
+          estimate_date?: string | null
+          glide_pdf_url?: string | null
+          glide_pdf_url2?: string | null
+          glide_row_id?: string | null
+          id: string
+          is_a_sample?: boolean | null
+          rowid_accounts?: string | null
+          rowid_invoices?: string | null
+          status?: string | null
+          total_amount?: number | null
+          total_credits?: number | null
+          updated_at?: string | null
+          valid_final_create_invoice_clicked?: boolean | null
+        }
+        Update: {
+          add_note?: boolean | null
+          balance?: number | null
+          created_at?: string | null
+          date_invoice_created_date?: string | null
+          estimate_date?: string | null
+          glide_pdf_url?: string | null
+          glide_pdf_url2?: string | null
+          glide_row_id?: string | null
+          id?: string
+          is_a_sample?: boolean | null
+          rowid_accounts?: string | null
+          rowid_invoices?: string | null
+          status?: string | null
+          total_amount?: number | null
+          total_credits?: number | null
+          updated_at?: string | null
+          valid_final_create_invoice_clicked?: boolean | null
+        }
+        Relationships: []
+      }
+      gl_expenses: {
+        Row: {
+          amount: number | null
+          category: string | null
+          created_at: string | null
+          date: string | null
+          expense_address: string | null
+          expense_cash: string | null
+          expense_change: string | null
+          expense_list_of_items: string | null
+          expense_receipt_image: string | null
+          expense_supplier_name: string | null
+          expense_tax: string | null
+          expense_text_to_json: string | null
+          expense_total: string | null
+          glide_row_id: string | null
+          id: string
+          notes: string | null
+          processing: boolean | null
+          submitted_by: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          amount?: number | null
+          category?: string | null
+          created_at?: string | null
+          date?: string | null
+          expense_address?: string | null
+          expense_cash?: string | null
+          expense_change?: string | null
+          expense_list_of_items?: string | null
+          expense_receipt_image?: string | null
+          expense_supplier_name?: string | null
+          expense_tax?: string | null
+          expense_text_to_json?: string | null
+          expense_total?: string | null
+          glide_row_id?: string | null
+          id: string
+          notes?: string | null
+          processing?: boolean | null
+          submitted_by?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          amount?: number | null
+          category?: string | null
+          created_at?: string | null
+          date?: string | null
+          expense_address?: string | null
+          expense_cash?: string | null
+          expense_change?: string | null
+          expense_list_of_items?: string | null
+          expense_receipt_image?: string | null
+          expense_supplier_name?: string | null
+          expense_tax?: string | null
+          expense_text_to_json?: string | null
+          expense_total?: string | null
+          glide_row_id?: string | null
+          id?: string
+          notes?: string | null
+          processing?: boolean | null
+          submitted_by?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      gl_invoice_lines: {
+        Row: {
+          created_at: string | null
+          date_of_sale: string | null
+          glide_row_id: string | null
+          id: string
+          line_total: number | null
+          product_sale_note: string | null
+          qty_sold: number | null
+          renamed_product_name: string | null
+          rowid_invoices: string | null
+          rowid_products: string | null
+          selling_price: number | null
+          updated_at: string | null
+          user_email_of_added: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          date_of_sale?: string | null
+          glide_row_id?: string | null
+          id: string
+          line_total?: number | null
+          product_sale_note?: string | null
+          qty_sold?: number | null
+          renamed_product_name?: string | null
+          rowid_invoices?: string | null
+          rowid_products?: string | null
+          selling_price?: number | null
+          updated_at?: string | null
+          user_email_of_added?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          date_of_sale?: string | null
+          glide_row_id?: string | null
+          id?: string
+          line_total?: number | null
+          product_sale_note?: string | null
+          qty_sold?: number | null
+          renamed_product_name?: string | null
+          rowid_invoices?: string | null
+          rowid_products?: string | null
+          selling_price?: number | null
+          updated_at?: string | null
+          user_email_of_added?: string | null
+        }
+        Relationships: []
+      }
+      gl_invoices: {
+        Row: {
+          balance: number | null
+          created_at: string | null
+          created_timestamp: string | null
+          doc_glideforeverlink: string | null
+          glide_row_id: string | null
+          id: string
+          invoice_order_date: string | null
+          notes: string | null
+          payment_status: string | null
+          processed: boolean | null
+          rowid_accounts: string | null
+          submitted_timestamp: string | null
+          total_amount: number | null
+          total_paid: number | null
+          updated_at: string | null
+          user_email: string | null
+        }
+        Insert: {
+          balance?: number | null
+          created_at?: string | null
+          created_timestamp?: string | null
+          doc_glideforeverlink?: string | null
+          glide_row_id?: string | null
+          id: string
+          invoice_order_date?: string | null
+          notes?: string | null
+          payment_status?: string | null
+          processed?: boolean | null
+          rowid_accounts?: string | null
+          submitted_timestamp?: string | null
+          total_amount?: number | null
+          total_paid?: number | null
+          updated_at?: string | null
+          user_email?: string | null
+        }
+        Update: {
+          balance?: number | null
+          created_at?: string | null
+          created_timestamp?: string | null
+          doc_glideforeverlink?: string | null
+          glide_row_id?: string | null
+          id?: string
+          invoice_order_date?: string | null
+          notes?: string | null
+          payment_status?: string | null
+          processed?: boolean | null
+          rowid_accounts?: string | null
+          submitted_timestamp?: string | null
+          total_amount?: number | null
+          total_paid?: number | null
+          updated_at?: string | null
+          user_email?: string | null
+        }
+        Relationships: []
+      }
+      gl_mappings: {
+        Row: {
+          column_mappings: Json | null
+          connection_id: string | null
+          created_at: string | null
+          enabled: boolean | null
+          glide_table: string | null
+          glide_table_display_name: string | null
+          id: string
+          supabase_table: string | null
+          sync_direction: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          column_mappings?: Json | null
+          connection_id?: string | null
+          created_at?: string | null
+          enabled?: boolean | null
+          glide_table?: string | null
+          glide_table_display_name?: string | null
+          id: string
+          supabase_table?: string | null
+          sync_direction?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          column_mappings?: Json | null
+          connection_id?: string | null
+          created_at?: string | null
+          enabled?: boolean | null
+          glide_table?: string | null
+          glide_table_display_name?: string | null
+          id?: string
+          supabase_table?: string | null
+          sync_direction?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gl_mappings_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "gl_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gl_products: {
+        Row: {
+          category: string | null
+          cost: number | null
+          created_at: string | null
+          date_timestamp_subm: string | null
+          display_name: string | null
+          email_email_of_user_who_added_product: string | null
+          fronted: boolean | null
+          glide_row_id: string | null
+          id: string
+          miscellaneous_items: boolean | null
+          new_product_name: string | null
+          po_po_date: string | null
+          po_poui_dfrom_add_prod: string | null
+          product_image1: string | null
+          product_purchase_date: string | null
+          purchase_notes: string | null
+          rowid_accounts: string | null
+          rowid_purchase_orders: string | null
+          rowid_vendor_payments: string | null
+          samples: boolean | null
+          samples_or_fronted: boolean | null
+          terms_for_fronted_product: string | null
+          total_qty_purchased: number | null
+          total_units_behind_sample: number | null
+          updated_at: string | null
+          vendor_product_name: string | null
+        }
+        Insert: {
+          category?: string | null
+          cost?: number | null
+          created_at?: string | null
+          date_timestamp_subm?: string | null
+          display_name?: string | null
+          email_email_of_user_who_added_product?: string | null
+          fronted?: boolean | null
+          glide_row_id?: string | null
+          id: string
+          miscellaneous_items?: boolean | null
+          new_product_name?: string | null
+          po_po_date?: string | null
+          po_poui_dfrom_add_prod?: string | null
+          product_image1?: string | null
+          product_purchase_date?: string | null
+          purchase_notes?: string | null
+          rowid_accounts?: string | null
+          rowid_purchase_orders?: string | null
+          rowid_vendor_payments?: string | null
+          samples?: boolean | null
+          samples_or_fronted?: boolean | null
+          terms_for_fronted_product?: string | null
+          total_qty_purchased?: number | null
+          total_units_behind_sample?: number | null
+          updated_at?: string | null
+          vendor_product_name?: string | null
+        }
+        Update: {
+          category?: string | null
+          cost?: number | null
+          created_at?: string | null
+          date_timestamp_subm?: string | null
+          display_name?: string | null
+          email_email_of_user_who_added_product?: string | null
+          fronted?: boolean | null
+          glide_row_id?: string | null
+          id?: string
+          miscellaneous_items?: boolean | null
+          new_product_name?: string | null
+          po_po_date?: string | null
+          po_poui_dfrom_add_prod?: string | null
+          product_image1?: string | null
+          product_purchase_date?: string | null
+          purchase_notes?: string | null
+          rowid_accounts?: string | null
+          rowid_purchase_orders?: string | null
+          rowid_vendor_payments?: string | null
+          samples?: boolean | null
+          samples_or_fronted?: boolean | null
+          terms_for_fronted_product?: string | null
+          total_qty_purchased?: number | null
+          total_units_behind_sample?: number | null
+          updated_at?: string | null
+          vendor_product_name?: string | null
+        }
+        Relationships: []
+      }
+      gl_purchase_orders: {
+        Row: {
+          balance: number | null
+          created_at: string | null
+          date_payment_date_mddyyyy: string | null
+          docs_shortlink: string | null
+          glide_row_id: string | null
+          id: string
+          payment_status: string | null
+          pdf_link: string | null
+          po_date: string | null
+          product_count: number | null
+          purchase_order_uid: string | null
+          rowid_accounts: string | null
+          total_amount: number | null
+          total_paid: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          balance?: number | null
+          created_at?: string | null
+          date_payment_date_mddyyyy?: string | null
+          docs_shortlink?: string | null
+          glide_row_id?: string | null
+          id: string
+          payment_status?: string | null
+          pdf_link?: string | null
+          po_date?: string | null
+          product_count?: number | null
+          purchase_order_uid?: string | null
+          rowid_accounts?: string | null
+          total_amount?: number | null
+          total_paid?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          balance?: number | null
+          created_at?: string | null
+          date_payment_date_mddyyyy?: string | null
+          docs_shortlink?: string | null
+          glide_row_id?: string | null
+          id?: string
+          payment_status?: string | null
+          pdf_link?: string | null
+          po_date?: string | null
+          product_count?: number | null
+          purchase_order_uid?: string | null
+          rowid_accounts?: string | null
+          total_amount?: number | null
+          total_paid?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      gl_shipping_records: {
+        Row: {
+          box_sizes: string | null
+          box_weight: number | null
+          created_at: string | null
+          drop_off_location_uid: string | null
+          glide_row_id: string | null
+          id: string
+          receiver_receiver_address: string | null
+          receiver_receiver_name: string | null
+          receiver_state: string | null
+          rowid_accounts: string | null
+          rowid_invoices: string | null
+          sender_sender_address: string | null
+          sender_sender_name_company: string | null
+          sender_sender_phone: string | null
+          ship_date: string | null
+          tp_id: string | null
+          tracking_number: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          box_sizes?: string | null
+          box_weight?: number | null
+          created_at?: string | null
+          drop_off_location_uid?: string | null
+          glide_row_id?: string | null
+          id: string
+          receiver_receiver_address?: string | null
+          receiver_receiver_name?: string | null
+          receiver_state?: string | null
+          rowid_accounts?: string | null
+          rowid_invoices?: string | null
+          sender_sender_address?: string | null
+          sender_sender_name_company?: string | null
+          sender_sender_phone?: string | null
+          ship_date?: string | null
+          tp_id?: string | null
+          tracking_number?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          box_sizes?: string | null
+          box_weight?: number | null
+          created_at?: string | null
+          drop_off_location_uid?: string | null
+          glide_row_id?: string | null
+          id?: string
+          receiver_receiver_address?: string | null
+          receiver_receiver_name?: string | null
+          receiver_state?: string | null
+          rowid_accounts?: string | null
+          rowid_invoices?: string | null
+          sender_sender_address?: string | null
+          sender_sender_name_company?: string | null
+          sender_sender_phone?: string | null
+          ship_date?: string | null
+          tp_id?: string | null
+          tracking_number?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      gl_sync_errors: {
+        Row: {
+          created_at: string | null
+          error_message: string | null
+          error_type: string | null
+          id: string
+          mapping_id: string | null
+          record_data: Json | null
+          resolution_notes: string | null
+          resolved_at: string | null
+          retryable: boolean | null
+        }
+        Insert: {
+          created_at?: string | null
+          error_message?: string | null
+          error_type?: string | null
+          id: string
+          mapping_id?: string | null
+          record_data?: Json | null
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          retryable?: boolean | null
+        }
+        Update: {
+          created_at?: string | null
+          error_message?: string | null
+          error_type?: string | null
+          id?: string
+          mapping_id?: string | null
+          record_data?: Json | null
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          retryable?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gl_sync_errors_mapping_id_fkey"
+            columns: ["mapping_id"]
+            isOneToOne: false
+            referencedRelation: "gl_mapping_status"
+            referencedColumns: ["mapping_id"]
+          },
+          {
+            foreignKeyName: "gl_sync_errors_mapping_id_fkey"
+            columns: ["mapping_id"]
+            isOneToOne: false
+            referencedRelation: "gl_mappings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gl_sync_errors_mapping_id_fkey"
+            columns: ["mapping_id"]
+            isOneToOne: false
+            referencedRelation: "gl_product_sync_stats"
+            referencedColumns: ["mapping_id"]
+          },
+        ]
+      }
+      gl_sync_logs: {
+        Row: {
+          completed_at: string | null
+          id: string
+          mapping_id: string | null
+          message: string | null
+          records_processed: number | null
+          started_at: string | null
+          status: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          id: string
+          mapping_id?: string | null
+          message?: string | null
+          records_processed?: number | null
+          started_at?: string | null
+          status?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          id?: string
+          mapping_id?: string | null
+          message?: string | null
+          records_processed?: number | null
+          started_at?: string | null
+          status?: string | null
+        }
+        Relationships: []
+      }
+      gl_vendor_payments: {
+        Row: {
+          created_at: string | null
+          date_of_payment: string | null
+          date_of_purchase_order: string | null
+          glide_row_id: string | null
+          id: string
+          payment_amount: number | null
+          rowid_accounts: string | null
+          rowid_products: string | null
+          rowid_purchase_orders: string | null
+          updated_at: string | null
+          vendor_purchase_note: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          date_of_payment?: string | null
+          date_of_purchase_order?: string | null
+          glide_row_id?: string | null
+          id: string
+          payment_amount?: number | null
+          rowid_accounts?: string | null
+          rowid_products?: string | null
+          rowid_purchase_orders?: string | null
+          updated_at?: string | null
+          vendor_purchase_note?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          date_of_payment?: string | null
+          date_of_purchase_order?: string | null
+          glide_row_id?: string | null
+          id?: string
+          payment_amount?: number | null
+          rowid_accounts?: string | null
+          rowid_products?: string | null
+          rowid_purchase_orders?: string | null
+          updated_at?: string | null
+          vendor_purchase_note?: string | null
+        }
+        Relationships: []
+      }
+      materialized_view_refresh_log: {
+        Row: {
+          last_refresh: string | null
+          next_refresh: string | null
+          refresh_interval: unknown | null
+          view_name: string
+        }
+        Insert: {
+          last_refresh?: string | null
+          next_refresh?: string | null
+          refresh_interval?: unknown | null
+          view_name: string
+        }
+        Update: {
+          last_refresh?: string | null
+          next_refresh?: string | null
+          refresh_interval?: unknown | null
+          view_name?: string
         }
         Relationships: []
       }
@@ -216,7 +1089,7 @@ export type Database = {
           media_group_id?: string | null
           media_group_sync?: boolean | null
           message_caption_id?: string | null
-          message_type?: string
+          message_type: string
           message_url?: string | null
           mime_type?: string | null
           mime_type_original?: string | null
@@ -565,6 +1438,21 @@ export type Database = {
         }
         Relationships: []
       }
+      processing_locks: {
+        Row: {
+          created_at: string | null
+          id: number
+        }
+        Insert: {
+          created_at?: string | null
+          id?: never
+        }
+        Update: {
+          created_at?: string | null
+          id?: never
+        }
+        Relationships: []
+      }
       product_matching_config: {
         Row: {
           created_at: string
@@ -884,8 +1772,84 @@ export type Database = {
         }
         Relationships: []
       }
+      workflow_entity: {
+        Row: {
+          active: boolean
+          connections: Json
+          createdAt: string
+          id: number
+          name: string
+          nodes: Json
+          settings: Json | null
+          staticData: Json | null
+          updatedAt: string
+        }
+        Insert: {
+          active: boolean
+          connections: Json
+          createdAt?: string
+          id?: number
+          name: string
+          nodes: Json
+          settings?: Json | null
+          staticData?: Json | null
+          updatedAt?: string
+        }
+        Update: {
+          active?: boolean
+          connections?: Json
+          createdAt?: string
+          id?: number
+          name?: string
+          nodes?: Json
+          settings?: Json | null
+          staticData?: Json | null
+          updatedAt?: string
+        }
+        Relationships: []
+      }
+      workflows_tags: {
+        Row: {
+          tagId: number
+          workflowId: number
+        }
+        Insert: {
+          tagId: number
+          workflowId: number
+        }
+        Update: {
+          tagId?: number
+          workflowId?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "FK_31140eb41f019805b40d0087449"
+            columns: ["workflowId"]
+            isOneToOne: false
+            referencedRelation: "workflow_entity"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
+      gl_business_metrics: {
+        Row: {
+          total_customers: number | null
+          total_estimates: number | null
+          total_invoice_amount: number | null
+          total_invoices: number | null
+          total_outstanding_balance: number | null
+          total_payments_made: number | null
+          total_payments_received: number | null
+          total_products: number | null
+          total_purchase_amount: number | null
+          total_purchase_balance: number | null
+          total_purchase_orders: number | null
+          total_vendors: number | null
+        }
+        Relationships: []
+      }
       gl_current_status: {
         Row: {
           balance_amount: number | null
@@ -899,9 +1863,149 @@ export type Database = {
         }
         Relationships: []
       }
+      gl_estimate_totals: {
+        Row: {
+          balance: number | null
+          glide_row_id: string | null
+          id: string | null
+          line_items_count: number | null
+          status: string | null
+          total_amount: number | null
+          total_credits: number | null
+        }
+        Relationships: []
+      }
+      gl_mapping_status: {
+        Row: {
+          app_name: string | null
+          column_mappings: Json | null
+          connection_id: string | null
+          created_at: string | null
+          current_status: string | null
+          enabled: boolean | null
+          error_count: number | null
+          glide_table: string | null
+          glide_table_display_name: string | null
+          last_sync_completed_at: string | null
+          last_sync_started_at: string | null
+          mapping_id: string | null
+          records_processed: number | null
+          supabase_table: string | null
+          sync_direction: string | null
+          total_records: number | null
+          updated_at: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gl_mappings_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "gl_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gl_order_fulfillment: {
+        Row: {
+          customer_name: string | null
+          has_shipping: boolean | null
+          invoice_amount: number | null
+          invoice_id: string | null
+          invoice_rowid: string | null
+          payment_status: string | null
+          products: string | null
+          ship_date: string | null
+          total_items: number | null
+          tracking_number: string | null
+        }
+        Relationships: []
+      }
+      gl_product_sync_stats: {
+        Row: {
+          app_name: string | null
+          connection_id: string | null
+          error_count: number | null
+          glide_table: string | null
+          glide_table_display_name: string | null
+          last_sync_time: string | null
+          mapping_id: string | null
+          supabase_table: string | null
+          sync_direction: string | null
+          total_products: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gl_mappings_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "gl_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gl_recent_logs: {
+        Row: {
+          app_name: string | null
+          glide_table: string | null
+          glide_table_display_name: string | null
+          id: string | null
+          mapping_id: string | null
+          message: string | null
+          records_processed: number | null
+          started_at: string | null
+          status: string | null
+          supabase_table: string | null
+          sync_direction: string | null
+        }
+        Relationships: []
+      }
+      gl_sync_stats: {
+        Row: {
+          failed_syncs: number | null
+          successful_syncs: number | null
+          sync_date: string | null
+          syncs: number | null
+          total_records_processed: number | null
+        }
+        Relationships: []
+      }
       gl_tables_view: {
         Row: {
           table_name: unknown | null
+        }
+        Relationships: []
+      }
+      gl_unpaid_inventory: {
+        Row: {
+          category: string | null
+          cost: number | null
+          created_at: string | null
+          date_timestamp_subm: string | null
+          display_name: string | null
+          email_email_of_user_who_added_product: string | null
+          fronted: boolean | null
+          glide_row_id: string | null
+          id: string | null
+          miscellaneous_items: boolean | null
+          new_product_name: string | null
+          po_po_date: string | null
+          po_poui_dfrom_add_prod: string | null
+          product_image1: string | null
+          product_purchase_date: string | null
+          purchase_notes: string | null
+          rowid_accounts: string | null
+          rowid_purchase_orders: string | null
+          rowid_vendor_payments: string | null
+          samples: boolean | null
+          samples_or_fronted: boolean | null
+          terms_for_fronted_product: string | null
+          total_qty_purchased: number | null
+          total_units_behind_sample: number | null
+          unpaid_type: string | null
+          unpaid_value: number | null
+          updated_at: string | null
+          vendor_name: string | null
+          vendor_product_name: string | null
         }
         Relationships: []
       }
@@ -1062,6 +2166,135 @@ export type Database = {
           },
         ]
       }
+      mv_account_details: {
+        Row: {
+          account_id: string | null
+          account_name: string | null
+          accounts_uid: string | null
+          balance: number | null
+          client_type: string | null
+          created_at: string | null
+          glide_row_id: string | null
+          invoice_count: number | null
+          is_customer: boolean | null
+          is_vendor: boolean | null
+          last_invoice_date: string | null
+          last_payment_date: string | null
+          photo: string | null
+          total_invoiced: number | null
+          total_paid: number | null
+          updated_at: string | null
+        }
+        Relationships: []
+      }
+      mv_estimate_customer_details: {
+        Row: {
+          balance: number | null
+          created_at: string | null
+          credit_count: number | null
+          customer_glide_id: string | null
+          customer_id: string | null
+          customer_name: string | null
+          customer_uid: string | null
+          estimate_date: string | null
+          estimate_id: string | null
+          glide_row_id: string | null
+          is_a_sample: boolean | null
+          line_count: number | null
+          related_invoice_glide_id: string | null
+          status: string | null
+          total_amount: number | null
+          total_credits: number | null
+          total_qty: number | null
+          updated_at: string | null
+          valid_final_create_invoice_clicked: boolean | null
+        }
+        Relationships: []
+      }
+      mv_invoice_customer_details: {
+        Row: {
+          balance: number | null
+          created_at: string | null
+          customer_glide_id: string | null
+          customer_id: string | null
+          customer_name: string | null
+          customer_uid: string | null
+          doc_glideforeverlink: string | null
+          glide_row_id: string | null
+          invoice_id: string | null
+          invoice_order_date: string | null
+          last_payment_date: string | null
+          line_count: number | null
+          notes: string | null
+          payment_count: number | null
+          payment_status: string | null
+          total_amount: number | null
+          total_paid: number | null
+          total_qty: number | null
+          updated_at: string | null
+        }
+        Relationships: []
+      }
+      mv_product_vendor_details: {
+        Row: {
+          category: string | null
+          cost: number | null
+          current_inventory: number | null
+          display_name: string | null
+          fronted: boolean | null
+          fronted_value: number | null
+          inventory_value: number | null
+          miscellaneous_items: boolean | null
+          new_product_name: string | null
+          payment_status: string | null
+          po_date: string | null
+          po_number: string | null
+          product_glide_id: string | null
+          product_id: string | null
+          product_image1: string | null
+          product_purchase_date: string | null
+          sample_value: number | null
+          samples: boolean | null
+          samples_or_fronted: boolean | null
+          terms_for_fronted_product: string | null
+          total_qty_purchased: number | null
+          total_sampled: number | null
+          total_sold: number | null
+          total_units_behind_sample: number | null
+          vendor_glide_id: string | null
+          vendor_id: string | null
+          vendor_name: string | null
+          vendor_product_name: string | null
+          vendor_uid: string | null
+        }
+        Relationships: []
+      }
+      mv_purchase_order_vendor_details: {
+        Row: {
+          balance: number | null
+          created_at: string | null
+          docs_shortlink: string | null
+          glide_row_id: string | null
+          last_payment_date: string | null
+          payment_count: number | null
+          payment_status: string | null
+          pdf_link: string | null
+          po_date: string | null
+          product_categories: string[] | null
+          product_count: number | null
+          purchase_order_id: string | null
+          purchase_order_uid: string | null
+          total_amount: number | null
+          total_items: number | null
+          total_paid: number | null
+          updated_at: string | null
+          vendor_glide_id: string | null
+          vendor_id: string | null
+          vendor_name: string | null
+          vendor_uid: string | null
+        }
+        Relationships: []
+      }
       pg_stat_statements: {
         Row: {
           blk_read_time: number | null
@@ -1117,29 +2350,6 @@ export type Database = {
         }
         Relationships: []
       }
-      v_audit_log_stats: {
-        Row: {
-          error_count: number | null
-          error_rate_percent: number | null
-          event_count: number | null
-          event_type: string | null
-          first_event: string | null
-          last_event: string | null
-          unique_correlations: number | null
-          unique_entities: number | null
-        }
-        Relationships: []
-      }
-      v_function_operations: {
-        Row: {
-          error_count: number | null
-          event_count: number | null
-          event_type: string | null
-          first_event: string | null
-          last_event: string | null
-        }
-        Relationships: []
-      }
       v_media_group_consistency: {
         Row: {
           caption_holders: number | null
@@ -1149,17 +2359,6 @@ export type Database = {
           media_group_id: string | null
           message_count: number | null
           synced_messages: number | null
-        }
-        Relationships: []
-      }
-      v_media_group_operations: {
-        Row: {
-          completed_count: number | null
-          error_count: number | null
-          fully_synced: boolean | null
-          last_update: string | null
-          media_group_id: string | null
-          message_count: number | null
         }
         Relationships: []
       }
@@ -1479,6 +2678,46 @@ export type Database = {
           total_purchase_balance: number
         }[]
       }
+      gl_get_sync_errors: {
+        Args: {
+          p_mapping_id: string
+          p_limit?: number
+          p_include_resolved?: boolean
+        }
+        Returns: {
+          created_at: string | null
+          error_message: string | null
+          error_type: string | null
+          id: string
+          mapping_id: string | null
+          record_data: Json | null
+          resolution_notes: string | null
+          resolved_at: string | null
+          retryable: boolean | null
+        }[]
+      }
+      gl_get_sync_status: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          app_name: string | null
+          column_mappings: Json | null
+          connection_id: string | null
+          created_at: string | null
+          current_status: string | null
+          enabled: boolean | null
+          error_count: number | null
+          glide_table: string | null
+          glide_table_display_name: string | null
+          last_sync_completed_at: string | null
+          last_sync_started_at: string | null
+          mapping_id: string | null
+          records_processed: number | null
+          supabase_table: string | null
+          sync_direction: string | null
+          total_records: number | null
+          updated_at: string | null
+        }[]
+      }
       gl_get_table_columns: {
         Args: { table_name: string }
         Returns: {
@@ -1626,32 +2865,6 @@ export type Database = {
           similarity: number
         }[]
       }
-      media_processor: {
-        Args:
-          | {
-              p_action: string
-              p_message_ids: string[]
-              p_correlation_id?: string
-              p_options?: Json
-            }
-          | { p_message_id: string }
-        Returns: Json
-      }
-      message_processor: {
-        Args:
-          | {
-              p_action: string
-              p_message_id: string
-              p_correlation_id?: string
-              p_options?: Json
-            }
-          | {
-              p_action: string
-              p_message_id: string
-              p_correlation_id?: string
-            }
-        Returns: Json
-      }
       pg_stat_statements: {
         Args: { showtext: boolean }
         Returns: Record<string, unknown>[]
@@ -1766,10 +2979,6 @@ export type Database = {
         Args: { "": unknown[] }
         Returns: number
       }
-      xdelo_check_file_exists: {
-        Args: { p_storage_path: string }
-        Returns: boolean
-      }
       xdelo_check_media_group_consistency: {
         Args: { p_media_group_id: string; p_correlation_id?: string }
         Returns: Json
@@ -1784,17 +2993,6 @@ export type Database = {
           media_group_id: string
           message_count: number
           sync_status: Json
-        }[]
-      }
-      xdelo_cleanup_audit_logs: {
-        Args: {
-          retention_days?: number
-          keep_errors?: boolean
-          keep_important_events?: boolean
-        }
-        Returns: {
-          deleted_count: number
-          retained_count: number
         }[]
       }
       xdelo_cleanup_orphaned_audit_logs: {
@@ -1844,10 +3042,6 @@ export type Database = {
         Returns: {
           fixed_count: number
         }[]
-      }
-      xdelo_fix_content_disposition: {
-        Args: { p_storage_path: string; p_mime_type: string }
-        Returns: boolean
       }
       xdelo_fix_public_urls: {
         Args: { p_limit?: number }
@@ -1947,13 +3141,32 @@ export type Database = {
         }[]
       }
       xdelo_log_event: {
-        Args: {
-          p_event_type: string
-          p_entity_id: string
-          p_correlation_id?: string
-          p_metadata?: Json
-          p_error_message?: string
-        }
+        Args:
+          | {
+              p_event_type: string
+              p_entity_id: string
+              p_correlation_id?: string
+              p_metadata?: Json
+              p_error_message?: string
+            }
+          | {
+              p_event_type: Database["public"]["Enums"]["audit_event_type"]
+              p_entity_id: string
+              p_telegram_message_id?: number
+              p_chat_id?: number
+              p_previous_state?: Json
+              p_new_state?: Json
+              p_metadata?: Json
+              p_correlation_id?: string
+              p_user_id?: string
+              p_error_message?: string
+            }
+          | {
+              p_event_type: string
+              p_entity_id: string
+              p_message_id?: string
+              p_metadata?: Json
+            }
         Returns: string
       }
       xdelo_log_event_flexible: {
@@ -2002,7 +3215,7 @@ export type Database = {
         Args: {
           p_event_type: string
           p_entity_id: string
-          p_correlation_id: string
+          p_correlation_id?: string
           p_metadata?: Json
           p_error_message?: string
         }
@@ -2016,6 +3229,14 @@ export type Database = {
         Args: { message_id: string }
         Returns: Json
       }
+      xdelo_process_caption_workflow: {
+        Args: {
+          p_message_id: string
+          p_correlation_id?: string
+          p_force?: boolean
+        }
+        Returns: Json
+      }
       xdelo_repair_file: {
         Args: { p_message_id: string; p_action: string }
         Returns: Json
@@ -2027,10 +3248,6 @@ export type Database = {
           source_message_id: string
           updated_count: number
         }[]
-      }
-      xdelo_repair_metadata: {
-        Args: { p_message_id: string }
-        Returns: Json
       }
       xdelo_reset_stalled_messages: {
         Args: { p_older_than_minutes?: number; p_correlation_id?: string }
@@ -2050,9 +3267,11 @@ export type Database = {
       }
       xdelo_sync_media_group: {
         Args: {
-          p_media_group_id: string
           p_source_message_id: string
+          p_media_group_id: string
           p_correlation_id: string
+          p_force_sync?: boolean
+          p_sync_edit_history?: boolean
         }
         Returns: Json
       }
@@ -2060,10 +3279,10 @@ export type Database = {
         Args: {
           p_message_id: string
           p_new_state: string
-          p_correlation_id: string
-          p_error_message?: string
+          p_correlation_id?: string
+          p_metadata?: Json
         }
-        Returns: Json
+        Returns: boolean
       }
       xdelo_update_product_matching_config: {
         Args: { p_config: Json }

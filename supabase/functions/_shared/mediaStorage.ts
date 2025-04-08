@@ -1,124 +1,133 @@
+import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
+import { 
+  xdelo_downloadMediaFromTelegram,
+  xdelo_uploadMediaToStorage,
+  xdelo_detectMimeType
+} from "./mediaUtils.ts";
 
-import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-// Store file from URL to Supabase storage
-export async function storeFileFromUrl(
+/**
+ * Find an existing file in the database by file_unique_id
+ */
+export async function xdelo_findExistingFile(
   supabase: SupabaseClient,
-  fileUrl: string,
-  fileInfo: {
-    path?: string;
-    fileName: string;
-    mimeType: string;
-    bucket?: string;
-  }
-) {
+  fileUniqueId: string
+): Promise<{ exists: boolean; message?: any }> {
   try {
-    const bucket = fileInfo.bucket || 'message_media';
-    const filePath = fileInfo.path ? `${fileInfo.path}/${fileInfo.fileName}` : fileInfo.fileName;
-    
-    // Fetch the file
-    const response = await fetch(fileUrl);
-    
-    if (!response.ok) {
-      throw new Error(`Failed to fetch file: ${response.status} ${response.statusText}`);
-    }
-    
-    // Convert the response to a blob
-    const blob = await response.blob();
-    
-    // Upload to Supabase storage
-    const { data, error } = await supabase.storage
-      .from(bucket)
-      .upload(filePath, blob, {
-        contentType: fileInfo.mimeType,
-        upsert: false
-      });
-    
+    const { data, error } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('file_unique_id', fileUniqueId)
+      .limit(1);
+
     if (error) {
-      throw error;
+      console.error('Error checking for existing file:', error);
+      return { exists: false };
+    }
+
+    if (data && data.length > 0) {
+      return { exists: true, message: data[0] };
+    }
+
+    return { exists: false };
+  } catch (error) {
+    console.error('Unexpected error checking for existing file:', error);
+    return { exists: false };
+  }
+}
+
+/**
+ * Process message media from Telegram, handling download and upload
+ */
+export async function xdelo_processMessageMedia(
+  message: any,
+  fileId: string,
+  fileUniqueId: string,
+  telegramBotToken: string,
+  messageId?: string
+): Promise<{ 
+  success: boolean; 
+  isDuplicate: boolean; 
+  fileInfo: any; 
+  error?: string 
+}> {
+  try {
+    // First check if this is a duplicate file
+    const { exists, message: existingMessage } = await xdelo_findExistingFile(
+      // Get Supabase client
+      createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+        {
+          auth: {
+            persistSession: false,
+            autoRefreshToken: false
+          }
+        }
+      ),
+      fileUniqueId
+    );
+
+    if (exists && existingMessage) {
+      console.log(`Found existing file: ${fileUniqueId}`);
+      
+      // Return existing file info
+      return {
+        success: true,
+        isDuplicate: true,
+        fileInfo: {
+          storage_path: existingMessage.storage_path,
+          mime_type: existingMessage.mime_type,
+          file_size: existingMessage.file_size,
+          public_url: existingMessage.public_url
+        }
+      };
+    }
+
+    // Detect MIME type
+    const detectedMimeType = xdelo_detectMimeType(message);
+    
+    // Download from Telegram
+    const downloadResult = await xdelo_downloadMediaFromTelegram(
+      fileId,
+      fileUniqueId,
+      detectedMimeType,
+      telegramBotToken
+    );
+    
+    if (!downloadResult.success || !downloadResult.blob) {
+      throw new Error(`Failed to download media: ${downloadResult.error || 'Unknown error'}`);
     }
     
-    // Get the public URL
-    const { data: { publicUrl } } = supabase.storage
-      .from(bucket)
-      .getPublicUrl(filePath);
+    // Upload to Supabase Storage
+    const uploadResult = await xdelo_uploadMediaToStorage(
+      downloadResult.storagePath || `${fileUniqueId}.bin`,
+      downloadResult.blob,
+      downloadResult.mimeType || detectedMimeType,
+      messageId
+    );
     
+    if (!uploadResult.success) {
+      throw new Error(`Failed to upload media: ${uploadResult.error || 'Unknown error'}`);
+    }
+    
+    // Return the file info
     return {
       success: true,
-      path: filePath,
-      publicUrl
+      isDuplicate: false,
+      fileInfo: {
+        storage_path: downloadResult.storagePath,
+        mime_type: downloadResult.mimeType || detectedMimeType,
+        file_size: downloadResult.blob.size,
+        public_url: uploadResult.publicUrl
+      }
     };
   } catch (error) {
-    console.error("Error storing file from URL:", error);
-    return { 
-      success: false, 
-      error: error.message 
+    console.error('Error processing message media:', error);
+    return {
+      success: false,
+      isDuplicate: false,
+      fileInfo: null,
+      error: error.message || 'Unknown error processing media'
     };
-  }
-}
-
-// Generate a storage path for a file
-export function generateStoragePath(
-  messageId: string, 
-  fileUniqueId: string,
-  fileName: string,
-  options?: {
-    includeMessageId?: boolean;
-    includeDate?: boolean;
-  }
-) {
-  const pathParts = ['telegram'];
-  
-  // Add date-based folder structure
-  if (options?.includeDate !== false) {
-    const now = new Date();
-    // Format: YYYY/MM
-    pathParts.push(`${now.getFullYear()}/${(now.getMonth() + 1).toString().padStart(2, '0')}`);
-  }
-  
-  // Add message ID subfolder if requested
-  if (options?.includeMessageId) {
-    pathParts.push(messageId);
-  }
-  
-  // Add file unique ID as prefix to prevent collisions
-  const sanitizedFileName = sanitizeFileName(fileName);
-  const finalFileName = `${fileUniqueId}_${sanitizedFileName}`;
-  
-  // Join path parts and add filename
-  return `${pathParts.join('/')}/${finalFileName}`;
-}
-
-// Sanitize file name to be safe for storage
-function sanitizeFileName(fileName: string): string {
-  return fileName
-    .replace(/[^\w\s.-]/g, '_') // Replace non-word chars with underscore
-    .replace(/\s+/g, '_')       // Replace spaces with underscore
-    .toLowerCase();
-}
-
-// Check if file exists in storage
-export async function checkFileExistsInStorage(
-  supabase: SupabaseClient,
-  filePath: string,
-  bucket: string = 'message_media'
-): Promise<boolean> {
-  try {
-    // List files with exact name match
-    const { data, error } = await supabase.storage
-      .from(bucket)
-      .list(filePath.substring(0, filePath.lastIndexOf('/')), {
-        search: filePath.substring(filePath.lastIndexOf('/') + 1)
-      });
-    
-    if (error) {
-      console.error("Error checking file existence:", error);
-      return false;
-    }
-    
-    return data.length > 0;
-  } catch (error) {
-    console.error("Exception checking file existence:", error);
-    return false;
   }
 }
