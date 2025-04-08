@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.208.0/http/server.ts";
-import { corsHeaders, extractForwardInfo, formatErrorResponse, formatSuccessResponse, logEvent, checkMessageExists, constructMessageUrl, supabase } from "../_shared/utils.ts";
+import { corsHeaders, extractForwardInfo, formatErrorResponse, formatSuccessResponse, logEvent, checkMessageExists, constructMessageUrl, supabase } from "../_shared/baseUtils.ts";
 import { xdelo_processMessageMedia } from "../_shared/mediaUtils.ts";
 import { MessageContext, MessageInput, TelegramMessage } from "../_shared/types.ts";
 
