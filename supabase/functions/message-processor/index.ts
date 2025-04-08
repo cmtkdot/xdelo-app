@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import {
     corsHeaders,
     formatErrorResponse,
@@ -11,24 +12,21 @@ import {
 } from "../_shared/baseUtils.ts";
 import type { AnalyzedContent } from "../_shared/types.ts";
 
-interface MessageProcessorRequest {
+interface ProcessorRequest {
   action: 'parse_caption' | 'analyze_with_ai' | 'process_media_group';
   messageId: string;
   correlationId?: string;
   syncMediaGroup?: boolean;
-  forceSync?: boolean;
   options?: {
     aiModel?: string;
     temperature?: number;
-    prompt?: string;
-    maxTokens?: number;
   };
 }
 
 /**
  * Handles message processing requests (manual parsing, AI analysis, media group sync)
  */
-async function processMessage(request: MessageProcessorRequest): Promise<Record<string, unknown>> {
+async function processMessage(request: ProcessorRequest): Promise<Record<string, unknown>> {
   // Generate correlation ID if not provided
   const correlationId = request.correlationId || crypto.randomUUID();
   
@@ -44,8 +42,13 @@ async function processMessage(request: MessageProcessorRequest): Promise<Record<
   const messageId = request.messageId;
   
   try {
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    )
+
     // Fetch message from database
-    const { data: message, error: fetchError } = await supabase
+    const { data: message, error: fetchError } = await supabaseClient
       .from('messages')
       .select('id, caption, text, telegram_message_id, chat_id, media_group_id, processing_state')
       .eq('id', messageId)
@@ -68,7 +71,11 @@ async function processMessage(request: MessageProcessorRequest): Promise<Record<
     }
     
     // Update message state to processing
-    await updateMessageState(messageId, 'processing', correlationId);
+    await supabaseClient.rpc('xdelo_update_message_state', {
+      p_message_id: messageId,
+      p_new_state: 'processing',
+      p_correlation_id: correlationId
+    })
     
     // Process based on action type
     let analyzedContent: AnalyzedContent | null = null;
@@ -107,7 +114,7 @@ async function processMessage(request: MessageProcessorRequest): Promise<Record<
           messageId,
           message.media_group_id,
           correlationId,
-          request.forceSync || false,
+          request.syncMediaGroup || false,
           false // Don't sync edit history by default
         );
         
@@ -134,12 +141,12 @@ async function processMessage(request: MessageProcessorRequest): Promise<Record<
     }
     
     // Update database with analyzed content
-    const updateResult = await updateMessageState(
-      messageId,
-      'completed',
-      correlationId,
-      analyzedContent
-    );
+    const updateResult = await supabaseClient.rpc('xdelo_update_message_state', {
+      p_message_id: messageId,
+      p_new_state: 'completed',
+      p_correlation_id: correlationId,
+      p_analyzed_content: analyzedContent
+    })
     
     if (!updateResult.success) {
       return {
@@ -169,7 +176,7 @@ async function processMessage(request: MessageProcessorRequest): Promise<Record<
         messageId,
         message.media_group_id,
         correlationId,
-        request.forceSync || false
+        request.syncMediaGroup || false
       );
       
       // Return result with sync info
@@ -204,13 +211,12 @@ async function processMessage(request: MessageProcessorRequest): Promise<Record<
     );
     
     // Update message state to error
-    await updateMessageState(
-      messageId,
-      'error', 
-      correlationId,
-      null,
-      error.message
-    );
+    await supabaseClient.rpc('xdelo_update_message_state', {
+      p_message_id: messageId,
+      p_new_state: 'error',
+      p_correlation_id: correlationId,
+      p_error_message: error.message
+    })
     
     return {
       success: false,
@@ -283,18 +289,28 @@ async function analyzeWithAI(
 }
 
 // Handle requests
-serve(async (req) => {
+serve(async (req: Request) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
   
   try {
-    // Parse request
-    const request = await req.json() as MessageProcessorRequest;
-    
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    )
+
+    const { action, messageId, correlationId = crypto.randomUUID(), options = {} } = 
+      await req.json() as ProcessorRequest
+
+    // Validate request
+    if (!messageId || !action) {
+      throw new Error('Missing required parameters: messageId and action')
+    }
+
     // Process message
-    const result = await processMessage(request);
+    const result = await processMessage({ action, messageId, correlationId, options });
     
     // Return appropriate response
     if (result.success) {

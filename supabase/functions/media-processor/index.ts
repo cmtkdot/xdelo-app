@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
     corsHeaders,
     formatErrorResponse,
@@ -29,42 +30,64 @@ interface MediaProcessorRequest {
 /**
  * Unified media processor function
  */
-serve(async (req) => {
+serve(async (req: Request) => {
   // Handle preflight CORS
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
   
   try {
-    const request = await req.json() as MediaProcessorRequest;
-    const correlationId = crypto.randomUUID();
-    
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
+    const { action, messageId, messageIds = [], options = {} } = 
+      await req.json() as MediaProcessorRequest;
+
     // Validate request
-    if (!request.action) {
-      return formatErrorResponse('Action is required', correlationId);
+    if (!action || (!messageId && messageIds.length === 0)) {
+      throw new Error('Missing required parameters');
     }
-    
-    // Action router
-    switch (request.action) {
+
+    // Convert single messageId to array
+    const targetMessageIds = messageId ? [messageId] : messageIds;
+
+    let result;
+    const correlationId = crypto.randomUUID();
+
+    switch (action) {
       case 'fix_content_disposition':
-        return await fixContentDisposition(request.messageIds, correlationId);
-      case 'repair_metadata':
-        return await repairFileMetadata(request.messageId || request.messageIds, correlationId);
+        result = await handleContentDisposition(supabaseClient, targetMessageIds, correlationId);
+        break;
       case 'validate_files':
-        return await validateMediaFiles(request.messageIds, correlationId);
+        result = await handleFileValidation(supabaseClient, targetMessageIds, correlationId, options);
+        break;
+      case 'repair_metadata':
+        result = await handleMetadataRepair(supabaseClient, targetMessageIds, correlationId);
+        break;
       case 'fix_mime_types':
-        return await fixMissingMimeTypes(correlationId);
+        result = await fixMissingMimeTypes(correlationId);
+        break;
       case 'standardize_storage_paths':
-        return await standardizeStoragePaths(request.messageIds, correlationId, request.options);
+        result = await standardizeStoragePaths(targetMessageIds, correlationId, options);
+        break;
       default:
-        return formatErrorResponse(`Unknown action: ${request.action}`, correlationId);
+        throw new Error(`Unknown action: ${action}`);
     }
+
+    return new Response(
+      JSON.stringify({ success: true, data: result }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
   } catch (error) {
     console.error('Error in media-processor function:', error);
-    return formatErrorResponse(
-      error.message || 'Unknown error',
-      undefined,
-      400
+    return new Response(
+      JSON.stringify({ success: false, error: error.message }),
+      { 
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      }
     );
   }
 });
@@ -72,302 +95,150 @@ serve(async (req) => {
 /**
  * Fix content disposition for files
  */
-async function fixContentDisposition(messageIds?: string[], correlationId?: string): Promise<Response> {
-  try {
-    let query = supabase.from('messages').select('id, storage_path, mime_type, file_unique_id');
-    
-    // If specific message IDs were provided, use those
-    if (messageIds && messageIds.length > 0) {
-      query = query.in('id', messageIds);
-    } else {
-      // Otherwise, get the latest 100 files
-      query = query.order('created_at', { ascending: false }).limit(100);
-    }
-    
-    // Only process files with storage paths
-    query = query.not('storage_path', 'is', null);
-    
-    const { data: messages, error } = await query;
-    
-    if (error) throw error;
-    
-    const results = [];
-    const successful = [];
-    const failed = [];
-    
-    // Process each message's file
-    for (const message of messages) {
-      try {
-        if (message.storage_path) {
-          // Log operation start
-          await logEvent(
-            'fix_content_disposition_started',
-            message.id,
-            correlationId,
-            { storage_path: message.storage_path }
-          );
-          
-          const success = await xdelo_repairContentDisposition(`telegram-media/${message.storage_path}`);
-          
-          if (success) {
-            successful.push(message.id);
-            results.push({
-              message_id: message.id,
-              file_unique_id: message.file_unique_id,
-              success: true
-            });
-            
-            // Log success
-            await logEvent(
-              'fix_content_disposition_completed',
-              message.id,
-              correlationId,
-              { storage_path: message.storage_path, success: true }
-            );
-          } else {
-            failed.push(message.id);
-            results.push({
-              message_id: message.id,
-              file_unique_id: message.file_unique_id,
-              success: false,
-              error: 'Failed to repair content disposition'
-            });
-            
-            // Log failure
-            await logEvent(
-              'fix_content_disposition_error',
-              message.id,
-              correlationId,
-              { storage_path: message.storage_path, success: false },
-              'Failed to repair content disposition'
-            );
-          }
-        } else {
-          failed.push(message.id);
-          results.push({
-            message_id: message.id,
-            file_unique_id: message.file_unique_id,
-            success: false,
-            error: 'No storage path available'
-          });
-        }
-      } catch (error) {
-        console.error(`Error processing message ${message.id}:`, error);
-        failed.push(message.id);
-        results.push({
-          message_id: message.id,
-          file_unique_id: message.file_unique_id,
-          success: false,
-          error: error.message
-        });
-        
-        // Log error
-        await logEvent(
-          'fix_content_disposition_error',
-          message.id,
-          correlationId,
-          { storage_path: message.storage_path, error: error.message },
-          error.message
-        );
-      }
-    }
-    
-    return formatSuccessResponse({
-      processed: messages.length,
-      successful: successful.length,
-      failed: failed.length,
-      results
-    }, correlationId);
-  } catch (error) {
-    console.error('Error in fixContentDisposition:', error);
-    return formatErrorResponse(error.message, correlationId, 500);
-  }
-}
+async function handleContentDisposition(supabase: any, messageIds: string[], correlationId: string) {
+  const results = [];
+  
+  for (const messageId of messageIds) {
+    try {
+      // Get message details
+      const { data: message } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('id', messageId)
+        .single();
 
-/**
- * Repair file metadata for specific messages
- */
-async function repairFileMetadata(messageIdOrIds: string | string[], correlationId?: string): Promise<Response> {
-  try {
-    const messageIds = Array.isArray(messageIdOrIds) 
-      ? messageIdOrIds 
-      : [messageIdOrIds];
-    
-    const results = [];
-    
-    for (const messageId of messageIds) {
-      // Log operation start
-      await logEvent(
-        'repair_metadata_started',
-        messageId,
-        correlationId,
-        { messageId }
-      );
-      
-      try {
-        const result = await xdelo_recoverFileMetadata(messageId);
-        results.push({
-          message_id: messageId,
-          ...result
-        });
-        
-        // Log result
-        if (result.success) {
-          await logEvent(
-            'repair_metadata_completed',
-            messageId,
-            correlationId,
-            { ...result }
-          );
-        } else {
-          await logEvent(
-            'repair_metadata_error',
-            messageId,
-            correlationId,
-            { ...result },
-            result.error
-          );
-        }
-      } catch (error) {
-        results.push({
-          message_id: messageId,
-          success: false,
-          error: error.message
-        });
-        
-        // Log error
-        await logEvent(
-          'repair_metadata_error',
-          messageId,
-          correlationId,
-          { error: error.message },
-          error.message
+      if (!message?.storage_path) continue;
+
+      // Update Content-Disposition
+      await supabase
+        .storage
+        .from('media')
+        .update(
+          message.storage_path,
+          message.storage_path,
+          {
+            contentType: message.mime_type,
+            cacheControl: '3600',
+            upsert: true
+          }
         );
-      }
+
+      results.push({ messageId, success: true });
+    } catch (error) {
+      results.push({ messageId, success: false, error: error.message });
     }
-    
-    return formatSuccessResponse({
-      results
-    }, correlationId);
-  } catch (error) {
-    console.error('Error in repairFileMetadata:', error);
-    return formatErrorResponse(error.message, correlationId, 500);
   }
+
+  return results;
 }
 
 /**
  * Validate media files exist in storage
  */
-async function validateMediaFiles(messageIds?: string[], correlationId?: string): Promise<Response> {
-  try {
-    let query = supabase.from('messages').select('id, storage_path, public_url, mime_type, file_unique_id');
-    
-    // If specific message IDs were provided, use those
-    if (messageIds && messageIds.length > 0) {
-      query = query.in('id', messageIds);
-    } else {
-      // Otherwise get a reasonable batch
-      query = query.order('created_at', { ascending: false }).limit(50);
-    }
-    
-    const { data: messages, error } = await query;
-    
-    if (error) throw error;
-    
-    const results = [];
-    const issues = [];
-    
-    for (const message of messages) {
-      // Skip messages without storage path
-      if (!message.storage_path) {
-        results.push({
-          message_id: message.id,
-          file_unique_id: message.file_unique_id,
-          status: 'missing_storage_path'
-        });
-        issues.push(message.id);
+async function handleFileValidation(
+  supabase: any, 
+  messageIds: string[], 
+  correlationId: string,
+  options: { deleteOrphaned?: boolean } = {}
+) {
+  const results = [];
+
+  for (const messageId of messageIds) {
+    try {
+      // Get message details
+      const { data: message } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('id', messageId)
+        .single();
+
+      if (!message?.storage_path) {
+        results.push({ messageId, exists: false, reason: 'no_storage_path' });
         continue;
       }
-      
-      try {
-        // Log operation start
-        await logEvent(
-          'validate_media_started',
-          message.id,
-          correlationId,
-          { storage_path: message.storage_path }
-        );
-        
-        // Check if the file exists in storage
-        const exists = await supabase.storage
-          .from('telegram-media')
-          .createSignedUrl(message.storage_path, 60)
-          .then(({ data, error }) => {
-            return !error && !!data;
-          })
-          .catch(() => false);
-        
-        if (exists) {
-          results.push({
-            message_id: message.id,
-            file_unique_id: message.file_unique_id,
-            status: 'exists'
-          });
-          
-          // Log success
-          await logEvent(
-            'validate_media_completed',
-            message.id,
-            correlationId,
-            { storage_path: message.storage_path, exists: true }
-          );
-        } else {
-          results.push({
-            message_id: message.id,
-            file_unique_id: message.file_unique_id,
-            status: 'not_found',
-            storage_path: message.storage_path
-          });
-          issues.push(message.id);
-          
-          // Log failure
-          await logEvent(
-            'validate_media_error',
-            message.id,
-            correlationId,
-            { storage_path: message.storage_path, exists: false },
-            'Media file not found in storage'
-          );
-        }
-      } catch (error) {
-        results.push({
-          message_id: message.id,
-          file_unique_id: message.file_unique_id,
-          status: 'error',
-          error: error.message
+
+      // Check if file exists
+      const { data } = await supabase
+        .storage
+        .from('media')
+        .list('', {
+          prefix: message.storage_path
         });
-        issues.push(message.id);
-        
-        // Log error
-        await logEvent(
-          'validate_media_error',
-          message.id,
-          correlationId,
-          { storage_path: message.storage_path, error: error.message },
-          error.message
-        );
+
+      const exists = data && data.length > 0;
+
+      if (!exists && options.deleteOrphaned) {
+        // Mark message as needing redownload
+        await supabase
+          .from('messages')
+          .update({
+            storage_exists: false,
+            needs_redownload: true,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', messageId);
       }
+
+      results.push({ messageId, exists, reason: exists ? null : 'file_not_found' });
+    } catch (error) {
+      results.push({ messageId, exists: false, error: error.message });
     }
-    
-    return formatSuccessResponse({
-      processed: messages.length,
-      issues: issues.length,
-      results
-    }, correlationId);
-  } catch (error) {
-    console.error('Error in validateMediaFiles:', error);
-    return formatErrorResponse(error.message, correlationId, 500);
   }
+
+  return results;
+}
+
+/**
+ * Repair file metadata for specific messages
+ */
+async function handleMetadataRepair(supabase: any, messageIds: string[], correlationId: string) {
+  const results = [];
+
+  for (const messageId of messageIds) {
+    try {
+      // Get message details
+      const { data: message } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('id', messageId)
+        .single();
+
+      if (!message) {
+        results.push({ messageId, success: false, reason: 'message_not_found' });
+        continue;
+      }
+
+      // Extract metadata from telegram_data
+      const telegramData = message.telegram_data;
+      const updates: Record<string, any> = {
+        updated_at: new Date().toISOString()
+      };
+
+      if (telegramData.photo) {
+        const photo = telegramData.photo[telegramData.photo.length - 1];
+        updates.width = photo.width;
+        updates.height = photo.height;
+        updates.file_size = photo.file_size;
+      } else if (telegramData.video) {
+        updates.width = telegramData.video.width;
+        updates.height = telegramData.video.height;
+        updates.duration = telegramData.video.duration;
+        updates.file_size = telegramData.video.file_size;
+      }
+
+      // Update message
+      await supabase
+        .from('messages')
+        .update(updates)
+        .eq('id', messageId);
+
+      results.push({ messageId, success: true, updates });
+    } catch (error) {
+      results.push({ messageId, success: false, error: error.message });
+    }
+  }
+
+  return results;
 }
 
 /**
