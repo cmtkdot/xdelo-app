@@ -1,4 +1,3 @@
-
 import { corsHeaders } from './cors.ts';
 import { createSupabaseClient } from './supabase.ts';
 
@@ -26,7 +25,7 @@ export async function logProcessingEvent(
     
     // Log to database
     const { error } = await supabaseClient.rpc(
-      'xdelo_logprocessingevent',
+      'xdelo_log_event',
       {
         p_event_type: eventType,
         p_entity_id: entityIdStr,

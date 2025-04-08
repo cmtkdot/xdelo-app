@@ -1,4 +1,3 @@
-
 import { corsHeaders } from '../../_shared/cors.ts';
 import { TelegramMessage, MessageContext } from '../types.ts';
 import { 
@@ -69,6 +68,7 @@ export async function handleMediaMessage(message: TelegramMessage, context: Mess
       chat_id: message.chat.id,
       chat_type: message.chat.type,
       chat_title: message.chat.title,
+      message_type: isChannelPost ? 'channel_post' : 'message',
       caption: message.caption || '',
       file_id,
       file_unique_id,
