@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,33 +11,9 @@ import { Label } from "@/components/ui/label";
 import { BatchProcessingTable } from "./BatchProcessingTable";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { AnalyzedContent } from "@/types/utils/AnalyzedContent";
+import { Database } from "@/integrations/supabase/database.types";
 
-interface BatchResults {
-  total: number;
-  matched: number;
-  unmatched: number;
-  failed: number;
-  averageConfidence: number;
-  topMatches: {
-    messageId: string;
-    productName: string;
-    confidence: number;
-  }[];
-}
-
-interface ProcessingMessage {
-  id: string;
-  productName?: string;
-  vendorUid?: string;
-  purchaseDate?: string;
-  status: 'processing' | 'matched' | 'unmatched' | 'error';
-  matchConfidence?: number;
-  matchedProductId?: string;
-  matchedProductName?: string;
-  processingStartedAt?: string;
-  processingCompletedAt?: string;
-  errorMessage?: string;
-}
+type GlProduct = Database['public']['Tables']['gl_products']['Row']; 
 
 export const BatchMatchingPanel = () => {
   const [isProcessing, setIsProcessing] = useState(false);
@@ -100,8 +75,8 @@ export const BatchMatchingPanel = () => {
         return {
           id: msg.id,
           productName: msg.product_name || productName,
-          vendorUid: msg.vendor_uid || vendorUid,
-          purchaseDate: msg.purchase_date || purchaseDate,
+          vendorUid: msg.vendorUid || vendorUid,
+          purchaseDate: msg.purchaseDate || purchaseDate,
           status: 'processing' as const,
           processingStartedAt: new Date().toISOString(),
         };

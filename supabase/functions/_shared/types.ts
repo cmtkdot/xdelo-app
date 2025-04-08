@@ -1,3 +1,4 @@
+
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 
 export type ProcessingState = 'pending' | 'processing' | 'completed' | 'error' | 'initialized';
@@ -190,6 +191,19 @@ export async function getMediaGroupInfo(
   };
 }
 
+export async function xdelo_syncMediaGroupContent(
+  supabase: SupabaseClient,
+  sourceMessageId: string,
+  mediaGroupId: string,
+  correlationId?: string
+): Promise<void> {
+  await supabase.rpc('xdelo_sync_media_group_content', {
+    p_source_message_id: sourceMessageId,
+    p_media_group_id: mediaGroupId,
+    p_correlation_id: correlationId
+  });
+}
+
 export interface MediaHandlingResult {
   success: boolean;
   file_unique_id: string;
@@ -197,163 +211,4 @@ export interface MediaHandlingResult {
   public_url: string;
   error?: string;
   needs_redownload?: boolean;
-}
-
-/**
- * Shared types for Telegram webhook and message processing
- */
-
-/**
- * Core message context for tracking processing
- */
-export interface MessageContext {
-  correlationId: string;
-  isEdit: boolean;
-  isChannelPost: boolean;
-  isForwarded: boolean;
-  startTime: string;
-}
-
-/**
- * Telegram message structure 
- */
-export interface TelegramMessage {
-  message_id: number;
-  chat: {
-    id: number;
-    type: string;
-    title?: string;
-  };
-  date: number;
-  text?: string;
-  caption?: string;
-  edit_date?: number;
-  // Media types
-  photo?: Array<{
-    file_id: string;
-    file_unique_id: string;
-    width: number;
-    height: number;
-    file_size?: number;
-  }>;
-  video?: {
-    file_id: string;
-    file_unique_id: string;
-    width: number;
-    height: number;
-    duration: number;
-    mime_type?: string;
-    file_size?: number;
-  };
-  document?: {
-    file_id: string;
-    file_unique_id: string;
-    file_name?: string;
-    mime_type?: string;
-    file_size?: number;
-  };
-  // Forwarded message info
-  forward_origin?: {
-    type: string;
-    date: number;
-    chat?: {
-      id: number;
-      title?: string;
-      type: string;
-    };
-    message_id?: number;
-  };
-  forward_from?: any;
-  forward_from_chat?: any;
-  forward_date?: number;
-  // Media group ID for grouped media
-  media_group_id?: string;
-}
-
-/**
- * Structure for message data to be saved to database
- */
-export interface MessageInput {
-  telegram_message_id: number;
-  chat_id: number;
-  chat_type: string;
-  chat_title?: string;
-  caption?: string;
-  text?: string;
-  file_id?: string;
-  file_unique_id?: string;
-  media_group_id?: string;
-  mime_type?: string;
-  file_size?: number;
-  width?: number;
-  height?: number;
-  duration?: number;
-  processing_state: string;
-  telegram_data: any;
-  is_forward: boolean;
-  correlation_id: string;
-  message_url?: string;
-}
-
-/**
- * Forward information structure
- */
-export interface ForwardInfo {
-  is_forwarded: boolean;
-  from_chat_id?: number;
-  from_message_id?: number;
-  forward_date?: string;
-  forward_origin_type?: string;
-}
-
-/**
- * Caption analysis request
- */
-export interface CaptionAnalysisRequest {
-  messageId: string;
-  caption?: string;
-  media_group_id?: string;
-  correlationId?: string;
-  isEdit?: boolean;
-  trigger_source?: string;
-}
-
-/**
- * Media group synchronization result
- */
-export interface MediaGroupResult {
-  success: boolean;
-  synced_count: number;
-  media_group_id: string;
-  error?: string;
-}
-
-/**
- * Analyzed caption content structure
- */
-export interface AnalyzedContent {
-  products: string[];
-  prices: {
-    amount: number;
-    currency: string;
-    raw: string;
-  }[];
-  tags: string[];
-  content: string;
-  raw_caption: string;
-  parsing_metadata: {
-    method: string;
-    timestamp: string;
-    original_caption: string;
-    is_edit?: boolean;
-    trigger_source?: string;
-    error?: string;
-  };
-  error?: string;
-  product_name?: string;
-  product_code?: string;
-  vendor_uid?: string;
-  purchase_date?: string;
-  quantity?: number;
-  notes?: string;
 }

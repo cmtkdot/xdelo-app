@@ -45,7 +45,7 @@ export function useTelegramOperations() {
       console.error('Error deleting message:', error);
       
       // Log the error with consolidated logging
-      await logger.logEvent(LogEventType.MESSAGE_ERROR, message.id, {
+      await logger.logEvent(LogEventType.SYSTEM_ERROR, message.id, {
         action: 'delete',
         delete_from_telegram: deleteTelegram,
         error: error instanceof Error ? error.message : String(error)
@@ -92,7 +92,7 @@ export function useTelegramOperations() {
       console.error('Error forwarding message:', error);
       
       // Log the error with consolidated logging
-      await logger.logEvent(LogEventType.MESSAGE_ERROR, message.id, {
+      await logger.logEvent(LogEventType.SYSTEM_ERROR, message.id, {
         action: 'forward',
         target_chat_id: chatId,
         error: error instanceof Error ? error.message : String(error)
@@ -137,7 +137,7 @@ export function useTelegramOperations() {
       console.error('Error reprocessing message:', error);
       
       // Log the error with consolidated logging
-      await logger.logEvent(LogEventType.MESSAGE_ERROR, messageId, {
+      await logger.logEvent(LogEventType.SYSTEM_ERROR, messageId, {
         action: 'reprocess',
         error: error instanceof Error ? error.message : String(error)
       });
