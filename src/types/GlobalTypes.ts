@@ -1,4 +1,5 @@
-import type { Database } from '../integrations/supabase/types';
+
+import type { Database } from '../integrations/supabase/database.types';
 
 // Database types
 export type DbMessage = Database['public']['Tables']['messages']['Row'];
@@ -7,7 +8,7 @@ export type DbMessageUpdate = Database['public']['Tables']['messages']['Update']
 export type DbGlProduct = Database['public']['Tables']['gl_products']['Row'];
 
 // Enums from database
-export type ProcessingState = Database['public']['Enums']['processing_state_type'];
+export type ProcessingState = "initialized" | "pending" | "processing" | "completed" | "error";
 
 // Sync types
 export interface SyncMetadata {
@@ -51,6 +52,11 @@ export interface MatchResult {
     matchedFields: string[];
     confidence: number;
   };
+  isMatch: boolean;
+  score: number;
+  matches: Record<string, { value: string; score: number }>;
+  match_fields?: string[];
+  match_date?: string;
 }
 
 export interface GlProduct extends DbGlProduct {

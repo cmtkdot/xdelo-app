@@ -7,6 +7,9 @@ import { GLProductFilters } from "@/components/GlProducts/GLProductFilters";
 import { supabase } from "@/integrations/supabase/client";
 import { GlProduct, convertToGlProduct } from '@/types/GlProducts';
 import { GlProduct as EntityGlProduct } from '@/types/entities/Product';
+import { Database } from "@/integrations/supabase/database.types";
+
+type GlProductRow = Database['public']['Tables']['gl_products']['Row'];
 
 const GlProducts = () => {
   const [search, setSearch] = useState("");
@@ -32,7 +35,7 @@ const GlProducts = () => {
       if (error) throw error;
       
       // Transform and type-cast the data using our converter
-      let productsWithImages: GlProduct[] = data.map(product => convertToGlProduct(product));
+      let productsWithImages: GlProduct[] = (data as GlProductRow[]).map(product => convertToGlProduct(product));
 
       // Filter by search term if provided
       if (search) {
