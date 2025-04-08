@@ -1,179 +1,145 @@
 
-import React from "react";
-import { Card, CardContent } from "@/components/ui/card";
+import { CheckCircle, XCircle, AlertCircle, Clock, Info } from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { MakeWebhookLog } from "@/types/make";
 import { Badge } from "@/components/ui/badge";
-import {
-  CheckCircle,
-  AlertCircle,
-  Clock,
-  Calendar,
-  ArrowRightCircle,
-  Info,
-} from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Button } from "@/components/ui/button";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-
-// Updated interface to match the actual structure used
-interface MakeWebhookLog {
-  id: string;
-  webhook_id: string;
-  webhook_name?: string;
-  webhook_url?: string;
-  event_type: string;
-  status: 'success' | 'error' | 'pending' | 'retry';
-  request_payload?: Record<string, any>;
-  response_payload?: Record<string, any>;
-  response_status?: number;
-  error_message?: string;
-  retry_count?: number;
-  retry_scheduled?: string;
-  created_at: string;
-  updated_at?: string;
-  metadata?: {
-    duration_ms?: number;
-    response_code?: number;
-    context?: any;
-    next_retry_at?: string;
-    [key: string]: any;
-  };
-}
+import { useState } from "react";
+import { formatDistanceToNow } from "date-fns";
 
 interface WebhookLogDisplayProps {
   log: MakeWebhookLog;
   showDetails?: boolean;
+  onRetry?: (logId: string) => void;
 }
 
-export function WebhookLogDisplay({
-  log,
-  showDetails = false
-}: WebhookLogDisplayProps) {
-  // Format date to readable string
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleString();
-  };
-
-  // Get status color
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "success": return "bg-green-100 text-green-800";
-      case "error": return "bg-red-100 text-red-800";
-      case "pending": return "bg-yellow-100 text-yellow-800";
-      case "retry": return "bg-blue-100 text-blue-800";
-      default: return "bg-gray-100 text-gray-800";
-    }
-  };
-
-  // Get context data (if available)
-  const contextData = log.metadata?.context ? (
-    <div className="text-xs text-muted-foreground mt-1">
-      Context: {JSON.stringify(log.metadata.context)}
-    </div>
-  ) : null;
-
-  // Show duration if available
-  const duration = log.metadata?.duration_ms ? (
-    <div className="text-xs text-muted-foreground">
-      Duration: {log.metadata.duration_ms}ms
-    </div>
-  ) : null;
-
-  // Status icon
+export function WebhookLogDisplay({ log, showDetails = false, onRetry }: WebhookLogDisplayProps) {
+  const [isOpen, setIsOpen] = useState(showDetails);
+  
+  // Format the timestamp for display
+  const formattedTime = log.created_at 
+    ? formatDistanceToNow(new Date(log.created_at), { addSuffix: true })
+    : 'Unknown time';
+  
+  // Determine status icon
   const StatusIcon = () => {
     switch (log.status) {
-      case "success": return <CheckCircle className="h-4 w-4 text-green-500" />;
-      case "error": return <AlertCircle className="h-4 w-4 text-red-500" />;
-      case "pending": return <Clock className="h-4 w-4 text-yellow-500" />;
-      case "retry": return <ArrowRightCircle className="h-4 w-4 text-blue-500" />;
-      default: return <Info className="h-4 w-4 text-gray-500" />;
+      case 'success':
+        return <CheckCircle className="h-5 w-5 text-green-500" />;
+      case 'failed':
+        return <XCircle className="h-5 w-5 text-red-500" />;
+      case 'pending':
+        return <Clock className="h-5 w-5 text-yellow-500" />;
+      default:
+        return <Info className="h-5 w-5 text-gray-500" />;
     }
   };
-
-  // Response code display if available
-  const responseCodeDisplay = log.metadata?.response_code ? (
-    <div className="mt-2 flex items-center gap-1">
-      <span className="font-medium">Response:</span>
-      <Badge variant={log.metadata.response_code >= 400 ? "destructive" : "outline"}>
-        {log.metadata.response_code}
-      </Badge>
-    </div>
-  ) : null;
-
-  // Retry information if available
-  const retryInfo = log.metadata?.next_retry_at ? (
-    <div className="mt-2 flex items-center gap-1">
-      <Clock className="h-3 w-3 text-muted-foreground" />
-      <span className="text-xs text-muted-foreground">
-        Next retry: {new Date(log.metadata.next_retry_at).toLocaleString()}
-      </span>
-    </div>
-  ) : null;
-
+  
+  // Create summary text
+  const getSummaryText = () => {
+    // Add a check for undefined event_type
+    if (!log.event_type) {
+      return '⚠️ Unknown event type';
+    }
+    
+    const eventName = log.event_type.replace(/_/g, ' ');
+    
+    if (log.status === 'success') {
+      return `✅ Successfully sent "${eventName}" webhook`;
+    } else if (log.status === 'failed') {
+      return `❌ Failed to send "${eventName}" webhook`;
+    } else {
+      return `⏳ Pending "${eventName}" webhook`;
+    }
+  };
+  
+  // Format the correlation ID for display
+  const correlationId = log.context?.correlationId 
+    ? `${log.context.correlationId}`
+    : 'Not available';
+  
   return (
-    <Card className="mb-2">
-      <CardContent className="pt-4 pb-2">
-        <div className="flex justify-between items-start">
+    <Card className="mb-4">
+      <CardHeader className="pb-2">
+        <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <StatusIcon />
-            <div>
-              <span className="font-medium">{log.webhook_name || log.webhook_id}</span>
-              <div className="text-xs text-muted-foreground flex items-center gap-1">
-                <Calendar className="h-3 w-3" />
-                {formatDate(log.created_at)}
-              </div>
-            </div>
+            <CardTitle className="text-md">{getSummaryText()}</CardTitle>
           </div>
-          <Badge className={getStatusColor(log.status)}>
+          <Badge variant={log.status === 'success' ? 'default' : log.status === 'failed' ? 'destructive' : 'outline'}>
             {log.status}
           </Badge>
         </div>
+        <CardDescription>
+          {log.event_type || 'Unknown event'} • {formattedTime} • {log.duration_ms ? `${log.duration_ms}ms` : 'No duration'}
+        </CardDescription>
+      </CardHeader>
+      
+      <CardContent>
+        <div className="mb-2">
+          <strong>Correlation ID:</strong> {correlationId}
+        </div>
         
-        {contextData}
-        {duration}
-        {responseCodeDisplay}
-        {retryInfo}
-
-        {showDetails && log.error_message && (
-          <div className="mt-2">
-            <Badge variant="destructive" className="mt-1">Error</Badge>
-            <div className="text-xs text-red-500 mt-1 p-2 bg-red-50 rounded">
-              {log.error_message}
-            </div>
-          </div>
-        )}
-
-        {showDetails && (
-          <Accordion type="single" collapsible className="mt-2">
-            <AccordionItem value="details">
-              <AccordionTrigger className="text-xs py-1">Show Technical Details</AccordionTrigger>
-              <AccordionContent>
-                <div className="text-xs space-y-2">
-                  <div>
-                    <div className="font-semibold">Request Payload</div>
-                    <pre className="text-xs bg-slate-50 p-2 rounded overflow-x-auto">
-                      {JSON.stringify(log.request_payload || {}, null, 2)}
-                    </pre>
-                  </div>
-                  
-                  {log.response_payload && (
-                    <div>
-                      <div className="font-semibold">Response Payload</div>
-                      <pre className="text-xs bg-slate-50 p-2 rounded overflow-x-auto">
-                        {JSON.stringify(log.response_payload, null, 2)}
-                      </pre>
-                    </div>
-                  )}
-                  
-                  <div>
-                    <div className="font-semibold">Metadata</div>
-                    <pre className="text-xs bg-slate-50 p-2 rounded overflow-x-auto">
-                      {JSON.stringify(log.metadata || {}, null, 2)}
-                    </pre>
-                  </div>
-                </div>
-              </AccordionContent>
-            </AccordionItem>
-          </Accordion>
-        )}
+        <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+          <CollapsibleTrigger asChild>
+            <Button variant="outline" size="sm">
+              {isOpen ? "Hide Details" : "Show Details"}
+            </Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="mt-2 space-y-2">
+            {log.error_message && (
+              <div className="rounded-md bg-red-50 p-3 text-red-800 dark:bg-red-950 dark:text-red-200">
+                <h4 className="font-bold">Error</h4>
+                <p>{log.error_message}</p>
+              </div>
+            )}
+            
+            {log.response_code && (
+              <div className="text-sm">
+                <strong>Response Code:</strong> {log.response_code}
+              </div>
+            )}
+            
+            {log.webhook_id && (
+              <div className="text-sm">
+                <strong>Webhook ID:</strong> {log.webhook_id}
+              </div>
+            )}
+            
+            {log.next_retry_at && (
+              <div className="text-sm">
+                <strong>Next Retry:</strong> {formatDistanceToNow(new Date(log.next_retry_at), { addSuffix: true })}
+              </div>
+            )}
+            
+            {log.retry_count && log.retry_count > 0 && (
+              <div className="text-sm">
+                <strong>Retry Count:</strong> {log.retry_count}
+              </div>
+            )}
+            
+            {log.payload && (
+              <div className="mt-2">
+                <h4 className="text-sm font-bold">Payload</h4>
+                <pre className="mt-1 max-h-[200px] overflow-auto rounded-md bg-gray-100 p-2 text-xs dark:bg-gray-800">
+                  {JSON.stringify(log.payload, null, 2)}
+                </pre>
+              </div>
+            )}
+            
+            {log.status === 'failed' && onRetry && (
+              <Button 
+                variant="secondary" 
+                size="sm" 
+                onClick={() => onRetry(log.id)}
+                className="mt-2"
+              >
+                Retry Webhook
+              </Button>
+            )}
+          </CollapsibleContent>
+        </Collapsible>
       </CardContent>
     </Card>
   );

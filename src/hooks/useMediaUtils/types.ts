@@ -1,57 +1,31 @@
 
-export interface MediaUtilsOptions {
-  maxRetries?: number;
-  useBatchOperations?: boolean;
-}
+import { Message } from '@/types/entities/Message';
 
-export interface MediaRepairOptions {
-  redownload?: boolean;
-  validateMime?: boolean;
-  standardizePath?: boolean;
-  force?: boolean;
-}
-
+/**
+ * Result type for media operations
+ */
 export interface RepairResult {
   success: boolean;
-  successCount: number;
-  failureCount: number;
-  errors: Record<string, string>;
-  messages: string[];
+  message?: string;
+  successful?: number;
+  failed?: number;
+  error?: string;
+  data?: any;
 }
 
-export interface BatchOperationResult {
-  successCount: number;
-  failureCount: number;
-  results: RepairResult[];
-}
-
-export interface MediaValidationResult {
-  valid: boolean;
-  issues: string[];
-  messageId: string;
-  recommendedActions?: string[];
-}
-
-export interface ValidationOptions {
-  checkMimeType?: boolean;
-  checkStorage?: boolean;
-  checkPath?: boolean;
-  checkDimensions?: boolean;
-}
-
-export interface BatchValidationResult {
-  validCount: number;
-  invalidCount: number;
-  results: MediaValidationResult[];
-}
-
+/**
+ * Media processing state
+ */
 export interface MediaProcessingState {
   isProcessing: boolean;
   processingMessageIds: Record<string, boolean>;
 }
 
+/**
+ * Media processing state actions
+ */
 export interface MediaProcessingStateActions {
-  setIsProcessing: (isProcessing: boolean) => void;
+  setIsProcessing: (value: boolean) => void;
   addProcessingMessageId: (id: string) => void;
   removeProcessingMessageId: (id: string) => void;
 }

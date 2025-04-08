@@ -10,27 +10,28 @@ verify_jwt = false
 verify_jwt = false
 [functions.delete-telegram-message]
 verify_jwt = false
-[functions.direct-caption-processor]
-verify_jwt = false
 [functions.generic-webhook]
 verify_jwt = false
-[functions.manual-caption-parser]
-verify_jwt = false
-[functions.media-management]
+[functions.log-operation]
 verify_jwt = false
 [functions.openai-request]
 verify_jwt = false
-[functions.parse-caption-with-ai]
-verify_jwt = false
 [functions.product-matching]
-verify_jwt = false
-[functions.redownload-missing-files]
 verify_jwt = false
 [functions.telegram-webhook]
 verify_jwt = false
 [functions.update-telegram-caption]
 verify_jwt = false
-[functions.user-data]
+
+# Consolidated functions
+[functions.message-processor]
 verify_jwt = false
-[functions.validate-storage-files]
+[functions.media-processor]
 verify_jwt = false
+
+# Removed deprecated functions:
+# - manual-caption-parser (consolidated into message-processor)
+# - parse-caption-with-ai (consolidated into message-processor)
+# - repair-media (consolidated into media-processor)
+# - media-management (consolidated into media-processor)
+# - validate-storage-files (consolidated into media-processor)
