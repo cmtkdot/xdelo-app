@@ -1,16 +1,7 @@
 import { serve } from "https://deno.land/std@0.208.0/http/server.ts";
+import { corsHeaders, extractForwardInfo, formatErrorResponse, formatSuccessResponse, logEvent, checkMessageExists, constructMessageUrl, supabase } from "../_shared/utils.ts";
 import { xdelo_processMessageMedia } from "../_shared/mediaUtils.ts";
 import { MessageContext, MessageInput, TelegramMessage } from "../_shared/types.ts";
-import {
-  checkMessageExists,
-  constructMessageUrl,
-  corsHeaders,
-  extractForwardInfo,
-  formatErrorResponse,
-  formatSuccessResponse,
-  logEvent,
-  supabase as supabaseClient
-} from "../_shared/utils.ts";
 
 /**
  * Handler for new media messages (photos, videos, documents)
@@ -33,6 +24,20 @@ async function handleMediaMessage(message: TelegramMessage, context: MessageCont
     
     // Process based on media type
     let fileId = '', fileUniqueId = '', width, height, duration, mimeType, fileSize;
+    let messageType = 'unknown';
+    
+    // Determine message type based on content
+    if (context.isChannelPost) {
+      messageType = 'channel_post';
+    } else if (message.photo) {
+      messageType = 'photo';
+    } else if (message.video) {
+      messageType = 'video';
+    } else if (message.document) {
+      messageType = 'document';
+    } else if (message.text) {
+      messageType = 'text';
+    }
     
     // Handle photos (use the largest size)
     if (message.photo) {
@@ -70,6 +75,7 @@ async function handleMediaMessage(message: TelegramMessage, context: MessageCont
       chat_id: message.chat.id,
       chat_type: message.chat.type,
       chat_title: message.chat.title,
+      message_type: messageType, // Add message_type field
       caption: message.caption || '',
       file_id: fileId,
       file_unique_id: fileUniqueId,
@@ -92,7 +98,7 @@ async function handleMediaMessage(message: TelegramMessage, context: MessageCont
     }
     
     // Create message record
-    const { data, error } = await supabaseClient
+    const { data, error } = await supabase
       .from("messages")
       .insert(messageInput)
       .select('id')
@@ -153,7 +159,7 @@ async function handleMediaMessage(message: TelegramMessage, context: MessageCont
           
           // If not already handled by processMessageMedia, update message with storage info
           if (!mediaResult.isDuplicate) {
-            await supabaseClient
+            await supabase
               .from("messages")
               .update({
                 storage_path: mediaResult.fileInfo.storage_path,
@@ -224,19 +230,19 @@ async function handleMediaMessage(message: TelegramMessage, context: MessageCont
       console.log(`Media message ${message.message_id} is part of group ${message.media_group_id}`);
       
       // Mark as pending for processing
-      await supabaseClient
+      await supabase
         .from("messages")
         .update({ processing_state: 'pending' })
         .eq('id', messageId);
     } else if (message.caption) {
       // If message has caption and not part of a group, mark it for processing
-      await supabaseClient
+      await supabase
         .from("messages")
         .update({ processing_state: 'pending' })
         .eq('id', messageId);
     } else if (!context.isEdit) { // Only mark as completed if not an edit
       // Otherwise mark as completed since no processing is needed
-      await supabaseClient
+      await supabase
         .from("messages")
         .update({ 
           processing_state: 'completed',
@@ -296,12 +302,19 @@ async function handleTextMessage(message: TelegramMessage, context: MessageConte
     // Check if message is forwarded
     const forwardInfo = extractForwardInfo(message);
     
+    // Determine message type based on context
+    let messageType = 'text';
+    if (context.isChannelPost) {
+      messageType = 'channel_text';
+    }
+    
     // Create message input
     const messageInput: MessageInput = {
       telegram_message_id: message.message_id,
       chat_id: message.chat.id,
       chat_type: message.chat.type,
       chat_title: message.chat.title,
+      message_type: messageType, // Add message_type field
       text: message.text || '',
       processing_state: context.isEdit ? 'pending' : 'completed', // Processed messages need reprocessing, but new text messages don't
       telegram_data: message,
@@ -311,7 +324,7 @@ async function handleTextMessage(message: TelegramMessage, context: MessageConte
     };
     
     // Create message record
-    const { data, error } = await supabaseClient
+    const { data, error } = await supabase
       .from("messages")
       .insert(messageInput)
       .select('id')
@@ -394,7 +407,7 @@ async function handleEditedMessage(message: TelegramMessage, context: MessageCon
     const isMediaMessage = !!(message.photo || message.video || message.document);
     
     // Find the existing message in our database
-    const { data: existingMessage, error: findError } = await supabaseClient
+    const { data: existingMessage, error: findError } = await supabase
       .from("messages")
       .select("id, processing_state, analyzed_content, media_group_id, text, caption, edit_count, file_id, file_unique_id")
       .eq("chat_id", message.chat.id)
@@ -494,7 +507,7 @@ async function handleEditedMessage(message: TelegramMessage, context: MessageCon
       }
       
       // Update the message
-      const { error: updateError } = await supabaseClient
+      const { error: updateError } = await supabase
         .from("messages")
         .update(messageData)
         .eq("id", existingMessage.id);
@@ -644,6 +657,7 @@ serve(async (req) => {
     
     // Log webhook received event
     console.log(`Webhook received: ${req.method} ${req.url} [${correlationId}]`);
+    console.log("Handling Telegram webhook request");
     
     await logEvent(
       "webhook_received",
@@ -680,15 +694,23 @@ serve(async (req) => {
       startTime: new Date().toISOString()
     };
 
-    // Log message details
-    console.log(`Processing message ${message.message_id} in chat ${message.chat?.id}`, {
+    // Log message details with structured logging
+    console.log(JSON.stringify({
+      level: "info",
+      timestamp: new Date().toISOString(),
+      component: "telegram-webhook",
+      correlationId,
+      message: "Processing message",
+      message_id: message.message_id,
+      chat_id: message.chat?.id,
+      chat_type: message.chat?.type,
       is_edit: context.isEdit,
       is_forwarded: context.isForwarded,
       has_media: !!(message.photo || message.video || message.document),
       has_caption: !!message.caption,
-      has_text: !!message.text,
-      media_group_id: message.media_group_id
-    });
+      media_group_id: message.media_group_id,
+      media_type: message.photo ? "photo" : message.video ? "video" : message.document ? "document" : "text"
+    }));
 
     // Handle different message types
     let response;
@@ -696,30 +718,64 @@ serve(async (req) => {
     try {
       // Handle edited messages
       if (context.isEdit) {
-        console.log(`Routing to edited message handler for message ${message.message_id}`);
+        console.log(JSON.stringify({
+          level: "info",
+          timestamp: new Date().toISOString(),
+          component: "telegram-webhook",
+          correlationId,
+          message: "Routing to edited message handler",
+          message_id: message.message_id
+        }));
         response = await handleEditedMessage(message, context);
       }
       // Handle media messages (photos, videos, documents)
       else if (message.photo || message.video || message.document) {
-        console.log(`Routing to media message handler for message ${message.message_id}`);
+        console.log(JSON.stringify({
+          level: "info",
+          timestamp: new Date().toISOString(),
+          component: "telegram-webhook",
+          correlationId,
+          message: "Routing to media message handler",
+          message_id: message.message_id
+        }));
         response = await handleMediaMessage(message, context);
       }
       // Handle text messages
       else {
-        console.log(`Routing to text message handler for message ${message.message_id}`);
+        console.log(JSON.stringify({
+          level: "info",
+          timestamp: new Date().toISOString(),
+          component: "telegram-webhook",
+          correlationId,
+          message: "Routing to text message handler",
+          message_id: message.message_id
+        }));
         response = await handleTextMessage(message, context);
       }
       
-      console.log(`Successfully processed message ${message.message_id}`, {
-        processing_time_ms: new Date().getTime() - new Date(context.startTime).getTime()
-      });
+      console.log(JSON.stringify({
+        level: "info",
+        timestamp: new Date().toISOString(),
+        component: "telegram-webhook",
+        correlationId,
+        message: "Successfully processed message",
+        message_id: message.message_id,
+        chat_id: message.chat?.id,
+        processing_time: new Date().getTime() - new Date(context.startTime).getTime()
+      }));
       
       return response;
     } catch (handlerError) {
-      console.error(`Error in message handler: ${handlerError.message}`, { 
+      console.error(JSON.stringify({
+        level: "error",
+        timestamp: new Date().toISOString(),
+        component: "telegram-webhook", 
+        correlationId,
+        message: `Error in message handler: ${handlerError.message}`,
+        error: handlerError.message,
         stack: handlerError.stack,
         message_id: message.message_id
-      });
+      }));
       
       // Log the error to the database
       await logEvent(
@@ -747,9 +803,14 @@ serve(async (req) => {
       });
     }
   } catch (error) {
-    console.error(`Unhandled error processing webhook: ${error.message}`, {
+    console.error(JSON.stringify({
+      level: "error",
+      timestamp: new Date().toISOString(),
+      component: "telegram-webhook",
+      message: `Unhandled error processing webhook: ${error.message}`,
+      error: error.message,
       stack: error.stack
-    });
+    }));
     
     return formatErrorResponse(error.message || 'Unknown error', crypto.randomUUID().toString(), 500);
   }

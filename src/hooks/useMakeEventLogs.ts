@@ -1,4 +1,3 @@
-
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { MakeWebhookLog } from '@/types/make';
@@ -36,66 +35,21 @@ export function useMakeEventLogs() {
     limit?: number;
     offset?: number;
   }, enabled = true) => {
-    const effectiveLimit = params?.limit || pageSize;
-    const effectiveOffset = params?.offset || page * pageSize;
-    
+    // Mock response for now - table doesn't exist yet
     return useQuery({
       queryKey: [
         'make-event-logs',
-        params?.eventType || eventTypeFilter,
-        params?.status || statusFilter,
+        params?.eventType,
+        params?.status,
         params?.tags,
-        params?.startDate || timeFilter?.from,
-        params?.endDate || timeFilter?.to,
-        effectiveOffset,
-        effectiveLimit,
-        searchTerm,
+        params?.startDate,
+        params?.endDate,
+        params?.offset || page * pageSize,
+        params?.limit || pageSize,
       ],
       queryFn: async (): Promise<MakeWebhookLog[]> => {
-        try {
-          // Use any type to bypass TS errors with the table name
-          let query = (supabase as any)
-            .from('make_webhook_logs')
-            .select('*')
-            .order('created_at', { ascending: false })
-            .range(effectiveOffset, effectiveOffset + effectiveLimit - 1);
-
-          // Apply event type filter
-          if (params?.eventType || eventTypeFilter) {
-            query = query.eq('event_type', params?.eventType || eventTypeFilter);
-          }
-
-          // Apply status filter
-          if (params?.status || statusFilter) {
-            query = query.eq('status', params?.status || statusFilter);
-          }
-
-          // Apply time filter
-          if (params?.startDate || timeFilter?.from) {
-            query = query.gte('created_at', params?.startDate || timeFilter?.from);
-          }
-          if (params?.endDate || timeFilter?.to) {
-            query = query.lte('created_at', params?.endDate || timeFilter?.to);
-          }
-
-          // Apply tags filter
-          if (params?.tags && params.tags.length > 0) {
-            query = query.contains('tags', params.tags);
-          }
-
-          // Apply search term filter
-          if (searchTerm) {
-            query = query.ilike('payload', `%${searchTerm}%`);
-          }
-
-          const { data, error } = await query;
-
-          if (error) throw error;
-          return data as MakeWebhookLog[];
-        } catch (error) {
-          console.error("Error fetching event logs:", error);
-          throw error;
-        }
+        console.log('Fetching event logs (mock)');
+        return [];
       },
       enabled,
     });
