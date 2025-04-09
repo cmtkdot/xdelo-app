@@ -12,17 +12,13 @@ verify_jwt = false
 verify_jwt = false
 [functions.generic-webhook]
 verify_jwt = false
-[functions.log-operation]
-verify_jwt = false
 [functions.manual-caption-parser]
 verify_jwt = false
 [functions.media-management]
 verify_jwt = false
 [functions.openai-request]
 verify_jwt = false
-[functions.parse-caption]
-verify_jwt = false
-[functions.process-audio-upload]
+[functions.parse-caption-with-ai]
 verify_jwt = false
 [functions.product-matching]
 verify_jwt = false

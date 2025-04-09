@@ -1,11 +1,10 @@
-
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/useToast";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2, DatabaseZap, Clock } from "lucide-react";
-import { QueryOptimizerCard } from "./QueryOptimizerCard"; // Import the new component
+import { QueryOptimizerCard } from "./QueryOptimizerCard";
 
 export const DatabaseFixCard = () => {
   const { toast } = useToast();
@@ -72,8 +71,7 @@ export const DatabaseFixCard = () => {
     try {
       setIsOptimizingStorage(true);
       
-      // Call the storage optimization function
-      const { data, error } = await supabase.functions.invoke("migrate_telegram_data");
+      const { data, error } = await supabase.rpc("xdelo_migrate_telegram_data_to_metadata");
       
       if (error) throw error;
       
@@ -168,7 +166,6 @@ export const DatabaseFixCard = () => {
         </div>
       </Card>
       
-      {/* Add the query optimizer card */}
       <QueryOptimizerCard />
     </div>
   );

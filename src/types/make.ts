@@ -1,134 +1,81 @@
 
+/**
+ * Types for Make integration
+ */
+
 export enum MakeEventType {
-  MessageReceived = 'message_received',
-  ChannelJoined = 'channel_joined',
-  ChannelLeft = 'channel_left',
-  UserJoined = 'user_joined',
-  UserLeft = 'user_left',
-  MediaReceived = 'media_received',
-  CommandReceived = 'command_received',
-  // New Telegram-specific event types
-  MessageEdited = 'message_edited',
-  MessageDeleted = 'message_deleted',
-  MediaGroupReceived = 'media_group_received',
-  MessageForwarded = 'message_forwarded',
-  CaptionUpdated = 'caption_updated',
-  ProcessingCompleted = 'processing_completed'
+  MESSAGE_RECEIVED = 'message_received',
+  MESSAGE_UPDATED = 'message_updated', 
+  MEDIA_PROCESSED = 'media_processed',
+  CHANNEL_JOINED = 'channel_joined',
+  PRODUCT_CREATED = 'product_created',
+  PRODUCT_UPDATED = 'product_updated',
+  USER_ACTION = 'user_action',
+  SYSTEM_EVENT = 'system_event'
+}
+
+export interface MakeWebhookConfig {
+  id: string;
+  name: string;
+  description?: string;
+  url: string;
+  event_types: string[];
+  is_active: boolean;
+  field_selection?: Record<string, FieldSelectionConfig>;
+  payload_template?: Record<string, any>;
+  transformation_code?: string;
+  headers?: Record<string, string>;
+  retry_config?: RetryConfig;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface FieldSelectionConfig {
+  mode: 'include' | 'exclude';
+  fields: string[];
+}
+
+export interface RetryConfig {
+  max_attempts: number;
+  backoff_factor: number;
+  initial_delay_ms: number;
+}
+
+export interface MakeWebhookLog {
+  id: string;
+  webhook_id: string;
+  event_type: string;
+  payload: any;
+  response?: any;
+  status: 'success' | 'failed' | 'pending';
+  status_code?: number;
+  attempt?: number;
+  error_message?: string;
+  tags?: string[];
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface MakeCondition {
   field: string;
-  operator: 'equals' | 'contains' | 'startsWith' | 'endsWith' | 'greaterThan' | 'lessThan';
-  value: string | number | boolean;
+  operator: 'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte' | 'contains' | 'starts_with' | 'ends_with' | 'exists' | 'not_exists';
+  value: any;
 }
 
 export interface MakeAction {
-  type: string;
+  type: 'webhook' | 'email' | 'notification' | 'database' | 'function';
   config: Record<string, any>;
 }
 
 export interface MakeAutomationRule {
   id: string;
   name: string;
-  description?: string | null;
+  description?: string;
   event_type: MakeEventType | string;
   conditions: MakeCondition[];
   actions: MakeAction[];
-  is_active: boolean | null;
-  priority: number | null;
-  created_at: string | null;
-  updated_at: string | null;
+  is_active: boolean;
+  priority: number;
+  created_at?: string;
+  updated_at?: string;
 }
-
-export interface MakeWebhookConfig {
-  id: string;
-  name: string;
-  description?: string | null;
-  url: string;
-  event_types: string[];
-  is_active: boolean | null;
-  created_at: string | null;
-  updated_at: string | null;
-  field_selection?: Record<string, any> | null;
-  payload_template?: Record<string, any> | null;
-  transformation_code?: string | null;
-  headers?: Record<string, string> | null;
-  retry_config?: {
-    max_retries: number;
-    retry_delay: number;
-    exponential_backoff: boolean;
-  } | null;
-}
-
-export interface MakeWebhookLog {
-  id: string;
-  webhook_id: string | null;
-  event_type: string;
-  payload: Record<string, any> | null;
-  status: 'success' | 'failed' | 'pending';
-  completed_at: string | null;
-  created_at: string | null;
-  duration_ms: number | null;
-  error_message: string | null;
-  request_headers: Record<string, any> | null;
-  response_body: string | null;
-  response_code: number | null;
-  response_headers: Record<string, any> | null;
-  severity: string | null;
-  tags: string[] | null;
-  context: Record<string, any> | null;
-  retry_count?: number | null;
-  next_retry_at?: string | null;
-}
-
-// New interface for field mapping with Telegram message data
-export interface MakeFieldMapping {
-  messageField: keyof import('./entities/Message').Message;
-  targetField: string;
-  description: string;
-  dataType: 'string' | 'number' | 'boolean' | 'object' | 'array';
-  isNested?: boolean;
-  example?: any;
-}
-
-// New interface for Telegram-specific webhook templates
-export interface MakeTelegramWebhookTemplate {
-  id: string;
-  name: string;
-  description?: string | null;
-  eventType: MakeEventType;
-  fieldMapping: MakeFieldMapping[];
-  template: Record<string, any>;
-  isDefault?: boolean;
-}
-
-export interface MakeDebugSession {
-  id: string;
-  name: string;
-  webhook_id: string | null;
-  start_time: string | null;
-  end_time: string | null;
-  status: string | null;
-  notes: string | null;
-  config: Record<string, any> | null;
-}
-
-export interface MakeDebugEvent {
-  id: string;
-  session_id: string | null;
-  event_type: string;
-  data: Record<string, any> | null;
-  level: string | null;
-  timestamp: string | null;
-}
-
-export interface MakeTestPayload {
-  id: string;
-  name: string;
-  description: string | null;
-  event_type: string;
-  payload: Record<string, any>;
-  is_template: boolean | null;
-  created_at: string | null;
-  updated_at: string | null;
-} 

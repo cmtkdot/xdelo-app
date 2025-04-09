@@ -1,7 +1,12 @@
 
 import { createMediaProcessingState } from './utils';
-import { useSingleFileOperations } from './singleFileOperations';
-import { useBatchOperations } from './batchOperations';
+import { uploadFile, deleteFile, reuploadMediaFromTelegram } from './singleFileOperations';
+import { 
+  standardizeStoragePaths,
+  fixMediaUrls,
+  repairMediaBatch,
+  processAllPendingMessages
+} from './batchOperations';
 
 /**
  * A consolidated hook for media operations with improved organization
@@ -14,21 +19,8 @@ export function useMediaUtils() {
   ] = createMediaProcessingState();
 
   // Initialize single file operations
-  const {
-    isUploading,
-    isDeleting,
-    uploadFile,
-    deleteFile,
-    reuploadMediaFromTelegram
-  } = useSingleFileOperations();
-
-  // Initialize batch operations
-  const {
-    standardizeStoragePaths,
-    fixMediaUrls,
-    repairMediaBatch,
-    processAllPendingMessages
-  } = useBatchOperations(setIsProcessing, addProcessingMessageId, removeProcessingMessageId);
+  const isUploading = false; // Will be implemented with state
+  const isDeleting = false; // Will be implemented with state
 
   return {
     // State

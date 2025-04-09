@@ -1,22 +1,16 @@
-import { supabaseClient } from '../../_shared/supabase.ts';
-import { corsHeaders } from '../../_shared/cors.ts';
-import { 
-  xdelo_downloadMediaFromTelegram,
-  xdelo_uploadMediaToStorage,
-  xdelo_validateAndFixStoragePath,
-  xdelo_isViewableMimeType,
-  xdelo_detectMimeType
-} from '../../_shared/mediaUtils.ts';
+/// <reference types="https://esm.sh/@supabase/functions-js/edge-runtime.d.ts" />
+
+// Shared Imports
+import { createCorsResponse } from "../../_shared/cors.ts"; 
+import { logAuditEvent } from "../../_shared/dbUtils.ts";
+import { supabaseClient } from "../../_shared/supabase.ts";
+// Local Imports
 import {
-  xdelo_findExistingFile,
-  xdelo_processMessageMedia
-} from '../../_shared/mediaStorage.ts';
-import { 
-  TelegramMessage, 
-  MessageContext, 
-  ForwardInfo,
-  MessageInput,
+    ForwardInfo, // Keep for insert/update
+    MessageContext,
+    TelegramMessage,
 } from '../types.ts';
+<<<<<<< HEAD
 import { createMessage, checkDuplicateMessage, xdelo_logProcessingEvent } from '../dbOperations.ts';
 import { constructTelegramMessageUrl } from '../../_shared/messageUtils.ts';
 
@@ -352,13 +346,39 @@ async function xdelo_handleEditedMediaMessage(
  * Helper function to handle new media messages
  */
 async function xdelo_handleNewMediaMessage(
+=======
+import {
+    xdelo_detectMimeType,
+    xdelo_downloadMediaFromTelegram, // Will remove token param later
+    xdelo_getStoragePath,
+    xdelo_isViewableMimeType,
+    xdelo_uploadMediaToStorage // Will remove supabase param later
+} from '../utils/mediaUtils.ts';
+import { constructTelegramMessageUrl } from '../utils/messageUtils.ts';
+
+/**
+ * Handles *new* media messages (photo, video, document) from Telegram.
+ * Checks for duplicates based on file_unique_id.
+ * If new: Downloads the media, uploads it to storage (if not already present),
+ *   and inserts a new record into the 'messages' table.
+ * If duplicate: Checks for caption changes, updates existing record accordingly,
+ *   and sets state for potential reprocessing if caption changed.
+ * Assumes *edited* messages (distinct edits on existing messages) are routed elsewhere.
+ */
+export async function handleMediaMessage(
+  telegramToken: string, // Keep for download util for now
+>>>>>>> 1c6afd6248d76680bdcec70142d877d46e874c8a
   message: TelegramMessage, 
   context: MessageContext
 ): Promise<Response> {
-  const { correlationId, logger } = context;
-  
-  // First check if this is a duplicate message we've already processed
+  // isEdit is ignored here, this handler only deals with new messages or duplicates
+  const { correlationId } = context; 
+  const functionName = 'handleMediaMessage';
+  let dbMessageId: string | null = null; 
+  let operation: 'inserted' | 'updated' | 'skipped_duplicate' = 'skipped_duplicate'; // Default
+
   try {
+<<<<<<< HEAD
     // Check for existing message in database
     const { data: existingMessages, error: checkError } = await supabaseClient
       .from('messages')
@@ -417,10 +437,47 @@ async function xdelo_handleNewMediaMessage(
     
     if (!mediaResult.success) {
       throw new Error(`Failed to process media: ${mediaResult.error}`);
+=======
+    console.log(`[${correlationId}][${functionName}] Processing media message ${message.message_id} in chat ${message.chat?.id}`);
+
+    // --- Basic Validation ---
+    if (!message || !message.chat || !message.message_id) {
+      throw new Error(`Invalid message structure: Missing chat or message_id`);
     }
-    
-    // Prepare forward info if message is forwarded
+
+    // --- Extract Media Info ---
+    const photo = message.photo ? message.photo[message.photo.length - 1] : undefined;
+    const video = message.video;
+    const document = message.document;
+    const mediaContent = photo || video || document;
+
+    if (!mediaContent || !mediaContent.file_unique_id || !mediaContent.file_id) {
+      await logAuditEvent("media_info_missing", null, correlationId, { function: functionName, telegram_message_id: message.message_id, chat_id: message.chat.id }, "Missing media content or essential file IDs (file_unique_id, file_id)");
+      throw new Error(`Missing media content or essential file IDs`);
+>>>>>>> 1c6afd6248d76680bdcec70142d877d46e874c8a
+    }
+    const fileUniqueId = mediaContent.file_unique_id;
+    const fileId = mediaContent.file_id; // Current file_id (might differ slightly from original if duplicate)
+    const detectedMimeType = xdelo_detectMimeType(message);
+
+    // --- Check for Existing DB Record using file_unique_id ---
+    console.log(`[${correlationId}][${functionName}] Checking DB for existing message with file_unique_id: ${fileUniqueId}`);
+    const { data: existingRecord, error: findError } = await supabaseClient
+        .from('messages')
+        .select('*, message_content:text_content') // Select all for potential update comparison, alias text_content
+        .eq('file_unique_id', fileUniqueId)
+        .maybeSingle();
+
+    if (findError) {
+        console.error(`[${correlationId}][${functionName}] Error finding existing message by file_unique_id:`, findError);
+        await logAuditEvent("db_find_existing_failed", null, correlationId, { function: functionName, file_unique_id: fileUniqueId }, findError.message);
+        throw new Error(`Database error checking for existing message: ${findError.message}`);
+    }
+
+    // --- Prepare Common Data ---
+    const messageUrl = constructTelegramMessageUrl(message);
     const forwardInfo: ForwardInfo | undefined = message.forward_origin ? {
+<<<<<<< HEAD
       is_forwarded: true,
       forward_origin_type: message.forward_origin.type,
       forward_from_chat_id: message.forward_origin.chat?.id,
@@ -518,38 +575,247 @@ async function xdelo_handleNewMediaMessage(
     return new Response(
       JSON.stringify({ success: true, id: result.id, correlationId }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-  } catch (createError) {
-    logger?.error(`Error creating new media message: ${
-      createError instanceof Error ? createError.message : String(createError)}`, {
-      message_id: message.message_id,
-      chat_id: message.chat.id,
-      media_group_id: message.media_group_id,
-      error_type: typeof createError,
-      error_keys: typeof createError === 'object' ? Object.keys(createError) : 'N/A'
-    });
-    
-    // Log detailed error to database
-    try {
-      await xdelo_logProcessingEvent(
-        "media_processing_error",
-        message.message_id.toString(),
-        correlationId,
-        {
-          message_id: message.message_id,
-          chat_id: message.chat.id,
-          error: createError instanceof Error ? createError.message : String(createError),
-          stack: createError instanceof Error ? createError.stack : undefined,
-          media_group_id: message.media_group_id
-        },
-        createError instanceof Error ? createError.message : String(createError)
-      );
-    } catch (logError) {
-      console.error(`Error logging failure: ${
-        logError instanceof Error ? logError.message : String(logError)}`);
+=======
+        is_forwarded: true, forward_origin_type: message.forward_origin.type, forward_from_chat_id: message.forward_origin.sender_chat?.id, forward_from_chat_title: message.forward_origin.sender_chat?.title, forward_from_chat_type: message.forward_origin.sender_chat?.type, forward_from_message_id: message.forward_origin.message_id, forward_date: new Date(message.forward_origin.date * 1000).toISOString(), original_chat_id: message.forward_origin.sender_chat?.id, original_chat_title: message.forward_origin.sender_chat?.title, original_message_id: message.forward_origin.message_id
+      } : (existingRecord?.forward_info || undefined); // Use existing if available and not overwritten
+    const messageType = photo ? 'photo' : video ? 'video' : document ? 'document' : 'unknown';
+
+    // --- Process Existing Record (Duplicate Found) ---
+    if (existingRecord) {
+        dbMessageId = existingRecord.id;
+        operation = 'updated'; // Treat as an update even if only metadata changes
+        console.log(`[${correlationId}][${functionName}] Found existing DB record ${dbMessageId} for file_unique_id ${fileUniqueId}. Processing as duplicate/update.`);
+
+        const existingCaption = existingRecord.caption;
+        const incomingCaption = message.caption || null;
+        const captionChanged = existingCaption !== incomingCaption;
+        
+        // Prepare base update data (always update these)
+        let updateData: Record<string, any> = {
+            telegram_message_id: message.message_id, // Update to latest message ID instance
+            chat_id: message.chat.id, // Update chat context
+            chat_type: message.chat.type,
+            chat_title: message.chat.title,
+            user_id: message.from?.id?.toString(),
+            telegram_data: message, // Update raw data
+            message_url: messageUrl,
+            forward_info: forwardInfo, // Update forward info
+            updated_at: new Date().toISOString(),
+            correlation_id: correlationId,
+            // Use the latest file_id received from Telegram
+            file_id: fileId,
+             // Reset error state on successful receipt of a duplicate?
+            error_message: null, 
+            last_error_at: null,
+            // Ensure text_content remains null for media messages
+            text_content: null,
+        };
+
+        if (captionChanged) {
+            console.log(`[${correlationId}][${functionName}] Caption changed for duplicate message ${dbMessageId}. Updating caption and history.`);
+            
+            // Add edit history entry for caption change
+            const currentEditHistory = existingRecord.edit_history || [];
+            const previousStateEntry = {
+                timestamp: new Date().toISOString(),
+                previous_caption: existingCaption,
+                previous_analyzed_content: existingRecord.analyzed_content,
+                // Use current timestamp as edit_date if message doesn't have one
+                edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : new Date().toISOString(), 
+            };
+
+            updateData = {
+                ...updateData,
+                caption: incomingCaption,
+                edit_history: [...currentEditHistory, previousStateEntry],
+                edit_count: (existingRecord.edit_count || 0) + 1,
+                // Set state to indicate caption needs reprocessing
+                processing_state: 'pending_caption_update',
+                // Update related caption fields
+                is_original_caption: false, // It's now based on an update
+                message_caption_id: null, // Reset if caption changes
+                group_caption_synced: false,
+            };
+             await logAuditEvent("media_message_duplicate_caption_changed", dbMessageId, correlationId, { function: functionName, file_unique_id: fileUniqueId }, "Caption changed on duplicate message.");
+        } else {
+            console.log(`[${correlationId}][${functionName}] Caption unchanged for duplicate message ${dbMessageId}. Updating metadata only.`);
+            // If caption didn't change, ensure processing state isn't pending unless it already was
+            updateData.processing_state = existingRecord.processing_state === 'pending_caption' || existingRecord.processing_state === 'pending_caption_update' 
+                                            ? existingRecord.processing_state 
+                                            : 'processed';
+             await logAuditEvent("media_message_duplicate_caption_same", dbMessageId, correlationId, { function: functionName, file_unique_id: fileUniqueId }, "Caption same on duplicate message.");                               
+        }
+
+        // Perform DB Update
+        const { error: updateError } = await supabaseClient
+            .from('messages')
+            .update(updateData)
+            .eq('id', dbMessageId);
+
+        if (updateError) {
+            console.error(`[${correlationId}][${functionName}] Error updating duplicate media message ${dbMessageId}:`, updateError);
+            await logAuditEvent("message_update_failed", dbMessageId, correlationId, { function: functionName, update_type: 'duplicate_media', table: 'messages' }, updateError.message);
+            throw new Error(`Failed to update duplicate media message: ${updateError.message}`);
+        }
+        console.log(`[${correlationId}][${functionName}] Successfully updated DB record ID: ${dbMessageId} for duplicate.`);
+
+    } 
+    // --- Process New Record (No Duplicate Found in DB) ---
+    else {
+        operation = 'inserted';
+        console.log(`[${correlationId}][${functionName}] No existing DB record found for file_unique_id ${fileUniqueId}. Processing as NEW insert.`);
+
+        // --- Download Media --- 
+        console.log(`[${correlationId}][${functionName}] Downloading media file_id: ${fileId}`);
+        const downloadResult = await xdelo_downloadMediaFromTelegram(fileId, fileUniqueId, detectedMimeType, telegramToken);
+        if (!downloadResult.success || !downloadResult.blob) {
+            await logAuditEvent("media_download_failed", null, correlationId, { function: functionName, telegram_file_id: fileId, telegram_file_unique_id: fileUniqueId, chat_id: message.chat.id, telegram_message_id: message.message_id }, downloadResult.error ?? "Download failed");
+            throw new Error(`Failed to download media: ${downloadResult.error}`);
+        }
+        const downloadedBlob = downloadResult.blob;
+        const mimeTypeFromDownload = downloadResult.mimeType;
+        const finalMimeType = (mimeTypeFromDownload && mimeTypeFromDownload !== 'application/octet-stream') 
+                               ? mimeTypeFromDownload : detectedMimeType;
+        const standardizedStoragePath = xdelo_getStoragePath(fileUniqueId, finalMimeType);
+        const contentDispositionToUse = xdelo_isViewableMimeType(finalMimeType) ? 'inline' : 'attachment';
+
+        // --- Check Storage Existence (Avoid redundant uploads) ---
+        console.log(`[${correlationId}][${functionName}] Checking storage for existing object at path: ${standardizedStoragePath}`);
+        let storageObjectExists = false;
+        let existingPublicUrl: string | undefined = undefined;
+        try {
+            const { data: listData, error: listError } = await supabaseClient.storage 
+                .from('telegram-media').list('', { limit: 1, offset: 0, search: standardizedStoragePath });
+            if (listError) {
+                console.error(`[${correlationId}][${functionName}] Error listing storage objects:`, listError);
+                await logAuditEvent("storage_check_failed", null, correlationId, { function: functionName, storage_path: standardizedStoragePath }, listError.message);
+                throw new Error(`Storage check failed: ${listError.message}`);
+            }
+            if (listData && listData.length > 0 && listData[0].name === standardizedStoragePath) {
+                storageObjectExists = true;
+                console.log(`[${correlationId}][${functionName}] Storage object found (likely from previous attempt or different message).`);
+                const { data: urlData } = supabaseClient.storage.from('telegram-media').getPublicUrl(standardizedStoragePath);
+                existingPublicUrl = urlData?.publicUrl;
+            } else {
+                console.log(`[${correlationId}][${functionName}] Storage object not found.`);
+            }
+        } catch (storageCheckError) {
+            const errorMsg = storageCheckError instanceof Error ? storageCheckError.message : String(storageCheckError);
+            console.error(`[${correlationId}][${functionName}] Exception during storage check:`, errorMsg);
+            await logAuditEvent("storage_check_exception", null, correlationId, { function: functionName, storage_path: standardizedStoragePath }, errorMsg);
+            throw new Error(`Storage check exception: ${errorMsg}`);
+        }
+
+        // --- Upload Media (if needed) ---
+        let publicUrlToUse: string | undefined = existingPublicUrl;
+        let uploadPerformed = false;
+        if (!storageObjectExists) {
+            console.log(`[${correlationId}][${functionName}] Storage object did not exist. Uploading downloaded media to: ${standardizedStoragePath}`);
+            const uploadResult = await xdelo_uploadMediaToStorage(supabaseClient, standardizedStoragePath, downloadedBlob, finalMimeType);
+            if (!uploadResult.success || !uploadResult.publicUrl) {
+                await logAuditEvent("media_upload_failed", null, correlationId, { function: functionName, storage_path: standardizedStoragePath }, uploadResult.error ?? "Upload failed");
+                throw new Error(`Failed to upload media for new message: ${uploadResult.error}`);
+            }
+            publicUrlToUse = uploadResult.publicUrl;
+            uploadPerformed = true;
+            console.log(`[${correlationId}][${functionName}] Media uploaded successfully. Public URL: ${publicUrlToUse}`);
+        } else {
+            console.log(`[${correlationId}][${functionName}] Skipping upload. Using existing public URL: ${publicUrlToUse}`);
+        }
+        
+        if (!publicUrlToUse) {
+             const errorMsg = "Failed to obtain a public URL for the media.";
+             console.error(`[${correlationId}][${functionName}] ${errorMsg}`);
+             await logAuditEvent("public_url_missing", null, correlationId, { function: functionName, storage_path: standardizedStoragePath }, errorMsg);
+             throw new Error(errorMsg);
+        }
+
+        // --- Prepare Insert Data ---
+        const insertData = {
+            telegram_message_id: message.message_id,
+            chat_id: message.chat.id, chat_type: message.chat.type, chat_title: message.chat.title,
+            user_id: message.from?.id?.toString(),
+            message_type: messageType, 
+            caption: message.caption,
+            text_content: null, // Ensure text is null
+            telegram_data: message,
+            media_group_id: message.media_group_id,
+            file_id: fileId,
+            file_unique_id: fileUniqueId,
+            mime_type: finalMimeType,
+            mime_type_original: document?.mime_type || video?.mime_type, 
+            mime_type_verified: true, 
+            file_size: mediaContent.file_size || downloadedBlob.size,
+            width: photo?.width || video?.width, height: photo?.height || video?.height, duration: video?.duration,
+            storage_path: standardizedStoragePath,
+            public_url: publicUrlToUse,
+            message_url: messageUrl,
+            content_disposition: contentDispositionToUse,
+            storage_exists: true, 
+            storage_path_standardized: true,
+            needs_redownload: false,
+            processing_state: message.caption ? 'pending_caption' : 'processed' as const, 
+            analyzed_content: null, old_analyzed_content: null,
+            error_message: null, retry_count: 0, last_error_at: null,
+            edit_history: null, edit_count: 0,
+            is_edited_channel_post: false, edit_date: null,
+            forward_info: forwardInfo,
+            created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+            correlation_id: correlationId,
+            message_caption_id: null, is_original_caption: !!message.caption, group_caption_synced: false,
+        };
+
+        // --- Perform Insert ---
+        console.log(`[${correlationId}][${functionName}] Performing insert for new media message.`);
+        const { data: insertedData, error: insertError } = await supabaseClient
+            .from('messages').insert(insertData).select('id').single();
+
+        if (insertError || !insertedData || !insertedData.id) {
+            await logAuditEvent("message_insert_failed", null, correlationId, { function: functionName, table: 'messages' }, insertError?.message || 'Insert failed');
+            console.error(`[${correlationId}][${functionName}] Error inserting message:`, insertError);
+            throw new Error(`Database error inserting message: ${insertError?.message || 'No ID returned'}`);
+        }
+        dbMessageId = insertedData.id;
+        console.log(`[${correlationId}][${functionName}] Successfully inserted message ID: ${dbMessageId}`);
+
+        // --- Log Success Audit for Insert ---
+        await logAuditEvent("media_message_created", dbMessageId, correlationId,
+            {
+                function: functionName, telegram_message_id: message.message_id, chat_id: message.chat.id,
+                file_unique_id: fileUniqueId, media_type: messageType, media_group_id: message.media_group_id,
+                has_caption: !!message.caption, is_forward: !!forwardInfo, upload_performed: uploadPerformed
+            }, null
+        );
     }
-    
-    // Re-throw to be caught by the main handler
-    throw createError;
+
+    // --- Return Success Response ---
+    console.log(`[${correlationId}][${functionName}] Completed processing media message ${message.message_id}. Operation: ${operation}`);
+    return createCorsResponse(
+      { success: true, messageId: dbMessageId, operation: operation, correlationId: correlationId }, 
+      { status: 200 }
+    );
+
+  } catch (error) {
+    // --- Centralized Error Handling ---
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    console.error(`[${correlationId}][${functionName}] Unhandled error:`, errorMessage);
+    if (errorStack) console.error(`[${correlationId}][${functionName}] Stack (truncated):`, errorStack?.substring(0, 500));
+
+    await logAuditEvent("message_processing_failed", dbMessageId, correlationId,
+        { handler_type: functionName, telegram_message_id: message?.message_id, chat_id: message?.chat?.id, error_stack_preview: errorStack?.substring(0, 200) }, errorMessage
+    );
+    return createCorsResponse(
+      { success: false, error: `Failed in ${functionName}: ${errorMessage}`, correlationId: correlationId }, 
+      { status: 200 }
+>>>>>>> 1c6afd6248d76680bdcec70142d877d46e874c8a
+    );
   }
 }
+<<<<<<< HEAD
+=======
+
+// Note: Caption processing triggers (like xdelo_processCaptionChanges) are NOT called directly.
+// Instead, the 'processing_state' is set to 'pending_caption_update' when a caption changes on a duplicate.
+// Another system (e.g., DB trigger, separate function) should monitor this state.
+>>>>>>> 1c6afd6248d76680bdcec70142d877d46e874c8a

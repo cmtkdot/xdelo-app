@@ -1,7 +1,9 @@
+
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { MakeEventType } from '@/types/make';
 import { useToast } from '@/hooks/useToast';
+import { Database } from '@/integrations/supabase/database.types';
 
 interface TestPayload {
   id: string;
@@ -13,6 +15,9 @@ interface TestPayload {
   created_at: string;
   updated_at: string;
 }
+
+type TestPayloadInsert = Omit<TestPayload, 'id' | 'created_at' | 'updated_at'>;
+type MakeTestPayloadRow = Database['public']['Tables']['make_test_payloads']['Row'];
 
 /**
  * Hook to manage test payloads for Make webhooks
@@ -34,11 +39,11 @@ export function useMakeTestPayloads() {
         if (error) throw error;
         
         // Group by event type
-        return data.reduce((acc, payload) => {
+        return data.reduce((acc, payload: MakeTestPayloadRow) => {
           if (!acc[payload.event_type]) {
             acc[payload.event_type] = [];
           }
-          acc[payload.event_type].push(payload);
+          acc[payload.event_type].push(payload as unknown as TestPayload);
           return acc;
         }, {} as Record<string, TestPayload[]>);
       },
@@ -59,11 +64,11 @@ export function useMakeTestPayloads() {
         if (error) throw error;
         
         // Group by event type
-        return data.reduce((acc, payload) => {
+        return data.reduce((acc, payload: MakeTestPayloadRow) => {
           if (!acc[payload.event_type]) {
             acc[payload.event_type] = [];
           }
-          acc[payload.event_type].push(payload);
+          acc[payload.event_type].push(payload as unknown as TestPayload);
           return acc;
         }, {} as Record<string, TestPayload[]>);
       },
@@ -82,22 +87,28 @@ export function useMakeTestPayloads() {
           .order('created_at', { ascending: false });
         
         if (error) throw error;
-        return data;
+        return data as unknown as TestPayload[];
       },
       enabled,
     });
 
   // Create a new test payload
   const createTestPayload = useMutation({
-    mutationFn: async (payload: Omit<TestPayload, 'id' | 'created_at' | 'updated_at'>) => {
+    mutationFn: async (payload: TestPayloadInsert) => {
       const { data, error } = await supabase
         .from('make_test_payloads')
-        .insert(payload)
+        .insert({
+          name: payload.name,
+          description: payload.description,
+          event_type: payload.event_type,
+          payload: payload.payload,
+          is_template: payload.is_template,
+        })
         .select()
         .single();
       
       if (error) throw error;
-      return data;
+      return data as unknown as TestPayload;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['make-test-payloads'] });
@@ -120,13 +131,19 @@ export function useMakeTestPayloads() {
     mutationFn: async (payload: Partial<TestPayload> & { id: string }) => {
       const { data, error } = await supabase
         .from('make_test_payloads')
-        .update(payload)
+        .update({
+          name: payload.name,
+          description: payload.description,
+          event_type: payload.event_type,
+          payload: payload.payload,
+          is_template: payload.is_template
+        })
         .eq('id', payload.id)
         .select()
         .single();
       
       if (error) throw error;
-      return data;
+      return data as unknown as TestPayload;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['make-test-payloads'] });
@@ -175,10 +192,10 @@ export function useMakeTestPayloads() {
   const generateDefaultTemplates = useMutation({
     mutationFn: async () => {
       const templates = Object.values(MakeEventType).map(eventType => {
-        let templatePayload;
+        let templatePayload: any;
         
         switch(eventType) {
-          case 'message_received':
+          case MakeEventType.MESSAGE_RECEIVED:
             templatePayload = {
               message: {
                 id: "msg_123456",
@@ -201,7 +218,7 @@ export function useMakeTestPayloads() {
             };
             break;
             
-          case 'channel_joined':
+          case MakeEventType.CHANNEL_JOINED:
             templatePayload = {
               channel: {
                 id: "channel_456",
@@ -234,7 +251,7 @@ export function useMakeTestPayloads() {
         return {
           name: `Default ${eventType} Template`,
           description: `Default template for ${eventType} events`,
-          event_type: eventType,
+          event_type: eventType as string,
           payload: templatePayload,
           is_template: true
         };
@@ -243,7 +260,7 @@ export function useMakeTestPayloads() {
       // Insert all templates
       const { data, error } = await supabase
         .from('make_test_payloads')
-        .insert(templates)
+        .insert(templates as any)
         .select();
       
       if (error) throw error;
@@ -275,4 +292,4 @@ export function useMakeTestPayloads() {
     deleteTestPayload,
     generateDefaultTemplates
   };
-} 
+}

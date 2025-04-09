@@ -1,13 +1,15 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
+
 import { 
   logProcessingEvent, 
   extractTelegramMetadata,
-  createSupabaseClient 
+  createSupabaseClient,
+  supabaseClient as sharedSupabaseClient 
 } from '../_shared/consolidatedMessageUtils.ts';
 
 /**
  * Enhanced Supabase client with improved timeout and retry capabilities
  */
+<<<<<<< HEAD
 export const supabaseClient = createSupabaseClient({ 
   timeoutSeconds: 30, 
   retryAttempts: 3 
@@ -44,6 +46,9 @@ export async function xdelo_logProcessingEvent(
     console.error(`Error logging event: ${eventType}`, error);
   }
 }
+=======
+export const supabaseClient = sharedSupabaseClient;
+>>>>>>> 1c6afd6248d76680bdcec70142d877d46e874c8a
 
 /**
  * Check if a message with the same Telegram message ID already exists in the database
@@ -58,33 +63,6 @@ export async function checkDuplicateMessage(chatId: number, telegramMessageId: n
     
   if (error) {
     console.error('Error checking for duplicate message:', error);
-    return false;
-  }
-  
-  return data && data.length > 0;
-}
-
-/**
- * Check if a file with the same Telegram message ID already exists in the database
- * @param client Supabase client instance
- * @param telegramMessageId Telegram message ID
- * @param chatId Chat ID
- * @returns Boolean indicating if the file is a duplicate
- */
-export async function checkDuplicateFile(
-  client: any,
-  telegramMessageId: number,
-  chatId: number
-): Promise<boolean> {
-  const { data, error } = await client
-    .from('messages')
-    .select('id')
-    .eq('chat_id', chatId)
-    .eq('telegram_message_id', telegramMessageId)
-    .limit(1);
-    
-  if (error) {
-    console.error('Error checking for duplicate file:', error);
     return false;
   }
   
@@ -173,11 +151,12 @@ export async function createMediaMessage(
     is_forward?: boolean;
     correlation_id: string;
     message_url?: string;
+    telegram_metadata?: any;
   }
 ): Promise<{ id?: string; success: boolean; error?: string }> {
   try {
     // Extract essential metadata only
-    const telegramMetadata = extractTelegramMetadata(input.telegram_data);
+    const telegramMetadata = input.telegram_metadata || extractTelegramMetadata(input.telegram_data);
     
     // Create the message record
     const { data, error } = await supabaseClient
@@ -226,7 +205,6 @@ export async function createMediaMessage(
  * This is a unified function that handles both media and non-media messages
  */
 export async function createMessage(
-  client: any, 
   input: any, 
   logger?: any
 ): Promise<{ id?: string; success: boolean; error_message?: string }> {
@@ -236,7 +214,7 @@ export async function createMessage(
       (input.telegram_data ? extractTelegramMetadata(input.telegram_data) : {});
     
     // Create the message record
-    const { data, error } = await client
+    const { data, error } = await supabaseClient
       .from('messages')
       .insert({
         telegram_message_id: input.telegram_message_id,
@@ -275,13 +253,13 @@ export async function createMessage(
       .single();
       
     if (error) {
-      logger?.error('Failed to create message record:', error);
+      if (logger) logger.error('Failed to create message record:', error);
       return { success: false, error_message: error.message };
     }
     
     return { id: data.id, success: true };
   } catch (error) {
-    logger?.error('Exception in createMessage:', error);
+    if (logger) logger.error('Exception in createMessage:', error);
     return { 
       success: false, 
       error_message: error instanceof Error ? error.message : String(error) 
@@ -366,6 +344,7 @@ export async function getMessageById(messageId: string) {
 
 /**
  * Sync media group content from one message to others
+ * Use the consolidated function from the database
  */
 export async function syncMediaGroupContent(
   sourceMessageId: string,

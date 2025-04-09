@@ -1,4 +1,3 @@
-
 /**
  * Type definitions for RPC functions
  * This helps TypeScript recognize custom RPC functions in the project
@@ -7,11 +6,6 @@
 // We need to extend the SupabaseClient type to include our custom RPC functions
 declare module "@supabase/supabase-js" {
   interface SupabaseClient {
-    rpc<T = any>(
-      fn: "execute_sql_migration" | "xdelo_execute_sql_migration", 
-      params?: { sql_command: string }
-    ): { data: T; error: null } | { data: null; error: Error };
-    
     rpc<T = any>(
       fn: "xdelo_log_event", 
       params?: { 
@@ -121,7 +115,7 @@ declare module "@supabase/supabase-js" {
 
     // Add RPC for migrating telegram data to metadata
     rpc<T = { migrated_count: number }>(
-      fn: "migrate_telegram_data_to_metadata",
+      fn: "xdelo_migrate_telegram_data_to_metadata",
       params?: {}
     ): { data: T; error: null } | { data: null; error: Error };
   }
