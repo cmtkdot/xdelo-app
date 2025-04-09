@@ -9,7 +9,7 @@ import { logProcessingEvent } from './utils/dbOperations.ts';
 import { logWithCorrelation } from './utils/logger.ts';
 import { isMessageForwarded } from '../_shared/consolidatedMessageUtils.ts';
 import { TelegramMessage, MessageContext } from './types.ts';
-import { supabaseClient } from '../_shared/supabase.ts';
+import { supabaseClient } from '../_shared/cors.ts';
 
 // Helper to manually create CORS response
 function createManualCorsResponse(body: object | string | null, options: ResponseInit = {}): Response {

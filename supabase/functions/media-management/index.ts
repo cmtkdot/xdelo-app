@@ -8,7 +8,7 @@ import {
   xdelo_recoverFileMetadata,
   xdelo_validateAndFixStoragePath
 } from "../_shared/mediaUtils.ts";
-import { supabaseClient as supabase } from "../_shared/supabase.ts";
+import { supabaseClient as supabase } from "../_shared/cors.ts";
 
 serve(async (req) => {
   // Handle preflight CORS

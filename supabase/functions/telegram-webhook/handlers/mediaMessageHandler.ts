@@ -2,11 +2,10 @@
 
 // Shared Imports
 import { createCorsResponse } from "../../_shared/cors.ts"; 
-import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
+import { supabaseClient } from "../../_shared/cors.ts";
 import { MediaProcessor, ProcessingResult } from "../../_shared/MediaProcessor.ts";
 import { createMediaProcessor } from "../../_shared/mediaUtils.ts";
 import { handleError } from "../../_shared/ErrorHandler.ts";
-import { supabaseClient } from "../../_shared/supabase.ts";
 
 // Local Imports
 import { createErrorResponse } from "../utils/errorHandler.ts";

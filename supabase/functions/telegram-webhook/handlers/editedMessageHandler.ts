@@ -2,7 +2,7 @@
 
 // Shared Imports
 import { createCorsResponse } from "../../_shared/cors.ts";
-import { supabaseClient } from "../../_shared/supabase.ts"; 
+import { supabaseClient } from "../../_shared/cors.ts"; 
 // Local Imports
 import { MessageContext, TelegramMessage, MessageRecord } from '../types.ts';
 import {

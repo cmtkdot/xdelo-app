@@ -1,7 +1,6 @@
-
 // Standard error handler for Edge Functions
 import { corsHeaders } from "./cors.ts";
-import { createSupabaseClient } from "./supabase.ts";
+import { createSupabaseClient } from "./cors.ts";
 
 export enum SecurityLevel {
   PUBLIC = "public",

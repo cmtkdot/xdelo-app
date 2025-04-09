@@ -1,4 +1,4 @@
-import { supabaseClient } from './supabase.ts';
+import { supabaseClient } from './cors.ts';
 
 /**
  * Construct a shareable message URL for a Telegram message

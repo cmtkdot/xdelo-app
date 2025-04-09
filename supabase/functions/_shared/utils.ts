@@ -1,7 +1,7 @@
 // Re-export functions from other utilities files for backward compatibility
 // and to provide a single import point for common utilities
 
-import { supabaseClient } from './supabase.ts';
+import { supabaseClient } from './cors.ts';
 import { corsHeaders } from './cors.ts';
 import { 
   isMessageForwarded, 

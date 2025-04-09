@@ -1,4 +1,4 @@
-import { supabaseClient } from '../../_shared/supabase.ts';
+import { supabaseClient } from '../../_shared/cors.ts';
 
 /**
  * Simple logger class for telegram-webhook function

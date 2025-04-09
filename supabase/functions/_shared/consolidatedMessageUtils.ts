@@ -1,5 +1,5 @@
 import { corsHeaders } from './cors.ts';
-import { createSupabaseClient } from './supabase.ts';
+import { createSupabaseClient } from './cors.ts';
 
 // Create a Supabase client with the service role key
 export const supabaseClient = createSupabaseClient();
