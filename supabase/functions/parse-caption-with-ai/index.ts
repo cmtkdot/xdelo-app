@@ -1,6 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
-<<<<<<< HEAD:supabase/functions/parse-caption/index.ts
 import {
   logErrorToDatabase,
   updateMessageWithError,
@@ -9,22 +8,11 @@ import {
 import {
   getMessage,
   logAnalysisEvent,
-=======
-import { 
-  getMessage, 
   updateMessageWithAnalysis, 
->>>>>>> 1c6afd6248d76680bdcec70142d877d46e874c8a:supabase/functions/parse-caption-with-ai/index.ts
   markQueueItemAsFailed,
-  syncMediaGroupContent,
-  logAnalysisEvent
+  syncMediaGroupContent
 } from './dbOperations.ts';
 import { ParsedContent } from './types.ts';
-import {
-  withErrorHandling,
-  logErrorToDatabase,
-  updateMessageWithError
-} from '../_shared/errorHandler.ts';
-import { SecurityLevel } from '../_shared/jwt-verification.ts';
 
 // Define corsHeaders here since we deleted the import
 const corsHeaders = {
@@ -254,19 +242,4 @@ const handleCaptionAnalysis = async (req: Request, correlationId: string) => {
     
     throw error;
   }
-<<<<<<< HEAD:supabase/functions/parse-caption/index.ts
 };
-=======
-};
-
-// Use the withErrorHandling wrapper with the SecurityLevel.PUBLIC for backward compatibility
-// We could change this to AUTHENTICATED if we want to restrict access
-serve(withErrorHandling(
-  'parse-caption-with-ai', 
-  handleCaptionAnalysis, 
-  { 
-    securityLevel: SecurityLevel.PUBLIC,  // Keep backward compatibility
-    bypassForServiceRole: true            // Allow service role tokens to bypass
-  }
-));
->>>>>>> 1c6afd6248d76680bdcec70142d877d46e874c8a:supabase/functions/parse-caption-with-ai/index.ts

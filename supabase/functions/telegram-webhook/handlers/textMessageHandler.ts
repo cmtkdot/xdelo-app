@@ -2,178 +2,140 @@
 
 // Shared Imports
 import { createCorsResponse } from "../../_shared/cors.ts";
-import { logAuditEvent } from "../../_shared/dbUtils.ts";
+// Removed: import { logAuditEvent } from "../../_shared/dbUtils.ts";
 import { supabaseClient } from "../../_shared/supabase.ts";
 // Local Imports
-import { MessageContext, TelegramMessage } from '../types.ts';
+import { MessageContext, TelegramMessage, MessageRecord } from '../types.ts';
 import { constructTelegramMessageUrl } from '../utils/messageUtils.ts';
+// Import the specific DB operations needed
+import {
+  createMessageRecord, // Assuming this is the function to create a record
+  logProcessingEvent,       // Assuming logAuditEvent is now here
+  DbOperationResult
+} from '../utils/dbOperations.ts';
 
 /**
  * Handles new non-media (text) messages from Telegram.
  * Assumes edited messages are routed to handleEditedMessage.
- * Inserts a new record into the 'messages' table.
+ * Inserts a new record into the 'messages' table using utility functions.
  */
 export async function handleOtherMessage(
   message: TelegramMessage,
   context: MessageContext
 ): Promise<Response> {
-  const { correlationId } = context; // isEdit is ignored here
+  const { correlationId } = context;
   const functionName = 'handleOtherMessage';
   let dbMessageId: string | undefined = undefined;
 
-  console.log(`[${correlationId}][${functionName}] Processing new text/other message ${message.message_id}`);
+  console.log(`[${correlationId}][${functionName}] Processing text message ${message.message_id}`);
 
   try {
     // Basic Validation
-    if (!message || !message.chat || !message.message_id || !message.text) {
-      // Added check for message.text as this handler is for text messages
-      throw new Error(`Invalid text message structure: Missing chat, message_id, or text content`);
+    if (!message || !message.chat || !message.message_id || !message.text || !message.date) {
+      throw new Error(`Invalid text message structure: Missing required fields`);
     }
 
-    // --- Check if message ALREADY exists (e.g., race condition, retry) ---
-    // Avoid inserting duplicates if possible.
-    const { data: existingRecord, error: findErr } = await supabaseClient
-      .from('messages')
-      .select('id') // Only need ID to check existence
-      .eq('telegram_message_id', message.message_id)
-      .eq('chat_id', message.chat.id)
-      .maybeSingle();
+    // Prepare data for insertion using MessageRecord type
+    const messageRecord: Partial<MessageRecord> = {
+      telegram_message_id: message.message_id,
+      chat_id: message.chat.id,
+      user_id: message.from?.id,
+      username: message.from?.username,
+      first_name: message.from?.first_name,
+      last_name: message.from?.last_name,
+      message_type: 'text', // Explicitly set for text messages
+      text_content: message.text,
+      // caption: null, // Explicitly null for text
+      // analyzed_content: null, // Will be set by analysis later
+      message_timestamp: new Date(message.date * 1000).toISOString(),
+      // last_edited_at: null,
+      // edit_history: [],
+      // edit_count: 0,
+      // file_id: null,
+      // file_unique_id: null,
+      // file_size: null,
+      // mime_type: null,
+      // storage_path: null,
+      // public_url: null,
+      // dimensions: null,
+      // duration: null,
+      media_group_id: message.media_group_id,
+      processing_state: 'pending_analysis', // Text messages usually need analysis
+      retry_count: 0,
+      // error_message: null,
+      // last_error_at: null,
+      telegram_data: message, // Store raw message data
+      message_url: constructTelegramMessageUrl(message),
+      correlation_id: correlationId,
+    };
 
-    if (findErr) {
-      console.error(`[${correlationId}][${functionName}] Error checking existing message:`, findErr);
-      // Log failure but maybe still attempt insert? Or throw? Let's throw for now.
-      await logAuditEvent(
-        "db_find_existing_failed",
-        null,
-        correlationId,
-        { function: functionName, telegram_message_id: message.message_id, chat_id: message.chat.id },
-        findErr.message
-      );
-      throw new Error(`DB error checking for existing text message: ${findErr.message}`);
-    }
+    // --- Insert the Message Record using Utility Function ---
+    console.log(`[${correlationId}][${functionName}] Attempting to create message record for tg_msg_id: ${message.message_id}`);
+    const createResult = await createMessageRecord(
+      supabaseClient,
+      messageRecord,
+      correlationId
+    );
 
-    if (existingRecord) {
-      // Message already exists, likely due to retry or race condition. Log and skip.
-      dbMessageId = existingRecord.id;
-      console.warn(`[${correlationId}][${functionName}] Message ${message.message_id} already exists in DB (ID: ${dbMessageId}). Skipping insert.`);
-      await logAuditEvent(
-        "text_message_skipped_duplicate",
-        dbMessageId,
-        correlationId,
-        { function: functionName, telegram_message_id: message.message_id, chat_id: message.chat.id },
-        "Message already processed."
+    // --- Handle Insertion Result ---    
+    if (!createResult.success || !createResult.data || createResult.data.length === 0) {
+      console.error(`[${correlationId}][${functionName}] Failed to insert text message:`, createResult.error);
+      await logProcessingEvent(
+          "db_insert_text_failed", null, correlationId,
+          { function: functionName, telegram_message_id: message.message_id, chat_id: message.chat.id },
+          createResult.error ?? 'Unknown DB error during insert'
       );
-      // Return success as the message *is* effectively processed.
+      // Original logic returned 200 even on DB failure, maintaining that for now
       return createCorsResponse(
-        { success: true, messageId: dbMessageId, operation: 'skipped_duplicate', correlationId },
+        { success: false, error: `DB error inserting text message: ${createResult.error}`, correlationId },
         { status: 200 }
       );
     }
 
-    // --- INSERT New Text Message ---
-    console.log(`[${correlationId}][${functionName}] No existing record found. Inserting new text message.`);
-    const messageUrl = constructTelegramMessageUrl(message);
-
-    // Prepare Insert Data (only necessary fields for text)
-    const insertData = {
-      telegram_message_id: message.message_id,
-      chat_id: message.chat.id,
-      chat_type: message.chat.type,
-      chat_title: message.chat.title,
-      user_id: message.from?.id?.toString(),
-      text_content: message.text, // Store text content
-      message_type: 'text', // Explicitly set message_type
-      telegram_data: message, // Store raw message
-      message_url: messageUrl,
-      processing_state: 'processed', // Mark as processed as there's no media/caption step
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      correlation_id: correlationId,
-      // Ensure nullable fields potentially used by media messages are null
-      caption: null,
-      media_group_id: null,
-      file_id: null,
-      file_unique_id: null,
-      mime_type: null,
-      mime_type_original: null,
-      mime_type_verified: null,
-      file_size: null,
-      width: null,
-      height: null,
-      duration: null,
-      storage_path: null,
-      public_url: null,
-      content_disposition: null,
-      storage_exists: false,
-      storage_path_standardized: false,
-      needs_redownload: false,
-      processing_state_details: null,
-      analyzed_content: null,
-      old_analyzed_content: null,
-      error_message: null,
-      retry_count: 0,
-      last_error_at: null,
-      edit_history: null, // No history on initial insert
-      edit_count: 0,
-      is_edited_channel_post: false, // Not edited on insert
-      edit_date: null,
-      forward_info: null, // Simplified: Forward info handled elsewhere if needed
-      message_caption_id: null,
-      is_original_caption: false,
-      group_caption_synced: false,
-    };
-
-    // Perform Insert
-    const { data: inserted, error: insertError } = await supabaseClient
-      .from('messages')
-      .insert(insertData)
-      .select('id')
-      .single();
-
-    if (insertError || !inserted) {
-      console.error(`[${correlationId}][${functionName}] Error inserting text message:`, insertError);
-      await logAuditEvent(
-        "message_insert_failed",
-        null,
-        correlationId,
-        { function: functionName, telegram_message_id: message.message_id, chat_id: message.chat.id, table: 'messages' },
-        insertError?.message || "Insert failed or no ID returned"
-      );
-      throw new Error(`DB error inserting text message: ${insertError?.message || 'No ID returned'}`);
+    // Assuming createResult.data[0] contains the inserted record with its ID
+    // Adjust based on the actual return type of createMessageRecord
+    dbMessageId = createResult.data[0]?.id; 
+    if (!dbMessageId) {
+        console.error(`[${correlationId}][${functionName}] Insert succeeded but no ID returned.`);
+         await logProcessingEvent(
+          "db_insert_text_no_id", null, correlationId,
+          { function: functionName, telegram_message_id: message.message_id, chat_id: message.chat.id },
+          'Insert reported success but returned no record ID'
+        );
+        // Treat as failure if ID is missing
+        return createCorsResponse(
+            { success: false, error: 'DB insert succeeded but failed to return ID', correlationId },
+            { status: 200 } // Still 200 as per original pattern
+        );
     }
-    dbMessageId = inserted.id;
-    console.log(`[${correlationId}][${functionName}] Successfully inserted text message ID: ${dbMessageId}`);
 
-    // Log Success Audit
-    await logAuditEvent(
-      "text_message_created",
-      dbMessageId,
-      correlationId,
+    console.log(`[${correlationId}][${functionName}] Successfully inserted text message, DB ID: ${dbMessageId}`);
+    await logProcessingEvent(
+      "text_message_received", dbMessageId, correlationId,
       { function: functionName, telegram_message_id: message.message_id, chat_id: message.chat.id },
-      null
+      null // No specific message needed for success
     );
 
-    // --- Return Success Response ---
+    // TODO: Trigger downstream processing if needed (e.g., NLP analysis)
+    
+    // Final success response
     return createCorsResponse(
-      { success: true, messageId: dbMessageId, operation: 'inserted', correlationId },
+      { success: true, operation: 'created', messageId: dbMessageId, correlationId },
       { status: 200 }
     );
 
   } catch (error) {
-    // --- Centralized Error Handling ---
     const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error(`[${correlationId}][${functionName}] Unhandled error:`, errorMessage);
-    await logAuditEvent(
-      "message_processing_failed",
-      dbMessageId || null,
-      correlationId,
-      { handler_type: functionName, telegram_message_id: message?.message_id, chat_id: message?.chat?.id },
-      errorMessage
+    console.error(`[${correlationId}][${functionName}] Exception processing text message:`, errorMessage);
+    await logProcessingEvent(
+        "text_handler_exception", dbMessageId, correlationId, // Use dbMessageId if available
+        { function: functionName, telegram_message_id: message?.message_id, chat_id: message?.chat?.id },
+        errorMessage
     );
-    // Return 200 OK to Telegram even on failure
+    // Consistent error response (though original had 200, 500 seems more appropriate for exceptions)
     return createCorsResponse(
-      { success: false, error: `Failed in ${functionName}: ${errorMessage}`, correlationId },
-      { status: 200 }
+      { success: false, error: errorMessage, correlationId },
+      { status: 500 }
     );
   }
 }

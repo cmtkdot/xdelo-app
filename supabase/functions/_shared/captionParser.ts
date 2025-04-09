@@ -1,48 +1,31 @@
-
 export interface ParsedContent {
-<<<<<<< HEAD
   product_name: string;
-  product_code: string;
-  vendor_uid: string | null; // Make vendor_uid optional
-  purchase_date: string | null; // Make purchase_date optional
-  quantity: number | null;
-  notes: string;
-  caption: string;
-  parsing_metadata: {
-    method: 'manual';
-    timestamp: string;
-    partial_success?: boolean; // New flag for partial success
-    missing_fields?: string[]; // Track which fields couldn't be parsed
-=======
-  product_name?: string;
   product_code?: string;
-  vendor_uid?: string | null;
-  purchase_date?: string | null;
+  vendor_uid?: string | null; // Make vendor_uid optional
+  purchase_date?: string | null; // Make purchase_date optional
   quantity?: number | null;
   notes?: string;
   caption?: string;
   raw_text?: string;
   raw_lines?: string[];
-  parsing_metadata: {
-    method?: string;
-    timestamp?: string;
-    partial_success?: boolean;
-    missing_fields?: string[];
->>>>>>> 1c6afd6248d76680bdcec70142d877d46e874c8a
+  parsing_metadata?: {
+    method: 'manual' | 'ai'; // Allow for AI parsing too
+    timestamp: string;
+    partial_success?: boolean; // Flag for partial success
+    missing_fields?: string[]; // Track missing fields
+    ai_model?: string; // If AI was used
+    confidence_score?: number; // AI confidence
     quantity_pattern?: string;
     used_fallback?: boolean;
     original_caption?: string;
     is_edit?: boolean;
     edit_timestamp?: string;
     error?: string;
-<<<<<<< HEAD
-=======
     trigger_source?: string;
     force_reprocess?: boolean;
     reprocess_timestamp?: string;
     retry_count?: number;
     retry_timestamp?: string;
->>>>>>> 1c6afd6248d76680bdcec70142d877d46e874c8a
   };
   sync_metadata?: {
     media_group_id?: string;
@@ -50,9 +33,6 @@ export interface ParsedContent {
   };
 }
 
-<<<<<<< HEAD
-export function xdelo_parseCaption(caption: string): ParsedContent {
-=======
 /**
  * Parse caption text to extract product information
  * @param caption The caption text to parse
@@ -74,7 +54,6 @@ export function xdelo_parseCaption(
     };
   }
   
->>>>>>> 1c6afd6248d76680bdcec70142d877d46e874c8a
   const trimmedCaption = caption.trim();
   const currentTimestamp = new Date().toISOString();
   
@@ -87,11 +66,8 @@ export function xdelo_parseCaption(
     quantity: null,
     notes: '',
     caption: trimmedCaption,
-<<<<<<< HEAD
-=======
     raw_text: trimmedCaption,
     raw_lines: trimmedCaption.split('\n').map(line => line.trim()).filter(Boolean),
->>>>>>> 1c6afd6248d76680bdcec70142d877d46e874c8a
     parsing_metadata: {
       method: 'manual',
       timestamp: currentTimestamp,
@@ -109,7 +85,9 @@ export function xdelo_parseCaption(
     if (productNameMatch && productNameMatch[1].trim()) {
       parsedContent.product_name = productNameMatch[1].trim();
     } else {
-      missingFields.push('product_name');
+      // Fallback: Use the full trimmed caption as the product name
+      parsedContent.product_name = trimmedCaption;
+      missingFields.push('product_name'); // Still note that specific extraction failed
     }
     
     // Extract product code (text following '#')
@@ -150,11 +128,7 @@ export function xdelo_parseCaption(
     } else {
       // Try alternative quantity patterns
       const altQuantityMatch = trimmedCaption.match(/(?:qty|quantity):\s*(\d+)/i) || 
-<<<<<<< HEAD
-                               trimmedCaption.match(/(\d+)\s*(?:pcs|pieces|units)/i);
-=======
                               trimmedCaption.match(/(\d+)\s*(?:pcs|pieces|units)/i);
->>>>>>> 1c6afd6248d76680bdcec70142d877d46e874c8a
       
       if (altQuantityMatch) {
         parsedContent.quantity = parseInt(altQuantityMatch[1], 10);

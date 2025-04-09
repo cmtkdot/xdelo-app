@@ -2,14 +2,16 @@
 
 // Shared Imports
 import { createCorsResponse } from "../../_shared/cors.ts";
-import { logAuditEvent } from "../../_shared/dbUtils.ts";
-import { supabaseClient } from "../../_shared/supabase.ts";
+import { logProcessingEvent } from "../utils/dbOperations.ts"; 
+import { supabaseClient } from "../../_shared/supabase.ts"; 
 // Local Imports
-import { MessageContext, TelegramMessage } from '../types.ts';
+import { MessageContext, TelegramMessage, MessageRecord } from '../types.ts';
 import { constructTelegramMessageUrl } from '../utils/messageUtils.ts';
-// Import caption processing trigger function (assuming it remains accessible)
-// TODO: Potentially move xdelo_processCaptionChanges to a shared location later
-import { xdelo_processCaptionChanges } from './mediaMessageHandler.ts'; // TEMPORARY: May need adjustment
+import {
+  findMessageByTelegramId,
+  updateMessageRecord,
+  DbOperationResult
+} from '../utils/dbOperations.ts';
 
 /**
  * Handles edited messages (both text and media captions) from Telegram.
@@ -39,7 +41,7 @@ export async function handleEditedMessage(
     if (!isTextEdit && !isMediaEdit) {
         // Neither text nor known media - likely unsupported edit type (e.g., poll)
         console.warn(`[${correlationId}][${functionName}] Received edit for unsupported message type (no text/photo/video/document). Skipping.`);
-        await logAuditEvent(
+        await logProcessingEvent(
             "edit_skipped_unsupported_type",
             null,
             correlationId,
@@ -52,184 +54,198 @@ export async function handleEditedMessage(
         );
     }
 
-    // --- Find the Original Message --- (Use same lookup for both types)
+    // --- Find the Original Message --- (Use new utility function)
     console.log(`[${correlationId}][${functionName}] Looking up original message by tg_msg_id: ${message.message_id}, chat_id: ${message.chat.id}`);
-    const { data: existingRecord, error: findError } = await supabaseClient
-      .from('messages')
-      // Select fields needed for *either* text or media edit update
-      .select('id, text_content, caption, analyzed_content, edit_history, edit_count, media_group_id')
-      .eq('telegram_message_id', message.message_id)
-      .eq('chat_id', message.chat.id)
-      .maybeSingle();
+    const findResult = await findMessageByTelegramId(
+      supabaseClient, // Pass client explicitly
+      message.message_id,
+      message.chat.id,
+      correlationId
+    );
 
     // --- Handle Find Errors or Not Found ---    
-    if (findError) {
-      console.error(`[${correlationId}][${functionName}] Error finding message to edit:`, findError);
-      await logAuditEvent(
+    if (!findResult.success) {
+      console.error(`[${correlationId}][${functionName}] Error finding message to edit:`, findResult.error);
+      await logProcessingEvent(
         "db_find_edit_target_failed", null, correlationId,
         { function: functionName, telegram_message_id: message.message_id, chat_id: message.chat.id },
-        findError.message
+        findResult.error ?? 'Unknown DB error'
       );
       return createCorsResponse(
-        { success: false, error: `DB error finding message to edit: ${findError.message}`, correlationId },
-        { status: 200 }
+        { success: false, error: `DB error finding message to edit: ${findResult.error}`, correlationId },
+        { status: 200 } // Respond with 200 as per original logic
       );
     }
 
-    if (!existingRecord) {
+    if (!findResult.data) {
       console.warn(`[${correlationId}][${functionName}] Original message not found for edit (tg_msg_id: ${message.message_id}, chat_id: ${message.chat.id}). Cannot process edit.`);
-      await logAuditEvent(
+      await logProcessingEvent(
         "edit_target_not_found", null, correlationId,
         { function: functionName, telegram_message_id: message.message_id, chat_id: message.chat.id },
         "Original message not found for edit"
       );
       return createCorsResponse(
         { success: true, operation: 'skipped', reason: 'Original message not found', correlationId },
-        { status: 200 }
+        { status: 200 } // Respond with 200 as per original logic
       );
     }
 
-    dbMessageId = existingRecord.id;
+    const existingRecord = findResult.data as MessageRecord; // Cast to expected type
+    dbMessageId = existingRecord.id; // id is likely string (uuid), check MessageRecord definition
     console.log(`[${correlationId}][${functionName}] Found existing message ${dbMessageId} for edit.`);
 
     // --- Prepare Common Update Fields --- 
     const currentEditHistory = existingRecord.edit_history || [];
-    const editCount = (existingRecord.edit_count || 0) + 1;
+    const editCount = (existingRecord.retry_count || 0) + 1; // Assuming retry_count was meant for edits?
     const editDateIso = new Date(message.edit_date * 1000).toISOString();
     const messageUrl = constructTelegramMessageUrl(message);
 
-    let updateData: Record<string, any> = {
-        telegram_data: message, // Always update the raw data
-        edit_count: editCount,
-        edit_date: editDateIso,
-        message_url: messageUrl, 
-        updated_at: new Date().toISOString(),
-        correlation_id: correlationId,
-        error_message: null, // Clear any previous errors
-        last_error_at: null,
+    let updateData: Partial<MessageRecord> = {
+      last_edited_at: editDateIso,
+      // Note: Ensure MessageRecord has `edit_count` field or adjust below
+      // retry_count: editCount, // Or use a dedicated `edit_count` field if available
+      edit_history: [...currentEditHistory, { date: editDateIso, content: isTextEdit ? message.text : message.caption }],
     };
-    let previousStateEntry: Record<string, any> = { 
-        timestamp: new Date().toISOString(),
-        edit_date: editDateIso,
-    };
-    let operationType: 'text_edit' | 'caption_edit' | 'skipped_no_change' = 'skipped_no_change';
-    let contentChanged = false;
-    let triggerCaptionProcessing = false;
 
-    // --- Handle Text Edit Path --- 
+    let captionChanged = false;
+
+    // --- Handle Text Edit ---    
     if (isTextEdit) {
-        console.log(`[${correlationId}][${functionName}] Processing as TEXT edit.`);
-        operationType = 'text_edit';
-        if (existingRecord.text_content !== message.text) {
-            console.log(`[${correlationId}][${functionName}] Text content changed.`);
-            contentChanged = true;
-            previousStateEntry.previous_text_content = existingRecord.text_content;
-            updateData.text_content = message.text;
-            updateData.processing_state = 'processed'; // Text edits are usually final
-        } else {
-            console.log(`[${correlationId}][${functionName}] Text content unchanged.`);
-        }
-    }
-    // --- Handle Media (Caption) Edit Path --- 
-    else if (isMediaEdit) {
-        console.log(`[${correlationId}][${functionName}] Processing as MEDIA edit (caption focus).`);
-        operationType = 'caption_edit';
-        const newCaption = message.caption || null; // Ensure null if empty/undefined
-        if (existingRecord.caption !== newCaption) {
-            console.log(`[${correlationId}][${functionName}] Caption content changed.`);
-            contentChanged = true;
-            previousStateEntry.previous_caption = existingRecord.caption;
-            previousStateEntry.previous_analyzed_content = existingRecord.analyzed_content;
-            updateData.caption = newCaption;
-            // If caption changed, it likely needs reprocessing
-            updateData.processing_state = 'pending_caption_update'; 
-            triggerCaptionProcessing = true;
-        } else {
-            console.log(`[${correlationId}][${functionName}] Caption content unchanged.`);
-        }
+      console.log(`[${correlationId}][${functionName}] Handling text edit for message ${dbMessageId}.`);
+      updateData.text_content = message.text;
+      // If text is edited, potentially clear/reset related fields if needed
+      // updateData.analyzed_content = null; // Example: Reset analysis if text changes
     }
 
-    // --- Perform Update only if Content Changed --- 
-    if (!contentChanged) {
-        console.log(`[${correlationId}][${functionName}] No relevant content change detected. Skipping DB update.`);
-        await logAuditEvent(
-            `${operationType}_skipped_no_change`, // e.g., text_edit_skipped_no_change
-            dbMessageId,
-            correlationId,
-            { function: functionName, telegram_message_id: message.message_id, chat_id: message.chat.id },
-            "Content identical to existing record."
-        );
-        return createCorsResponse(
-            { success: true, messageId: dbMessageId, operation: 'skipped_no_change', correlationId },
-            { status: 200 }
-        );
+    // --- Handle Media Caption Edit ---    
+    if (isMediaEdit && message.caption !== existingRecord.caption) {
+      console.log(`[${correlationId}][${functionName}] Handling caption edit for message ${dbMessageId}.`);
+      captionChanged = true;
+      updateData.caption = message.caption;
+      // Keep existing media info (storage_path, public_url etc.) as it's just a caption edit
     }
 
-    // Add the history entry and finalize update payload
-    updateData.edit_history = [...currentEditHistory, previousStateEntry];
-
-    console.log(`[${correlationId}][${functionName}] Updating message ${dbMessageId} for ${operationType}.`);
-    
-    const { error: updateError } = await supabaseClient
-      .from('messages')
-      .update(updateData)
-      .eq('id', dbMessageId);
-
-    if (updateError) {
-      console.error(`[${correlationId}][${functionName}] Error updating edited message ${dbMessageId}:`, updateError);
-      await logAuditEvent(
-        "message_update_failed", dbMessageId, correlationId,
-        { function: functionName, telegram_message_id: message.message_id, chat_id: message.chat.id, update_type: operationType, table: 'messages' },
-        updateError.message
-      );
-      throw new Error(`Failed to update edited message: ${updateError.message}`);
-    }
-
-    console.log(`[${correlationId}][${functionName}] Successfully updated message ID: ${dbMessageId}`);
-    await logAuditEvent(
-      operationType === 'text_edit' ? "text_message_edited" : "media_message_caption_edited",
+    // --- Update the Message Record --- (Use new utility function)
+    console.log(`[${correlationId}][${functionName}] Updating message ${dbMessageId} with edit data.`);
+    const updateResult = await updateMessageRecord(
+      supabaseClient,
       dbMessageId,
-      correlationId,
-      { function: functionName, telegram_message_id: message.message_id, chat_id: message.chat.id, edit_count: editCount },
-      null
+      updateData,
+      correlationId
     );
 
-    // --- Trigger Caption Processing If Needed ---
-    if (triggerCaptionProcessing) {
-        console.log(`[${correlationId}][${functionName}] Caption changed. Triggering re-parsing for message ${dbMessageId}`);
-        // Pass necessary info to the caption processing function
-        await xdelo_processCaptionChanges(
-            // supabaseClient, // Pass client if still needed by the function signature
-            dbMessageId,
-            updateData.caption, // Pass the new caption
-            existingRecord.media_group_id, // Pass media group ID if relevant
-            correlationId,
-            true // Indicate this is an edit
-        );
-        // Audit log for trigger is handled inside xdelo_processCaptionChanges
+    // --- Handle Update Errors ---    
+    if (!updateResult.success) {
+      console.error(`[${correlationId}][${functionName}] Error updating message ${dbMessageId}:`, updateResult.error);
+      await logProcessingEvent(
+        "db_update_edit_failed", dbMessageId, correlationId,
+        { function: functionName, telegram_message_id: message.message_id, chat_id: message.chat.id },
+        updateResult.error ?? 'Unknown DB error'
+      );
+      // Log error but respond successfully as per original logic
+      return createCorsResponse(
+          { success: false, error: `Failed to save edit: ${updateResult.error}`, correlationId },
+          { status: 200 }
+      );
     }
 
-    // --- Return Success Response ---
-    return createCorsResponse(
-      { success: true, messageId: dbMessageId, operation: 'updated', update_type: operationType, correlationId },
-      { status: 200 }
-    );
+    console.log(`[${correlationId}][${functionName}] Successfully updated message ${dbMessageId}.`);
+
+    // --- Trigger Caption Processing if Caption Changed ---    
+    if (captionChanged && dbMessageId) { // Ensure we have the dbMessageId
+      console.log(`[${correlationId}][${functionName}] Caption changed for ${dbMessageId}, invoking parser function.`);
+      // Fire-and-forget call to the caption parser function
+      (async () => {
+        try {
+          const parserUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/manual-caption-parser`;
+          const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+
+          if (!parserUrl || !serviceKey) {
+            console.error(`[${correlationId}][${functionName}] CRITICAL: Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY for caption parser call.`);
+            await logProcessingEvent(
+              supabaseClient,
+              'caption_parser_invoke_error',
+              dbMessageId,
+              correlationId,
+              { error: 'Missing env vars for parser', function: functionName },
+              'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY'
+            );
+            return; // Cannot proceed
+          }
+
+          const parserPayload = {
+            messageId: dbMessageId, // Pass the DB UUID
+            // Pass other relevant details if needed by the parser
+            correlationId: correlationId, 
+          };
+
+          const response = await fetch(parserUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${serviceKey}`,
+              'x-client-info': 'supabase-edge-function-editedMessageHandler'
+            },
+            body: JSON.stringify(parserPayload)
+          });
+
+          if (!response.ok) {
+            const errorBody = await response.text();
+            console.error(`[${correlationId}][${functionName}] Error invoking caption parser for edited message ${dbMessageId}. Status: ${response.status}, Body: ${errorBody}`);
+            // Log this error - don't fail the edit operation
+            await logProcessingEvent(
+              supabaseClient,
+              'caption_parser_invoke_failed',
+              dbMessageId,
+              correlationId,
+              { status: response.status, errorBody: errorBody, function: functionName },
+              `Caption parser invocation failed with status ${response.status}`
+            );
+          } else {
+            console.log(`[${correlationId}][${functionName}] Successfully invoked caption parser for edited message ${dbMessageId}.`);
+             // Log success (optional)
+            await logProcessingEvent(
+              supabaseClient,
+              'caption_parser_invoked',
+              dbMessageId,
+              correlationId,
+              { function: functionName }
+            );
+          }
+        } catch (fetchError: any) {
+          console.error(`[${correlationId}][${functionName}] Network/fetch error invoking caption parser for edited message ${dbMessageId}:`, fetchError);
+           await logProcessingEvent(
+              supabaseClient,
+              'caption_parser_invoke_exception',
+              dbMessageId,
+              correlationId,
+              { errorMessage: fetchError.message, stack: fetchError.stack, function: functionName },
+              `Fetch exception invoking caption parser: ${fetchError.message}`
+            );
+        }
+      })(); // End of immediately invoked async function
+    } else {
+       await logProcessingEvent(
+            "edit_processed_no_caption_change", dbMessageId ?? null, correlationId, // Handle potential undefined dbMessageId if update failed
+            { function: functionName, edit_type: isTextEdit ? 'text' : 'media_no_caption_change' },
+            `Message edit processed successfully.`
+        );
+    }
+
+    // Final success response
+    return createCorsResponse({ success: true, operation: 'updated', messageId: dbMessageId, correlationId });
 
   } catch (error) {
-    // --- Centralized Error Handling ---
     const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error(`[${correlationId}][${functionName}] Unhandled error:`, errorMessage);
-    await logAuditEvent(
-      "message_processing_failed", dbMessageId || null, correlationId,
-      { handler_type: functionName, telegram_message_id: message?.message_id, chat_id: message?.chat?.id },
-      errorMessage
+    console.error(`[${correlationId}][${functionName}] Exception processing edited message:`, errorMessage);
+    await logProcessingEvent(
+        "edit_handler_exception", dbMessageId, correlationId, // Use dbMessageId if available
+        { function: functionName, telegram_message_id: message?.message_id, chat_id: message?.chat?.id },
+        errorMessage
     );
     return createCorsResponse(
-      { success: false, error: `Failed in ${functionName}: ${errorMessage}`, correlationId },
-      { status: 200 }
+      { success: false, error: errorMessage, correlationId },
+      { status: 500 }
     );
   }
 }
-
-// Note: The dependency on xdelo_processCaptionChanges from mediaMessageHandler.ts
-// needs to be resolved. Ideally, move xdelo_processCaptionChanges to a shared utility file.

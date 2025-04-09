@@ -5,7 +5,7 @@ import { handleMediaMessage } from './handlers/mediaMessageHandler.ts';
 import { handleOtherMessage } from './handlers/textMessageHandler.ts';
 import { handleEditedMessage } from './handlers/editedMessageHandler.ts';
 import { corsHeaders } from '../_shared/cors.ts';
-import { logAuditEvent } from '../_shared/dbUtils.ts';
+import { logProcessingEvent } from './utils/dbOperations.ts';
 import { Logger } from './utils/logger.ts';
 import { isMessageForwarded } from '../_shared/consolidatedMessageUtils.ts';
 import { TelegramMessage, MessageContext } from './types.ts';
@@ -46,7 +46,7 @@ serve(async (req: Request) => {
     } catch (error) {
       const errorMsg = `Failed to parse request body: ${error.message}`;
       logger.error(errorMsg, { bodyPreview: error instanceof SyntaxError ? req.body?.toString().substring(0,100) : 'N/A' });
-      await logAuditEvent("webhook_parse_error", null, correlationId, { error: errorMsg }, errorMsg);
+      await logProcessingEvent("webhook_parse_error", null, correlationId, { error: errorMsg }, errorMsg);
       // Use manual helper for error response
       return createManualCorsResponse({ success: false, error: 'Invalid JSON in request body', correlationId }, { status: 400 });
     }
@@ -55,7 +55,7 @@ serve(async (req: Request) => {
     
     if (!message) {
       logger.warn('No processable message found in update', { update_keys: Object.keys(update) });
-      await logAuditEvent("webhook_no_message", null, correlationId, { update_keys: Object.keys(update) }, "No processable message found");
+      await logProcessingEvent("webhook_no_message", null, correlationId, { update_keys: Object.keys(update) }, "No processable message found");
       // Use manual helper for error response
       return createManualCorsResponse({ success: false, message: "No processable message found", correlationId }, { status: 200 });
     }
@@ -82,7 +82,7 @@ serve(async (req: Request) => {
     const telegramToken = Deno.env.get("TELEGRAM_BOT_TOKEN");
     if (!telegramToken) {
         logger.error("TELEGRAM_BOT_TOKEN environment variable not set.");
-        await logAuditEvent("config_error", null, correlationId, { variable: "TELEGRAM_BOT_TOKEN" }, "Bot token not configured");
+        await logProcessingEvent("config_error", null, correlationId, { variable: "TELEGRAM_BOT_TOKEN" }, "Bot token not configured");
         throw new Error("TELEGRAM_BOT_TOKEN environment variable not set.");
     }
 
@@ -100,7 +100,7 @@ serve(async (req: Request) => {
     }
     else {
       logger.warn(`Unsupported new message type received`, { message_id: message.message_id, message_keys: Object.keys(message) });
-      await logAuditEvent("webhook_unsupported_new_type", null, correlationId, { message_id: message.message_id }, "Unsupported new message type");
+      await logProcessingEvent("webhook_unsupported_new_type", null, correlationId, { message_id: message.message_id }, "Unsupported new message type");
       // Use manual helper for skipped response
       response = Promise.resolve(createManualCorsResponse({ success: true, operation: 'skipped', reason: 'Unsupported message type', correlationId }, { status: 200 }));
     }
@@ -117,7 +117,7 @@ serve(async (req: Request) => {
     const errorMessage = error instanceof Error ? error.message : String(error);
     logger.error('Unhandled error in webhook entry point', { error: errorMessage, stack: error instanceof Error ? error.stack : undefined });
     
-    await logAuditEvent("webhook_critical_failure", null, correlationId, { error: errorMessage }, errorMessage);
+    await logProcessingEvent("webhook_critical_failure", null, correlationId, { error: errorMessage }, errorMessage);
     
     // Use manual helper for 500 error response
     return createManualCorsResponse({ success: false, error: 'Internal Server Error', correlationId }, { status: 500 });
