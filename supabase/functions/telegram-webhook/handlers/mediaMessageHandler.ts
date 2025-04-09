@@ -17,7 +17,7 @@ import {
   ForwardInfo,
   MessageInput,
 } from '../types.ts';
-import { createMessage, checkDuplicateMessage,  } from '../dbOperations.ts';
+import { createMessage, checkDuplicateMessage, xdelo_logProcessingEvent } from '../dbOperations.ts';
 import { constructTelegramMessageUrl } from '../../_shared/messageUtils.ts';
 
 // Get Telegram bot token from environment
@@ -28,6 +28,10 @@ if (!TELEGRAM_BOT_TOKEN) {
 
 /**
  * Main handler for media messages from Telegram
+ * 
+ * @param message - The Telegram message object containing media
+ * @param context - Context information about the message
+ * @returns Response object to send back to Telegram
  */
 export async function handleMediaMessage(message: TelegramMessage, context: MessageContext): Promise<Response> {
   try {
@@ -38,6 +42,38 @@ export async function handleMediaMessage(message: TelegramMessage, context: Mess
       message_id: message.message_id,
       chat_id: message.chat.id
     });
+    
+    // Validate token
+    if (!TELEGRAM_BOT_TOKEN) {
+      const errorMsg = 'Missing TELEGRAM_BOT_TOKEN environment variable';
+      await xdelo_logProcessingEvent(
+        "media_processing_error",
+        message.message_id.toString(),
+        correlationId,
+        {
+          message_id: message.message_id,
+          chat_id: message.chat?.id
+        },
+        errorMsg
+      );
+      return new Response(
+        JSON.stringify({ error: errorMsg, correlationId }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      );
+    }
+    
+    // Basic validation
+    if (!message || !message.chat || !message.message_id) {
+      const errorMsg = 'Invalid message structure: Missing chat or message_id';
+      await xdelo_logProcessingEvent(
+        "media_processing_error",
+        "unknown",
+        correlationId,
+        { error: errorMsg },
+        errorMsg
+      );
+      throw new Error(errorMsg);
+    }
     
     let response;
     
@@ -105,6 +141,16 @@ async function xdelo_handleEditedMediaMessage(
 
   if (lookupError) {
     logger?.error(`Failed to lookup existing message for edit: ${lookupError.message}`);
+    await xdelo_logProcessingEvent(
+      "message_lookup_failed",
+      message.message_id.toString(),
+      correlationId,
+      {
+        message_id: message.message_id,
+        chat_id: message.chat.id
+      },
+      lookupError.message
+    );
     throw new Error(`Database lookup failed: ${lookupError.message}`);
   }
 
@@ -132,6 +178,10 @@ async function xdelo_handleEditedMediaMessage(
         const telegramFile = message.photo ? 
           message.photo[message.photo.length - 1] : 
           message.video || message.document;
+          
+        if (!telegramFile || !telegramFile.file_id || !telegramFile.file_unique_id) {
+          throw new Error('Missing file information in edited message');
+        }
           
         // Get mime type
         const detectedMimeType = xdelo_detectMimeType(message);
@@ -176,24 +226,30 @@ async function xdelo_handleEditedMediaMessage(
         }
         
         // Log the edit operation
-        try {
-          await xdelo_logProcessingEvent(
-            "message_media_edited",
-            existingMessage.id,
-            correlationId,
-            {
-              message_id: message.message_id,
-              chat_id: message.chat.id,
-              file_id: telegramFile.file_id,
-              file_unique_id: telegramFile.file_unique_id,
-              storage_path: mediaProcessResult.fileInfo.storage_path
-            }
-          );
-        } catch (logError) {
-          logger?.error(`Failed to log media edit operation: ${logError.message}`);
-        }
+        await xdelo_logProcessingEvent(
+          "message_media_edited",
+          existingMessage.id,
+          correlationId,
+          {
+            message_id: message.message_id,
+            chat_id: message.chat.id,
+            file_id: telegramFile.file_id,
+            file_unique_id: telegramFile.file_unique_id,
+            storage_path: mediaProcessResult.fileInfo.storage_path
+          }
+        );
       } catch (mediaError) {
-        logger?.error(`Error processing edited media: ${mediaError.message}`);
+        logger?.error(`Error processing edited media: ${mediaError instanceof Error ? mediaError.message : String(mediaError)}`);
+        await xdelo_logProcessingEvent(
+          "media_edit_error",
+          existingMessage.id,
+          correlationId,
+          {
+            message_id: message.message_id,
+            chat_id: message.chat.id
+          },
+          mediaError instanceof Error ? mediaError.message : String(mediaError)
+        );
         throw mediaError;
       }
     } 
@@ -215,30 +271,31 @@ async function xdelo_handleEditedMediaMessage(
         .eq('id', existingMessage.id);
         
       if (updateError) {
-        throw new Error(`Failed to update message caption: ${updateError.message}`);
-      }
-      
-      // Process the new caption
-      if (message.caption) {
-        // Process caption changes - this could trigger analysis, etc.
-      }
-      
-      // Log the caption edit
-      try {
         await xdelo_logProcessingEvent(
-          "message_caption_edited",
+          "caption_update_error",
           existingMessage.id,
           correlationId,
           {
             message_id: message.message_id,
-            chat_id: message.chat.id,
-            previous_caption: existingMessage.caption,
-            new_caption: message.caption
-          }
+            chat_id: message.chat.id
+          },
+          updateError.message
         );
-      } catch (logError) {
-        logger?.error(`Failed to log caption edit operation: ${logError.message}`);
+        throw new Error(`Failed to update message caption: ${updateError.message}`);
       }
+      
+      // Log the caption edit
+      await xdelo_logProcessingEvent(
+        "message_caption_edited",
+        existingMessage.id,
+        correlationId,
+        {
+          message_id: message.message_id,
+          chat_id: message.chat.id,
+          previous_caption: existingMessage.caption,
+          new_caption: message.caption
+        }
+      );
     } else {
       // No significant changes detected
       logger?.info(`No significant changes detected in edit for message ${message.message_id}`);
@@ -259,20 +316,16 @@ async function xdelo_handleEditedMediaMessage(
       }
       
       // Log the edit operation anyway
-      try {
-        await xdelo_logProcessingEvent(
-          "message_edit_received",
-          existingMessage.id,
-          correlationId,
-          {
-            message_id: message.message_id,
-            chat_id: message.chat.id,
-            no_changes: true
-          }
-        );
-      } catch (logError) {
-        console.error('Error logging edit operation:', logError);
-      }
+      await xdelo_logProcessingEvent(
+        "message_edit_received",
+        existingMessage.id,
+        correlationId,
+        {
+          message_id: message.message_id,
+          chat_id: message.chat.id,
+          no_changes: true
+        }
+      );
     }
 
     return new Response(
@@ -283,6 +336,15 @@ async function xdelo_handleEditedMediaMessage(
   
   // If existing message not found, handle as new message
   logger?.info(`Original message not found, creating new message for edit ${message.message_id}`);
+  await xdelo_logProcessingEvent(
+    "edit_for_nonexistent_message",
+    message.message_id.toString(),
+    correlationId,
+    {
+      message_id: message.message_id,
+      chat_id: message.chat.id
+    }
+  );
   return await xdelo_handleNewMediaMessage(message, context);
 }
 
@@ -297,11 +359,15 @@ async function xdelo_handleNewMediaMessage(
   
   // First check if this is a duplicate message we've already processed
   try {
-    const isDuplicate = await checkDuplicateFile(
-      supabaseClient,
-      message.message_id,
-      message.chat.id
-    );
+    // Check for existing message in database
+    const { data: existingMessages, error: checkError } = await supabaseClient
+      .from('messages')
+      .select('id')
+      .eq('telegram_message_id', message.message_id)
+      .eq('chat_id', message.chat.id)
+      .limit(1);
+    
+    const isDuplicate = !checkError && existingMessages && existingMessages.length > 0;
     
     if (isDuplicate) {
       logger?.info(`Duplicate message detected: ${message.message_id} in chat ${message.chat.id}`);
@@ -336,6 +402,10 @@ async function xdelo_handleNewMediaMessage(
     const telegramFile = message.photo ? 
       message.photo[message.photo.length - 1] : 
       message.video || message.document;
+    
+    if (!telegramFile || !telegramFile.file_id || !telegramFile.file_unique_id) {
+      throw new Error('Missing file information in message');
+    }
     
     // Process media
     const mediaResult = await xdelo_processMessageMedia(
@@ -387,7 +457,7 @@ async function xdelo_handleNewMediaMessage(
       forward_info: forwardInfo,
       telegram_data: message,
       edit_date: message.edit_date ? new Date(message.edit_date * 1000).toISOString() : undefined,
-      is_forward: context.isForwarded,
+      is_forward: !!forwardInfo,
       edit_history: context.isEdit ? [{
         timestamp: new Date().toISOString(),
         is_initial_edit: true,
@@ -416,7 +486,8 @@ async function xdelo_handleNewMediaMessage(
           message_id: message.message_id,
           chat_id: message.chat.id,
           error: result.error_message
-        }
+        },
+        result.error_message
       );
       
       throw new Error(result.error_message || 'Failed to create message record');
@@ -429,6 +500,20 @@ async function xdelo_handleNewMediaMessage(
       media_type: message.photo ? 'photo' : message.video ? 'video' : 'document',
       storage_path: mediaResult.fileInfo.storage_path
     });
+    
+    // Log to audit log
+    await xdelo_logProcessingEvent(
+      "message_created",
+      result.id || message.message_id.toString(),
+      correlationId,
+      {
+        message_id: message.message_id,
+        chat_id: message.chat.id,
+        media_type: message.photo ? 'photo' : message.video ? 'video' : 'document',
+        storage_path: mediaResult.fileInfo.storage_path,
+        has_caption: !!message.caption
+      }
+    );
     
     return new Response(
       JSON.stringify({ success: true, id: result.id, correlationId }),
@@ -468,4 +553,3 @@ async function xdelo_handleNewMediaMessage(
     throw createError;
   }
 }
-

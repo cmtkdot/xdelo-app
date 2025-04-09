@@ -10,8 +10,6 @@ verify_jwt = false
 verify_jwt = false
 [functions.delete-telegram-message]
 verify_jwt = false
-[functions.direct-caption-processor]
-verify_jwt = false
 [functions.generic-webhook]
 verify_jwt = false
 [functions.log-operation]
@@ -28,13 +26,10 @@ verify_jwt = false
 verify_jwt = false
 [functions.product-matching]
 verify_jwt = false
-[functions.redownload-missing-files]
-verify_jwt = false
 [functions.telegram-webhook]
 verify_jwt = false
 [functions.update-telegram-caption]
 verify_jwt = false
-[functions.user-data]
-verify_jwt = false
-[functions.validate-storage-files]
+
+[functions.xdelo_sync_media_group]
 verify_jwt = false

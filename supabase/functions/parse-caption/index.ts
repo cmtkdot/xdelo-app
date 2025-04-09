@@ -5,7 +5,6 @@ import {
   updateMessageWithError,
   withErrorHandling,
 } from "../_shared/errorHandler.ts";
-import { SecurityLevel } from "../_shared/jwt-verification.ts";
 import {
   getMessage,
   logAnalysisEvent,
@@ -287,12 +286,3 @@ const handleCaptionAnalysis = async (req: Request, correlationId: string) => {
     throw error;
   }
 };
-
-// Use the withErrorHandling wrapper with the SecurityLevel.PUBLIC for backward compatibility
-// We could change this to AUTHENTICATED if we want to restrict access
-serve(
-  withErrorHandling("parse-caption", handleCaptionAnalysis, {
-    securityLevel: SecurityLevel.PUBLIC, // Keep backward compatibility
-    bypassForServiceRole: true, // Allow service role tokens to bypass
-  })
-);
