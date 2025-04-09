@@ -5,10 +5,11 @@ import { createCorsResponse } from "../../_shared/cors.ts";
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { MediaProcessor, ProcessingResult } from "../../_shared/MediaProcessor.ts";
 import { createMediaProcessor } from "../../_shared/mediaUtils.ts";
-import { handleError, createErrorResponse } from "../../_shared/ErrorHandler.ts";
+import { handleError } from "../../_shared/ErrorHandler.ts";
 import { supabaseClient } from "../../_shared/supabase.ts";
 
 // Local Imports
+import { createErrorResponse } from "../utils/errorHandler.ts";
 import {
     MessageContext,
     TelegramMessage,
@@ -17,10 +18,13 @@ import {
     createMessageRecord, 
     updateMessageRecord, 
     findMessageByTelegramId,
+    findMessageByFileUniqueId,
     updateMessageWithError,
     logProcessingEvent,
     upsertMediaMessageRecord,
-    triggerCaptionParsing
+    triggerCaptionParsing,
+    findMessagesByMediaGroupId,
+    syncMediaGroupCaptions
 } from '../utils/dbOperations.ts';
 import { 
     extractMediaContent, 
@@ -28,11 +32,12 @@ import {
     processCaptionWithRetry, 
     processMessageMedia 
 } from '../utils/messageUtils.ts';
+import { logWithCorrelation } from '../utils/logger.ts';
 
 // Get Telegram bot token from environment
 const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN');
 if (!TELEGRAM_BOT_TOKEN) {
-  console.error('CRITICAL: Missing TELEGRAM_BOT_TOKEN environment variable. Function cannot proceed.');
+  logWithCorrelation('system', 'CRITICAL: Missing TELEGRAM_BOT_TOKEN environment variable. Function cannot proceed.', 'ERROR');
   throw new Error('Missing required environment variable: TELEGRAM_BOT_TOKEN'); 
 }
 
@@ -53,16 +58,16 @@ if (!TELEGRAM_BOT_TOKEN) {
  * );
  */
 export async function handleMediaMessage(
+  telegramBotToken: string,
   message: TelegramMessage,
-  supabaseClient: SupabaseClient,
-  correlationId: string
+  context: MessageContext
 ): Promise<Response> {
+  const { correlationId } = context;
   const functionName = 'handleMediaMessage';
-  console.log(`[${correlationId}][${functionName}] Processing message ${message.message_id} in chat ${message.chat.id}`);
+  logWithCorrelation(correlationId, `Processing message ${message.message_id} in chat ${message.chat.id}`, 'INFO', functionName);
   
   try {
     // Validate required environment variables
-    const telegramBotToken = Deno.env.get("TELEGRAM_BOT_TOKEN");
     if (!telegramBotToken) {
       throw new Error("TELEGRAM_BOT_TOKEN environment variable is not set");
     }
@@ -101,7 +106,7 @@ export async function handleMediaMessage(
       // This is an edited message
       if (!messageExists) {
         // Edited message not found in database, treat as new
-        console.log(`[${correlationId}][${functionName}] Edited message ${message.message_id} not found in database, treating as new`);
+        logWithCorrelation(correlationId, `Edited message ${message.message_id} not found in database, treating as new`, 'INFO', functionName);
         return await handleNewMessage(message, mediaContent, mediaProcessor, supabaseClient, captionData, correlationId);
       } else {
         // Edited message found in database, update it
@@ -111,7 +116,7 @@ export async function handleMediaMessage(
       // This is a new message
       if (messageExists) {
         // Message already exists in database, return existing record
-        console.log(`[${correlationId}][${functionName}] Message ${message.message_id} already exists in database`);
+        logWithCorrelation(correlationId, `Message ${message.message_id} already exists in database`, 'INFO', functionName);
         return new Response(
           JSON.stringify({
             success: true,
@@ -168,7 +173,7 @@ async function handleNewMessage(
   correlationId: string
 ): Promise<Response> {
   const functionName = 'handleNewMessage';
-  console.log(`[${correlationId}][${functionName}] Processing new message ${message.message_id}`);
+  logWithCorrelation(correlationId, `Processing new message ${message.message_id}`, 'INFO', functionName);
   
   try {
     // Process media
@@ -178,7 +183,7 @@ async function handleNewMessage(
     );
 
     const processingState = mapStatusToProcessingState(processingResult.status);
-    console.log(`[${correlationId}][${functionName}] Media processing status for message ${message.message_id}: ${processingResult.status} -> DB state: ${processingState}`);
+    logWithCorrelation(correlationId, `Media processing status for message ${message.message_id}: ${processingResult.status} -> DB state: ${processingState}`, 'INFO', functionName);
 
     // Check if this message already exists in the database
     const existingMessage = await findMessageByFileUniqueId(
@@ -194,7 +199,7 @@ async function handleNewMessage(
       // Check if caption has changed
       if (existingMessage.data.caption !== message.caption) {
         captionChanged = true;
-        console.log(`[${correlationId}][${functionName}] Caption changed for message ${message.message_id}. Old: "${existingMessage.data.caption}", New: "${message.caption}"`);
+        logWithCorrelation(correlationId, `Caption changed for message ${message.message_id}. Old: "${existingMessage.data.caption}", New: "${message.caption}"`, 'INFO', functionName);
       }
     }
 
@@ -206,7 +211,7 @@ async function handleNewMessage(
       userId: message.from?.id,
       messageDate: new Date(message.date * 1000),
       caption: message.caption || null,
-      mediaType: mediaContent.type,
+      mediaType: mediaContent.mediaType,
       fileId: processingResult.fileId,
       fileUniqueId: processingResult.fileUniqueId,
       storagePath: processingResult.storagePath,
@@ -231,7 +236,7 @@ async function handleNewMessage(
     });
 
     if (!dbResult.success) {
-      console.error(`[${correlationId}][${functionName}] Failed to create message: ${dbResult.error}`);
+      logWithCorrelation(correlationId, `Failed to create message: ${dbResult.error}`, 'ERROR', functionName);
       
       // Log the error
       await logProcessingEvent(
@@ -260,7 +265,7 @@ async function handleNewMessage(
 
     // If caption has changed, trigger the caption parser
     if (captionChanged && message.caption) {
-      console.log(`[${correlationId}][${functionName}] Caption changed, triggering parser for message ${dbResult.data.id}`);
+      logWithCorrelation(correlationId, `Caption changed, triggering parser for message ${dbResult.data.id}`, 'INFO', functionName);
       
       // Trigger caption parsing asynchronously
       triggerCaptionParsing({
@@ -268,12 +273,12 @@ async function handleNewMessage(
         messageId: dbResult.data.id,
         correlationId
       }).catch(error => {
-        console.error(`[${correlationId}][${functionName}] Error triggering caption parser: ${error instanceof Error ? error.message : String(error)}`);
+        logWithCorrelation(correlationId, `Error triggering caption parser: ${error instanceof Error ? error.message : String(error)}`, 'ERROR', functionName);
       });
     }
 
     // Log success
-    console.log(`[${correlationId}][${functionName}] Successfully processed message ${message.message_id}`);
+    logWithCorrelation(correlationId, `Successfully processed message ${message.message_id}`, 'INFO', functionName);
     
     // Return success response
     return new Response(
@@ -289,7 +294,8 @@ async function handleNewMessage(
     );
   } catch (error) {
     // Handle error with comprehensive logging
-    console.error(`[${correlationId}][${functionName}] Error processing media message: ${error instanceof Error ? error.message : String(error)}`, error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logWithCorrelation(correlationId, `Error processing media message: ${errorMessage}`, 'ERROR', functionName);
     
     // Log the error
     await logProcessingEvent(
@@ -301,68 +307,16 @@ async function handleNewMessage(
         message_id: message.message_id,
         chat_id: message.chat.id
       },
-      error instanceof Error ? error.message : String(error)
+      errorMessage
     );
     
     return createErrorResponse(
-      `Error processing media message: ${error instanceof Error ? error.message : String(error)}`,
+      `Error processing media message: ${errorMessage}`,
       functionName,
       500,
       correlationId,
       { messageId: message.message_id, chatId: message.chat.id }
     );
-  }
-}
-
-/**
- * Find a message by its file_unique_id
- * 
- * @param supabaseClient - The Supabase client
- * @param fileUniqueId - The file_unique_id to search for
- * @param correlationId - Correlation ID for request tracking
- * @returns Operation result with the message if found
- */
-async function findMessageByFileUniqueId(
-  supabaseClient: SupabaseClient,
-  fileUniqueId: string,
-  correlationId: string
-): Promise<DbOperationResult<{ id: string; caption: string | null; analyzed_content: any }>> {
-  const functionName = 'findMessageByFileUniqueId';
-  
-  try {
-    const { data, error } = await supabaseClient
-      .from('messages')
-      .select('id, caption, analyzed_content')
-      .eq('file_unique_id', fileUniqueId)
-      .maybeSingle();
-    
-    if (error) {
-      console.error(`[${correlationId}][${functionName}] Error finding message by file_unique_id ${fileUniqueId}: ${error.message}`);
-      return {
-        success: false,
-        error: error.message
-      };
-    }
-    
-    if (!data) {
-      return {
-        success: false,
-        error: 'Message not found'
-      };
-    }
-    
-    return {
-      success: true,
-      data
-    };
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error(`[${correlationId}][${functionName}] Exception finding message: ${errorMessage}`);
-    
-    return {
-      success: false,
-      error: errorMessage
-    };
   }
 }
 
@@ -388,11 +342,11 @@ async function handleEditedMessage(
   correlationId: string
 ): Promise<Response> {
   const functionName = 'handleEditedMessage';
-  console.log(`[${correlationId}][${functionName}] Processing edited message ${message.message_id}`);
+  logWithCorrelation(correlationId, `Processing edited message ${message.message_id}`, 'INFO', functionName);
   
   try {
     // Check if media has changed by comparing file_unique_id
-    const currentFileUniqueId = mediaContent.file_unique_id;
+    const currentFileUniqueId = mediaContent.fileUniqueId;
     const hasNewMedia = currentFileUniqueId !== existingMessage.file_unique_id;
     
     // Check if caption has changed
@@ -400,7 +354,7 @@ async function handleEditedMessage(
     
     // If neither media nor caption changed, return early
     if (!hasNewMedia && !captionChanged) {
-      console.log(`[${correlationId}][${functionName}] No changes detected in edited message ${message.message_id}`);
+      logWithCorrelation(correlationId, `No changes detected in edited message ${message.message_id}`, 'INFO', functionName);
       return new Response(
         JSON.stringify({
           success: true,
@@ -434,7 +388,7 @@ async function handleEditedMessage(
     
     // If media has changed, process the new media
     if (hasNewMedia) {
-      console.log(`[${correlationId}][${functionName}] Media changed in edited message ${message.message_id}`);
+      logWithCorrelation(correlationId, `Media changed in edited message ${message.message_id}`, 'INFO', functionName);
       
       // Process new media
       const processingResult = await mediaProcessor.processMedia(
@@ -443,92 +397,123 @@ async function handleEditedMessage(
       );
       
       const processingState = mapStatusToProcessingState(processingResult.status);
-      console.log(`[${correlationId}][${functionName}] Media processing status for edited message ${message.message_id}: ${processingResult.status} -> DB state: ${processingState}`);
+      logWithCorrelation(correlationId, `Media processing status for edited message ${message.message_id}: ${processingResult.status} -> DB state: ${processingState}`, 'INFO', functionName);
       
       // Update media fields
-      if (processingResult.fileInfo) {
+      if (processingResult.fileUniqueId) {
         updates.file_unique_id = processingResult.fileUniqueId;
         updates.storage_path = processingResult.storagePath;
         updates.public_url = processingResult.publicUrl;
         updates.mime_type = processingResult.mimeType;
-        updates.file_size = processingResult.fileSize;
-        updates.content_disposition = processingResult.contentDisposition;
+        updates.extension = processingResult.extension;
+        updates.processing_state = processingState;
+        updates.processing_error = processingResult.error || null;
       }
-      updates.processingState = processingState;
-      updates.processingError = processingResult.error || null;
-    } else if (message.text) {
-        logWithCorrelation(correlationId, `Edited message ${message.message_id} is a text message. Routing update to separate handler (TODO).`, "info");
-        // Update logic for text messages might go here or in handleTextMessage
-        // This should interact with 'other_messages' table
-        processingState = "processed"; // Assume simple text update is 'processed' for now
-    } else {
-        logWithCorrelation(correlationId, `Edited message ${message.message_id} has no media or text to update.`, "info");
-        return new Response("OK", { headers: corsHeaders }); // Nothing to do
+    } else if (captionChanged) {
+      // If only caption changed, reset processing state to trigger reprocessing
+      updates.processing_state = 'initialized';
+      
+      // If the message has analyzed content, move it to old_analyzed_content
+      if (existingMessage.analyzed_content) {
+        updates.old_analyzed_content = existingMessage.old_analyzed_content 
+          ? [...existingMessage.old_analyzed_content, existingMessage.analyzed_content]
+          : [existingMessage.analyzed_content];
+        updates.analyzed_content = null;
+      }
     }
     
-    // Update message record using the new database operation function
+    // Update the message record
     const updateResult = await updateMessageRecord(
       supabaseClient,
-      existingMessage.id,
-      updates,
+      existingMessage,
+      message,
+      hasNewMedia ? { 
+        fileUniqueId: updates.file_unique_id,
+        storagePath: updates.storage_path,
+        publicUrl: updates.public_url,
+        mimeType: updates.mime_type,
+        extension: updates.extension
+      } : null,
+      captionData,
       correlationId
     );
     
-    if (!updateResult.success) {
-      throw new Error(`Failed to update message record: ${updateResult.error}`);
+    if (!updateResult) {
+      logWithCorrelation(correlationId, `Failed to update message ${existingMessage.id}`, 'ERROR', functionName);
+      return createErrorResponse(
+        `Failed to update message`,
+        functionName,
+        500,
+        correlationId,
+        { messageId: message.message_id, chatId: message.chat.id }
+      );
     }
     
-    // Log the edit event
-    await logProcessingEvent(
-      supabaseClient,
-      'message_edited',
-      existingMessage.id,
-      correlationId,
-      {
-        message_id: message.message_id,
-        chat_id: message.chat.id,
-        media_changed: hasNewMedia,
-        caption_changed: captionChanged
-      }
-    );
+    // If caption has changed and this is part of a media group, sync the caption to other messages in the group
+    if (captionChanged && message.media_group_id) {
+      logWithCorrelation(correlationId, `Caption changed for message in media group ${message.media_group_id}, syncing to other messages`, 'INFO', functionName);
+      
+      // Sync caption changes to other messages in the group
+      await syncMediaGroupCaptions(
+        supabaseClient,
+        message.media_group_id,
+        existingMessage.id,
+        message.caption,
+        captionData,
+        'initialized', // Reset processing state for other messages
+        correlationId
+      );
+    }
+    
+    // If caption has changed, trigger the caption parser
+    if (captionChanged && message.caption) {
+      logWithCorrelation(correlationId, `Caption changed, triggering parser for message ${existingMessage.id}`, 'INFO', functionName);
+      
+      // Trigger caption parsing asynchronously
+      triggerCaptionParsing({
+        supabaseClient,
+        messageId: existingMessage.id,
+        correlationId
+      }).catch(error => {
+        logWithCorrelation(correlationId, `Error triggering caption parser: ${error instanceof Error ? error.message : String(error)}`, 'ERROR', functionName);
+      });
+    }
+    
+    // Log success
+    logWithCorrelation(correlationId, `Successfully processed edited message ${message.message_id}`, 'INFO', functionName);
     
     // Return success response
     return new Response(
       JSON.stringify({
         success: true,
+        message: "Edited message processed successfully",
         messageId: existingMessage.id,
         mediaChanged: hasNewMedia,
-        captionChanged: captionChanged,
+        captionChanged,
         correlationId
       }),
       { status: 200 }
     );
   } catch (error) {
     // Handle error with comprehensive logging
-    const errorResult = await handleError(error, {
-      context: {
-        message,
-        existingMessage,
-        correlationId,
-        functionName
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logWithCorrelation(correlationId, `Error processing edited media message: ${errorMessage}`, 'ERROR', functionName);
+    
+    // Log the error
+    await logProcessingEvent(
+      supabaseClient,
+      'edited_media_message_processing_error',
+      existingMessage?.id || 'N/A',
+      correlationId,
+      {
+        message_id: message.message_id,
+        chat_id: message.chat.id
       },
-      supabaseClient
-    });
+      errorMessage
+    );
     
-    // If we have the existing message ID, update it with error information
-    if (existingMessage?.id) {
-      await updateMessageWithError(
-        supabaseClient,
-        existingMessage.id,
-        error instanceof Error ? error.message : String(error),
-        'EditedMessageProcessingError',
-        correlationId
-      );
-    }
-    
-    // Return standardized error response
     return createErrorResponse(
-      error instanceof Error ? error.message : String(error),
+      `Error processing edited media message: ${errorMessage}`,
       functionName,
       500,
       correlationId,
@@ -537,20 +522,23 @@ async function handleEditedMessage(
   }
 }
 
-// Helper function to map ProcessingResult status to ProcessingState
-function mapStatusToProcessingState(status: ProcessingResult['status']): ProcessingState {
+/**
+ * Map a processing status to a database processing state
+ * 
+ * @param status - The processing status from the MediaProcessor
+ * @returns The corresponding database processing state
+ */
+function mapStatusToProcessingState(status: string): string {
   switch (status) {
-    case "success":
-      return "processed";
-    case "duplicate":
-      return "duplicate";
-    case "download_failed_forwarded":
-      return "download_failed_forwarded";
-    case "error":
-      return "error";
+    case 'success':
+      return 'processed';
+    case 'duplicate':
+      return 'duplicate';
+    case 'download_failed_forwarded':
+      return 'download_failed_forwarded';
+    case 'error':
+      return 'error';
     default:
-      // Should not happen if all statuses are handled
-      console.warn(`Unhandled ProcessingResult status: ${status}`);
-      return "error";
+      return 'error';
   }
 }

@@ -2,16 +2,17 @@
 
 // Shared Imports
 import { createCorsResponse } from "../../_shared/cors.ts";
-import { logProcessingEvent } from "../utils/dbOperations.ts"; 
 import { supabaseClient } from "../../_shared/supabase.ts"; 
 // Local Imports
 import { MessageContext, TelegramMessage, MessageRecord } from '../types.ts';
-import { constructTelegramMessageUrl } from '../utils/messageUtils.ts';
 import {
   findMessageByTelegramId,
   updateMessageRecord,
-  DbOperationResult
+  logProcessingEvent,
+  DbOperationResult,
+  triggerCaptionParsing
 } from '../utils/dbOperations.ts';
+import { logWithCorrelation } from '../utils/logger.ts';
 
 /**
  * Handles edited messages (both text and media captions) from Telegram.
@@ -26,7 +27,7 @@ export async function handleEditedMessage(
   const functionName = 'handleEditedMessage';
   let dbMessageId: string | undefined = undefined;
 
-  console.log(`[${correlationId}][${functionName}] Processing edited message ${message.message_id}`);
+  logWithCorrelation(correlationId, `Processing edited message ${message.message_id}`, 'INFO', functionName);
 
   try {
     // Basic Validation
@@ -40,8 +41,9 @@ export async function handleEditedMessage(
 
     if (!isTextEdit && !isMediaEdit) {
         // Neither text nor known media - likely unsupported edit type (e.g., poll)
-        console.warn(`[${correlationId}][${functionName}] Received edit for unsupported message type (no text/photo/video/document). Skipping.`);
+        logWithCorrelation(correlationId, `Received edit for unsupported message type (no text/photo/video/document). Skipping.`, 'WARN', functionName);
         await logProcessingEvent(
+            supabaseClient,
             "edit_skipped_unsupported_type",
             null,
             correlationId,
@@ -55,7 +57,7 @@ export async function handleEditedMessage(
     }
 
     // --- Find the Original Message --- (Use new utility function)
-    console.log(`[${correlationId}][${functionName}] Looking up original message by tg_msg_id: ${message.message_id}, chat_id: ${message.chat.id}`);
+    logWithCorrelation(correlationId, `Looking up original message by tg_msg_id: ${message.message_id}, chat_id: ${message.chat.id}`, 'INFO', functionName);
     const findResult = await findMessageByTelegramId(
       supabaseClient, // Pass client explicitly
       message.message_id,
@@ -65,9 +67,12 @@ export async function handleEditedMessage(
 
     // --- Handle Find Errors or Not Found ---    
     if (!findResult.success) {
-      console.error(`[${correlationId}][${functionName}] Error finding message to edit:`, findResult.error);
+      logWithCorrelation(correlationId, `Error finding message to edit: ${findResult.error}`, 'ERROR', functionName);
       await logProcessingEvent(
-        "db_find_edit_target_failed", null, correlationId,
+        supabaseClient,
+        "db_find_edit_target_failed", 
+        null, 
+        correlationId,
         { function: functionName, telegram_message_id: message.message_id, chat_id: message.chat.id },
         findResult.error ?? 'Unknown DB error'
       );
@@ -78,9 +83,12 @@ export async function handleEditedMessage(
     }
 
     if (!findResult.data) {
-      console.warn(`[${correlationId}][${functionName}] Original message not found for edit (tg_msg_id: ${message.message_id}, chat_id: ${message.chat.id}). Cannot process edit.`);
+      logWithCorrelation(correlationId, `Original message not found for edit (tg_msg_id: ${message.message_id}, chat_id: ${message.chat.id}). Cannot process edit.`, 'WARN', functionName);
       await logProcessingEvent(
-        "edit_target_not_found", null, correlationId,
+        supabaseClient,
+        "edit_target_not_found", 
+        null, 
+        correlationId,
         { function: functionName, telegram_message_id: message.message_id, chat_id: message.chat.id },
         "Original message not found for edit"
       );
@@ -91,142 +99,84 @@ export async function handleEditedMessage(
     }
 
     const existingRecord = findResult.data as MessageRecord; // Cast to expected type
-    dbMessageId = existingRecord.id; // id is likely string (uuid), check MessageRecord definition
-    console.log(`[${correlationId}][${functionName}] Found existing message ${dbMessageId} for edit.`);
+    dbMessageId = existingRecord.id; // Store for later use
 
-    // --- Prepare Common Update Fields --- 
-    const currentEditHistory = existingRecord.edit_history || [];
-    const editCount = (existingRecord.retry_count || 0) + 1; // Assuming retry_count was meant for edits?
-    const editDateIso = new Date(message.edit_date * 1000).toISOString();
-    const messageUrl = constructTelegramMessageUrl(message);
+    logWithCorrelation(correlationId, `Found existing message with DB ID: ${dbMessageId}`, 'INFO', functionName);
 
-    let updateData: Partial<MessageRecord> = {
-      last_edited_at: editDateIso,
-      // Note: Ensure MessageRecord has `edit_count` field or adjust below
-      // retry_count: editCount, // Or use a dedicated `edit_count` field if available
-      edit_history: [...currentEditHistory, { date: editDateIso, content: isTextEdit ? message.text : message.caption }],
-    };
+    // --- Check for Caption Changes (Media Messages) ---
+    const hasCaptionChanged = isMediaEdit && 
+                             (existingRecord.caption !== message.caption) && 
+                             (message.caption !== undefined); // Only consider if caption is actually present
 
-    let captionChanged = false;
-
-    // --- Handle Text Edit ---    
-    if (isTextEdit) {
-      console.log(`[${correlationId}][${functionName}] Handling text edit for message ${dbMessageId}.`);
-      updateData.text_content = message.text;
-      // If text is edited, potentially clear/reset related fields if needed
-      // updateData.analyzed_content = null; // Example: Reset analysis if text changes
+    if (hasCaptionChanged) {
+      logWithCorrelation(correlationId, `Caption changed for media message. Old: "${existingRecord.caption}", New: "${message.caption}"`, 'INFO', functionName);
     }
 
-    // --- Handle Media Caption Edit ---    
-    if (isMediaEdit && message.caption !== existingRecord.caption) {
-      console.log(`[${correlationId}][${functionName}] Handling caption edit for message ${dbMessageId}.`);
-      captionChanged = true;
-      updateData.caption = message.caption;
-      // Keep existing media info (storage_path, public_url etc.) as it's just a caption edit
-    }
-
-    // --- Update the Message Record --- (Use new utility function)
-    console.log(`[${correlationId}][${functionName}] Updating message ${dbMessageId} with edit data.`);
+    // --- Update the Message Record ---
+    // For media edits, we currently only support caption changes
+    // For text edits, we update the text content
     const updateResult = await updateMessageRecord(
       supabaseClient,
-      dbMessageId,
-      updateData,
+      existingRecord,
+      message,
+      null, // No media result since we're not re-processing media
+      null, // No caption data - will be processed by caption parser if needed
       correlationId
     );
 
-    // --- Handle Update Errors ---    
-    if (!updateResult.success) {
-      console.error(`[${correlationId}][${functionName}] Error updating message ${dbMessageId}:`, updateResult.error);
+    if (!updateResult) {
+      logWithCorrelation(correlationId, `Failed to update message record for edit`, 'ERROR', functionName);
       await logProcessingEvent(
-        "db_update_edit_failed", dbMessageId, correlationId,
-        { function: functionName, telegram_message_id: message.message_id, chat_id: message.chat.id },
-        updateResult.error ?? 'Unknown DB error'
+        supabaseClient,
+        "edit_db_update_failed", 
+        dbMessageId, 
+        correlationId,
+        { function: functionName },
+        "Failed to update message record for edit"
       );
-      // Log error but respond successfully as per original logic
       return createCorsResponse(
-          { success: false, error: `Failed to save edit: ${updateResult.error}`, correlationId },
-          { status: 200 }
+        { success: false, error: "Failed to update message record", correlationId },
+        { status: 200 } // Respond with 200 as per original logic
       );
     }
 
-    console.log(`[${correlationId}][${functionName}] Successfully updated message ${dbMessageId}.`);
-
-    // --- Trigger Caption Processing if Caption Changed ---    
-    if (captionChanged && dbMessageId) { // Ensure we have the dbMessageId
-      console.log(`[${correlationId}][${functionName}] Caption changed for ${dbMessageId}, invoking parser function.`);
-      // Fire-and-forget call to the caption parser function
-      (async () => {
-        try {
-          const parserUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/manual-caption-parser`;
-          const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-
-          if (!parserUrl || !serviceKey) {
-            console.error(`[${correlationId}][${functionName}] CRITICAL: Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY for caption parser call.`);
-            await logProcessingEvent(
-              supabaseClient,
-              'caption_parser_invoke_error',
-              dbMessageId,
-              correlationId,
-              { error: 'Missing env vars for parser', function: functionName },
-              'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY'
-            );
-            return; // Cannot proceed
-          }
-
-          const parserPayload = {
-            messageId: dbMessageId, // Pass the DB UUID
-            // Pass other relevant details if needed by the parser
-            correlationId: correlationId, 
-          };
-
-          const response = await fetch(parserUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${serviceKey}`,
-              'x-client-info': 'supabase-edge-function-editedMessageHandler'
-            },
-            body: JSON.stringify(parserPayload)
-          });
-
-          if (!response.ok) {
-            const errorBody = await response.text();
-            console.error(`[${correlationId}][${functionName}] Error invoking caption parser for edited message ${dbMessageId}. Status: ${response.status}, Body: ${errorBody}`);
-            // Log this error - don't fail the edit operation
-            await logProcessingEvent(
-              supabaseClient,
-              'caption_parser_invoke_failed',
-              dbMessageId,
-              correlationId,
-              { status: response.status, errorBody: errorBody, function: functionName },
-              `Caption parser invocation failed with status ${response.status}`
-            );
-          } else {
-            console.log(`[${correlationId}][${functionName}] Successfully invoked caption parser for edited message ${dbMessageId}.`);
-             // Log success (optional)
-            await logProcessingEvent(
-              supabaseClient,
-              'caption_parser_invoked',
-              dbMessageId,
-              correlationId,
-              { function: functionName }
-            );
-          }
-        } catch (fetchError: any) {
-          console.error(`[${correlationId}][${functionName}] Network/fetch error invoking caption parser for edited message ${dbMessageId}:`, fetchError);
-           await logProcessingEvent(
-              supabaseClient,
-              'caption_parser_invoke_exception',
-              dbMessageId,
-              correlationId,
-              { errorMessage: fetchError.message, stack: fetchError.stack, function: functionName },
-              `Fetch exception invoking caption parser: ${fetchError.message}`
-            );
-        }
-      })(); // End of immediately invoked async function
+    // --- Process Caption Changes (if applicable) ---
+    if (hasCaptionChanged) {
+      logWithCorrelation(correlationId, `Triggering caption parser for edited message ${dbMessageId}`, 'INFO', functionName);
+      
+      // Use the new triggerCaptionParsing function
+      const parserResult = await triggerCaptionParsing({
+        supabaseClient,
+        messageId: dbMessageId,
+        correlationId
+      });
+      
+      if (!parserResult.success) {
+        logWithCorrelation(correlationId, `Failed to trigger caption parser: ${parserResult.error}`, 'ERROR', functionName);
+        await logProcessingEvent(
+          supabaseClient,
+          'caption_parser_invoke_failed',
+          dbMessageId,
+          correlationId,
+          { error: parserResult.error, function: functionName },
+          `Failed to trigger caption parser: ${parserResult.error}`
+        );
+      } else {
+        logWithCorrelation(correlationId, `Successfully triggered caption parser for edited message ${dbMessageId}`, 'INFO', functionName);
+        await logProcessingEvent(
+          supabaseClient,
+          'caption_parser_invoked',
+          dbMessageId,
+          correlationId,
+          { function: functionName }
+        );
+      }
     } else {
        await logProcessingEvent(
-            "edit_processed_no_caption_change", dbMessageId ?? null, correlationId, // Handle potential undefined dbMessageId if update failed
+            supabaseClient,
+            "edit_processed_no_caption_change", 
+            dbMessageId ?? null, 
+            correlationId, // Handle potential undefined dbMessageId if update failed
             { function: functionName, edit_type: isTextEdit ? 'text' : 'media_no_caption_change' },
             `Message edit processed successfully.`
         );
@@ -237,9 +187,12 @@ export async function handleEditedMessage(
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error(`[${correlationId}][${functionName}] Exception processing edited message:`, errorMessage);
+    logWithCorrelation(correlationId, `Exception processing edited message: ${errorMessage}`, 'ERROR', functionName);
     await logProcessingEvent(
-        "edit_handler_exception", dbMessageId, correlationId, // Use dbMessageId if available
+        supabaseClient,
+        "edit_handler_exception", 
+        dbMessageId, 
+        correlationId, // Use dbMessageId if available
         { function: functionName, telegram_message_id: message?.message_id, chat_id: message?.chat?.id },
         errorMessage
     );

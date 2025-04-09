@@ -920,6 +920,183 @@ export async function upsertMediaMessageRecord(
 }
 
 /**
+ * Find all messages in a media group
+ * 
+ * @param supabaseClient - The Supabase client
+ * @param mediaGroupId - The media group ID
+ * @param correlationId - The correlation ID for request tracking
+ * @returns Operation result with the found messages
+ * @example
+ * const result = await findMessagesByMediaGroupId(
+ *   supabaseClient,
+ *   "12345678",
+ *   correlationId
+ * );
+ * 
+ * if (result.success && result.data && result.data.length > 0) {
+ *   console.log(`Found ${result.data.length} messages in media group`);
+ * } else {
+ *   console.error(`Error finding messages in media group: ${result.error}`);
+ * }
+ */
+export async function findMessagesByMediaGroupId(
+  supabaseClient: SupabaseClient<Database>,
+  mediaGroupId: string,
+  correlationId: string
+): Promise<DbOperationResult<MessageRecord[]>> {
+  const functionName = 'findMessagesByMediaGroupId';
+  logWithCorrelation(correlationId, `Finding messages in media group ${mediaGroupId}`, 'INFO', functionName);
+
+  try {
+    // Query for messages with the same media_group_id
+    const { data, error } = await supabaseClient
+      .from('messages')
+      .select('*')
+      .eq('media_group_id', mediaGroupId);
+
+    if (error) {
+      logWithCorrelation(correlationId, `Error finding messages in media group: ${error.message}`, 'ERROR', functionName);
+      return {
+        success: false,
+        error: error.message,
+        errorCode: error.code
+      };
+    }
+
+    if (!data || data.length === 0) {
+      logWithCorrelation(correlationId, `No messages found in media group ${mediaGroupId}`, 'INFO', functionName);
+      return {
+        success: true,
+        data: []
+      };
+    }
+
+    logWithCorrelation(correlationId, `Found ${data.length} messages in media group ${mediaGroupId}`, 'INFO', functionName);
+    return {
+      success: true,
+      data: data as MessageRecord[]
+    };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logWithCorrelation(correlationId, `Exception finding messages in media group: ${errorMessage}`, 'ERROR', functionName);
+    return {
+      success: false,
+      error: errorMessage
+    };
+  }
+}
+
+/**
+ * Update all messages in a media group with the same caption and caption data
+ * 
+ * @param supabaseClient - The Supabase client
+ * @param mediaGroupId - The media group ID
+ * @param excludeMessageId - Message ID to exclude from the update (usually the one that triggered the update)
+ * @param caption - The new caption
+ * @param captionData - The new caption data
+ * @param processingState - The new processing state
+ * @param correlationId - The correlation ID for request tracking
+ * @returns Operation result
+ * @example
+ * const result = await syncMediaGroupCaptions(
+ *   supabaseClient,
+ *   "12345678",
+ *   "abc-123",
+ *   "New caption",
+ *   { parsed_data: "..." },
+ *   "initialized",
+ *   correlationId
+ * );
+ */
+export async function syncMediaGroupCaptions(
+  supabaseClient: SupabaseClient<Database>,
+  mediaGroupId: string,
+  excludeMessageId: string,
+  caption: string | null,
+  captionData: Json | null,
+  processingState: ProcessingState,
+  correlationId: string
+): Promise<DbOperationResult<void>> {
+  const functionName = 'syncMediaGroupCaptions';
+  logWithCorrelation(correlationId, `Syncing captions for media group ${mediaGroupId}`, 'INFO', functionName);
+
+  try {
+    // Find all messages in the media group
+    const groupMessagesResult = await findMessagesByMediaGroupId(
+      supabaseClient,
+      mediaGroupId,
+      correlationId
+    );
+
+    if (!groupMessagesResult.success || !groupMessagesResult.data) {
+      return {
+        success: false,
+        error: groupMessagesResult.error || 'Failed to find messages in media group'
+      };
+    }
+
+    const groupMessages = groupMessagesResult.data;
+    if (groupMessages.length === 0) {
+      logWithCorrelation(correlationId, `No other messages found in media group ${mediaGroupId}`, 'INFO', functionName);
+      return { success: true };
+    }
+
+    // Filter out the message that triggered the update
+    const messagesToUpdate = groupMessages.filter(msg => msg.id !== excludeMessageId);
+    if (messagesToUpdate.length === 0) {
+      logWithCorrelation(correlationId, `No other messages to update in media group ${mediaGroupId}`, 'INFO', functionName);
+      return { success: true };
+    }
+
+    logWithCorrelation(correlationId, `Updating ${messagesToUpdate.length} other messages in media group ${mediaGroupId}`, 'INFO', functionName);
+
+    // Update each message in the group with the new caption and caption data
+    for (const message of messagesToUpdate) {
+      // Skip if the message already has the same caption
+      if (message.caption === caption) {
+        continue;
+      }
+
+      // Prepare update data
+      const updateData: Record<string, any> = {
+        caption,
+        processing_state: processingState,
+        caption_data: captionData
+      };
+
+      // If the message has analyzed content, move it to old_analyzed_content
+      if (message.analyzed_content) {
+        updateData.old_analyzed_content = message.old_analyzed_content 
+          ? [...(message.old_analyzed_content as any[]), message.analyzed_content]
+          : [message.analyzed_content];
+        updateData.analyzed_content = null;
+      }
+
+      // Update the message
+      const { error } = await supabaseClient
+        .from('messages')
+        .update(updateData)
+        .eq('id', message.id);
+
+      if (error) {
+        logWithCorrelation(correlationId, `Error updating message ${message.id} in media group: ${error.message}`, 'ERROR', functionName);
+        // Continue with other messages even if one fails
+      }
+    }
+
+    logWithCorrelation(correlationId, `Successfully synced captions for media group ${mediaGroupId}`, 'INFO', functionName);
+    return { success: true };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logWithCorrelation(correlationId, `Exception syncing media group captions: ${errorMessage}`, 'ERROR', functionName);
+    return {
+      success: false,
+      error: errorMessage
+    };
+  }
+}
+
+/**
  * Input parameters for triggering caption parsing.
  */
 export interface TriggerCaptionParsingParams {
@@ -956,15 +1133,48 @@ export async function triggerCaptionParsing(
   const { supabaseClient, messageId, correlationId } = params;
   const functionName = "triggerCaptionParsing";
   
-  logWithCorrelation(correlationId, `Triggering caption parsing for message ${messageId}`);
+  logWithCorrelation(correlationId, `Triggering caption parsing for message ${messageId}`, 'INFO', functionName);
   
   try {
+    // First, get the message to check if it has a caption and media group ID
+    const { data: message, error: fetchError } = await supabaseClient
+      .from('messages')
+      .select('id, caption, processing_state, media_group_id')
+      .eq('id', messageId)
+      .single();
+    
+    if (fetchError) {
+      logWithCorrelation(correlationId, `Error fetching message ${messageId}: ${fetchError.message}`, 'ERROR', functionName);
+      return {
+        success: false,
+        error: fetchError.message,
+        errorCode: fetchError.code
+      };
+    }
+    
+    if (!message) {
+      logWithCorrelation(correlationId, `Message ${messageId} not found`, 'ERROR', functionName);
+      return {
+        success: false,
+        error: 'Message not found'
+      };
+    }
+    
+    if (!message.caption) {
+      logWithCorrelation(correlationId, `Message ${messageId} has no caption to parse`, 'WARN', functionName);
+      return {
+        success: true,
+        data: undefined
+      };
+    }
+    
+    // Call the manual caption parser Edge Function
     const parserUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/manual-caption-parser`;
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     
     if (!parserUrl || !serviceKey) {
       const errorMsg = 'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY for caption parser call';
-      logWithCorrelation(correlationId, `CRITICAL: ${errorMsg}`, 'ERROR');
+      logWithCorrelation(correlationId, `CRITICAL: ${errorMsg}`, 'ERROR', functionName);
       
       await logProcessingEvent(
         supabaseClient,
@@ -987,6 +1197,8 @@ export async function triggerCaptionParsing(
       isEdit: true
     };
     
+    logWithCorrelation(correlationId, `Calling manual caption parser for message ${messageId}`, 'INFO', functionName);
+    
     const response = await fetch(parserUrl, {
       method: 'POST',
       headers: {
@@ -1000,7 +1212,7 @@ export async function triggerCaptionParsing(
     if (!response.ok) {
       const errorBody = await response.text();
       const errorMsg = `Error invoking caption parser. Status: ${response.status}, Body: ${errorBody}`;
-      logWithCorrelation(correlationId, errorMsg, 'ERROR');
+      logWithCorrelation(correlationId, errorMsg, 'ERROR', functionName);
       
       await logProcessingEvent(
         supabaseClient,
@@ -1017,7 +1229,7 @@ export async function triggerCaptionParsing(
       };
     }
     
-    logWithCorrelation(correlationId, `Successfully invoked caption parser for message ${messageId}`);
+    logWithCorrelation(correlationId, `Successfully invoked caption parser for message ${messageId}`, 'INFO', functionName);
     
     await logProcessingEvent(
       supabaseClient,
@@ -1027,20 +1239,99 @@ export async function triggerCaptionParsing(
       { isEdit: true }
     );
     
+    // If this message is part of a media group, we need to sync the analyzed content
+    // after the caption parser has completed its work
+    if (message.media_group_id) {
+      logWithCorrelation(correlationId, `Message ${messageId} is part of media group ${message.media_group_id}. Will sync analyzed content after processing.`, 'INFO', functionName);
+      
+      // We need to wait a bit for the caption parser to complete its work
+      // before syncing the analyzed content
+      setTimeout(async () => {
+        try {
+          // Get the updated message with analyzed content
+          const { data: updatedMessage, error: fetchUpdatedError } = await supabaseClient
+            .from('messages')
+            .select('id, analyzed_content, caption, caption_data, media_group_id')
+            .eq('id', messageId)
+            .single();
+          
+          if (fetchUpdatedError || !updatedMessage) {
+            logWithCorrelation(correlationId, `Error fetching updated message for media group sync: ${fetchUpdatedError?.message || 'Message not found'}`, 'ERROR', functionName);
+            return;
+          }
+          
+          // Only sync if we have analyzed content
+          if (updatedMessage.analyzed_content) {
+            logWithCorrelation(correlationId, `Syncing analyzed content for media group ${updatedMessage.media_group_id}`, 'INFO', functionName);
+            
+            // Call the database function to sync media group
+            const { data: syncResult, error: syncError } = await supabaseClient.rpc('xdelo_sync_media_group', {
+              p_source_message_id: messageId,
+              p_media_group_id: updatedMessage.media_group_id,
+              p_correlation_id: correlationId,
+              p_force_sync: true,
+              p_sync_edit_history: true
+            });
+            
+            if (syncError) {
+              logWithCorrelation(correlationId, `Error syncing media group: ${syncError.message}`, 'ERROR', functionName);
+              await logProcessingEvent(
+                supabaseClient,
+                'media_group_sync_failed',
+                messageId,
+                correlationId,
+                { 
+                  media_group_id: updatedMessage.media_group_id,
+                  error: syncError.message
+                },
+                syncError.message
+              );
+            } else {
+              logWithCorrelation(correlationId, `Successfully synced media group ${updatedMessage.media_group_id}. Synced ${syncResult.synced_count} messages.`, 'INFO', functionName);
+              await logProcessingEvent(
+                supabaseClient,
+                'media_group_synced_after_caption_parsing',
+                messageId,
+                correlationId,
+                { 
+                  media_group_id: updatedMessage.media_group_id,
+                  synced_count: syncResult.synced_count
+                }
+              );
+            }
+          } else {
+            logWithCorrelation(correlationId, `No analyzed content available yet for message ${messageId}. Media group sync skipped.`, 'WARN', functionName);
+          }
+        } catch (syncError) {
+          const syncErrorMsg = syncError instanceof Error ? syncError.message : String(syncError);
+          logWithCorrelation(correlationId, `Exception during media group sync: ${syncErrorMsg}`, 'ERROR', functionName);
+          await logProcessingEvent(
+            supabaseClient,
+            'media_group_sync_exception',
+            messageId,
+            correlationId,
+            { error: syncErrorMsg },
+            syncErrorMsg
+          );
+        }
+      }, 5000); // Wait 5 seconds for the caption parser to complete
+    }
+    
     return {
-      success: true
+      success: true,
+      data: undefined
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    logWithCorrelation(correlationId, `Exception invoking caption parser: ${errorMessage}`, 'ERROR');
+    logWithCorrelation(correlationId, `Exception triggering caption parsing: ${errorMessage}`, 'ERROR', functionName);
     
     await logProcessingEvent(
       supabaseClient,
       'caption_parser_invoke_exception',
       messageId,
       correlationId,
-      { errorMessage, stack: error instanceof Error ? error.stack : undefined },
-      `Fetch exception invoking caption parser: ${errorMessage}`
+      { error: errorMessage },
+      errorMessage
     );
     
     return {

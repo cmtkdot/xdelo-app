@@ -6,7 +6,6 @@ import { createCorsResponse } from "../../_shared/cors.ts";
 import { supabaseClient } from "../../_shared/supabase.ts";
 // Local Imports
 import { MessageContext, TelegramMessage, MessageRecord } from '../types.ts';
-import { constructTelegramMessageUrl } from '../utils/messageUtils.ts';
 // Import the specific DB operations needed
 import {
   createMessageRecord, // Assuming this is the function to create a record
