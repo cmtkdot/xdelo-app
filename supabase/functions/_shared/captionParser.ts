@@ -169,6 +169,26 @@ export function xdelo_parseCaption(
   }
 }
 
+/**
+ * Process caption text to extract product information
+ * This is an adapter function for backward compatibility
+ * 
+ * @param caption The caption text to parse
+ * @param options Optional configuration
+ * @returns Parsed content object
+ */
+export function processCaptionText(
+  caption: string | null | undefined,
+  options: {
+    extractPurchaseDate?: boolean;
+    extractProductCode?: boolean;
+    extractVendorUid?: boolean;
+    extractPricing?: boolean;
+  } = {}
+): ParsedContent {
+  return xdelo_parseCaption(caption, options);
+}
+
 function formatPurchaseDate(dateDigits: string): string {
   // Add leading zero for 5-digit dates (missing leading zero in month)
   const normalizedDigits = dateDigits.length === 5 ? '0' + dateDigits : dateDigits;
