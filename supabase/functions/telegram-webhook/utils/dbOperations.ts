@@ -10,7 +10,7 @@ import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { TelegramMessage, ForwardInfo, Updates } from "../types.ts";
 import { ProcessingResult } from "../../_shared/MediaProcessor.ts";
 import { Database, Json } from "../../_shared/types.ts";
-import { logWithCorrelation } from "../logger.ts";
+import { logWithCorrelation } from "./logger.ts";
 
 /**
  * Define ProcessingState type
@@ -836,11 +836,10 @@ export interface UpsertMediaMessageParams {
  *   publicUrl: "https://example.com/storage/AQADkK4xG_cN6EZ-.jpeg",
  *   mimeType: "image/jpeg",
  *   extension: "jpeg",
- *   messageData: { /* Telegram message object */ },
+ *   messageData: { message: "Telegram message object" },
  *   processingState: "processed",
  *   correlationId: "abc-123"
  * });
- * 
  * if (result.success) {
  *   console.log(`Message upserted with ID: ${result.data.id}`);
  * } else {

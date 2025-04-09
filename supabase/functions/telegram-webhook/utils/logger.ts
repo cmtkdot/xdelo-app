@@ -1,4 +1,3 @@
-
 import { supabaseClient } from '../../_shared/supabase.ts';
 
 /**
@@ -75,5 +74,38 @@ export class Logger {
       // Don't recursively log errors from logging
       console.error(`Database logging error: ${error instanceof Error ? error.message : String(error)}`);
     }
+  }
+}
+
+/**
+ * Helper function to log a message with correlation ID
+ * 
+ * @param correlationId - Correlation ID for request tracking
+ * @param message - Message to log
+ * @param level - Log level (default: 'info')
+ * @param metadata - Additional metadata to include
+ */
+export function logWithCorrelation(
+  correlationId: string, 
+  message: string, 
+  level: 'debug' | 'info' | 'warn' | 'error' = 'info',
+  metadata: Record<string, any> = {}
+): void {
+  const logger = new Logger(correlationId);
+  
+  switch (level) {
+    case 'debug':
+      logger.debug(message, metadata);
+      break;
+    case 'warn':
+      logger.warn(message, metadata);
+      break;
+    case 'error':
+      logger.error(message, metadata);
+      break;
+    case 'info':
+    default:
+      logger.info(message, metadata);
+      break;
   }
 }
