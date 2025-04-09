@@ -10,7 +10,6 @@ import {
     MessageContext,
     TelegramMessage,
 } from '../types.ts';
-<<<<<<< HEAD
 import { createMessage, checkDuplicateMessage, xdelo_logProcessingEvent } from '../dbOperations.ts';
 import { constructTelegramMessageUrl } from '../../_shared/messageUtils.ts';
 
@@ -346,28 +345,6 @@ async function xdelo_handleEditedMediaMessage(
  * Helper function to handle new media messages
  */
 async function xdelo_handleNewMediaMessage(
-=======
-import {
-    xdelo_detectMimeType,
-    xdelo_downloadMediaFromTelegram, // Will remove token param later
-    xdelo_getStoragePath,
-    xdelo_isViewableMimeType,
-    xdelo_uploadMediaToStorage // Will remove supabase param later
-} from '../utils/mediaUtils.ts';
-import { constructTelegramMessageUrl } from '../utils/messageUtils.ts';
-
-/**
- * Handles *new* media messages (photo, video, document) from Telegram.
- * Checks for duplicates based on file_unique_id.
- * If new: Downloads the media, uploads it to storage (if not already present),
- *   and inserts a new record into the 'messages' table.
- * If duplicate: Checks for caption changes, updates existing record accordingly,
- *   and sets state for potential reprocessing if caption changed.
- * Assumes *edited* messages (distinct edits on existing messages) are routed elsewhere.
- */
-export async function handleMediaMessage(
-  telegramToken: string, // Keep for download util for now
->>>>>>> 1c6afd6248d76680bdcec70142d877d46e874c8a
   message: TelegramMessage, 
   context: MessageContext
 ): Promise<Response> {
