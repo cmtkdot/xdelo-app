@@ -47,7 +47,7 @@ DECLARE
   _sync_result uuid[];
   _old_record jsonb := NULL;
   _new_record jsonb;
-  _sync_flag text := current_setting('app.sync_media_group_in_progress', true);
+  v_sync_in_progress boolean := false;
 BEGIN
   -- Convert records to jsonb for easier handling
   _new_record := row_to_json(NEW)::jsonb;
@@ -61,15 +61,28 @@ BEGIN
     RETURN NEW;
   END IF;
   
-  -- Prevent infinite trigger recursion with a custom setting
-  -- This setting is local to the transaction
-  IF _sync_flag = 'true' THEN
-    -- Skip if we're already in a sync operation
-    RETURN NEW;
-  END IF;
+  -- Check if we're in a recursion using a temporary table approach
+  -- This is an alternative to using custom settings which might have permission issues
+  BEGIN
+    -- Try to create a temporary table if it doesn't exist yet
+    CREATE TEMP TABLE IF NOT EXISTS _sync_media_group_lock (
+      media_group_id text PRIMARY KEY,
+      in_progress boolean NOT NULL
+    ) ON COMMIT DROP;
+    
+    -- Try to insert a new lock record - if it already exists, we'll get a unique violation
+    -- which we'll catch and interpret as "sync in progress"
+    INSERT INTO _sync_media_group_lock (media_group_id, in_progress)
+    VALUES (NEW.media_group_id, true);
+  EXCEPTION WHEN unique_violation THEN
+    -- We're already processing this media group, skip to avoid recursion
+    v_sync_in_progress := true;
+  END;
   
-  -- Set flag to prevent recursion
-  PERFORM set_config('app.sync_media_group_in_progress', 'true', true);
+  -- If already in progress, return without further processing
+  IF v_sync_in_progress THEN
+    RETURN NEW;
+  END;
   
   BEGIN
     -- Determine processing state to use
@@ -128,8 +141,8 @@ BEGIN
     );
   END;
   
-  -- Reset the flag
-  PERFORM set_config('app.sync_media_group_in_progress', 'false', true);
+  -- Clean up our lock
+  DELETE FROM _sync_media_group_lock WHERE media_group_id = NEW.media_group_id;
   
   RETURN NEW;
 END;
@@ -296,5 +309,4 @@ ALTER FUNCTION public.trigger_sync_media_group_captions() SECURITY DEFINER;
 ALTER FUNCTION public.prevent_unnecessary_message_updates() SECURITY DEFINER;
 ALTER FUNCTION public.should_sync_media_group(jsonb, jsonb) SECURITY DEFINER;
 
--- Grant usage of the custom setting to the trigger function
-GRANT SET ON PARAMETER app.sync_media_group_in_progress TO PUBLIC;
+-- No need for any special grants with the temporary table approach
