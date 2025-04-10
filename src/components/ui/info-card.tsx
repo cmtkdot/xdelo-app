@@ -1,4 +1,3 @@
-
 "use client";
 
 import {
@@ -88,8 +87,8 @@ interface MediaItem {
 interface InfoCardMediaProps extends React.HTMLAttributes<HTMLDivElement> {
   media: MediaItem[];
   loading?: "eager" | "lazy";
-  shrinkHeight?: number;
-  expandHeight?: number;
+  shrinkHeight?: number | string;
+  expandHeight?: number | string;
 }
 
 const InfoCardImageContext = createContext<{
@@ -349,7 +348,11 @@ const InfoCardMedia = ({
         <div
           className={cn(
             "relative",
-            media.length > 0 ? { height: shrinkHeight } : "h-auto"
+            media.length > 0 
+              ? typeof shrinkHeight === 'string' 
+                ? { height: shrinkHeight } 
+                : { height: `${shrinkHeight}px` }
+              : "h-auto"
           )}
         >
           {displayMedia.map((item, index) => {
@@ -364,7 +367,7 @@ const InfoCardMedia = ({
             return (
               <motion.div
                 key={src}
-                className="absolute w-full"
+                className="absolute w-full h-full"
                 animate={{
                   rotateZ: getRotation(index),
                   x: getTranslateX(index),
@@ -381,7 +384,7 @@ const InfoCardMedia = ({
                   <video
                     src={src}
                     className={cn(
-                      "w-full rounded-md border border-gray-200 object-cover shadow-lg",
+                      "w-full h-full rounded-md border border-gray-200 object-cover shadow-lg",
                       itemClassName
                     )}
                     onLoadedData={() => handleMediaLoad(src)}
@@ -395,7 +398,7 @@ const InfoCardMedia = ({
                     src={src}
                     alt={alt}
                     className={cn(
-                      "w-full rounded-md border border-gray-200 object-cover shadow-lg",
+                      "w-full h-full rounded-md border border-gray-200 object-cover shadow-lg",
                       itemClassName
                     )}
                     onLoad={() => handleMediaLoad(src)}

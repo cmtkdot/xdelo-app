@@ -2,7 +2,6 @@
 import React, { useState, useEffect } from 'react';
 import { Message } from '@/types/entities/Message';
 import { Play, ExternalLink } from 'lucide-react';
-import { formatDuration } from '@/utils/dateUtils';
 import { getVideoDuration } from '@/utils/mediaUtils';
 import { 
   InfoCard, 
@@ -30,21 +29,17 @@ export function VideoPreviewCard({
 }: VideoPreviewCardProps) {
   const [isHovering, setIsHovering] = useState(false);
   
-  // Get duration in seconds from message data
-  const duration = getVideoDuration(message);
-  const formattedDuration = duration ? formatDuration(parseInt(duration)) : null;
-  
   // Product name either from analyzed content or caption
   const productName = message.analyzed_content?.product_name || message.caption || 'Video';
   
   return (
     <div 
-      className={`relative ${className}`}
+      className={`relative aspect-square ${className}`}
       onMouseEnter={() => setIsHovering(true)}
       onMouseLeave={() => setIsHovering(false)}
     >
-      <InfoCard className="border-0 p-0 bg-transparent">
-        <InfoCardContent>
+      <InfoCard className="border-0 p-0 bg-transparent h-full">
+        <InfoCardContent className="h-full">
           {showTitle && (
             <InfoCardTitle className="text-xs">
               {productName}
@@ -58,25 +53,14 @@ export function VideoPreviewCard({
                 src: message.public_url,
                 autoPlay: isHovering,
                 loop: true,
-                height: 150,
+                height: '100%',
+                className: "aspect-square object-cover"
               }
             ]}
-            shrinkHeight={150}
-            expandHeight={200}
+            shrinkHeight="100%"
+            expandHeight="100%"
+            className="h-full"
           />
-          
-          <InfoCardDescription className="mt-1 text-xs">
-            {formattedDuration && (
-              <span className="bg-black/70 text-white px-1.5 py-0.5 rounded text-xs mr-2">
-                {formattedDuration}
-              </span>
-            )}
-            {message.vendor_uid && (
-              <span className="bg-blue-500/70 text-white px-1.5 py-0.5 rounded text-xs">
-                {message.vendor_uid}
-              </span>
-            )}
-          </InfoCardDescription>
           
           <InfoCardFooter>
             <InfoCardAction>
@@ -100,6 +84,13 @@ export function VideoPreviewCard({
           </InfoCardFooter>
         </InfoCardContent>
       </InfoCard>
+
+      {/* Play button overlay for better visibility */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <div className="bg-black/30 rounded-full p-3 backdrop-blur-sm">
+          <Play className="h-6 w-6 text-white" fill="white" />
+        </div>
+      </div>
 
       {/* Click overlay for the entire card */}
       <div 
