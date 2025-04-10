@@ -11,7 +11,29 @@ import {
     logWithCorrelation,
     upsertTextMessageRecord
 } from '../utils/dbOperations.ts';
-// Import error handling utilities
+
+// Helper function to create consistent error responses
+function createErrorResponse(
+  message: string,
+  functionName: string,
+  statusCode: number,
+  correlationId: string,
+  metadata?: Record<string, any>
+): Response {
+  return new Response(
+    JSON.stringify({
+      success: false,
+      error: message,
+      function: functionName,
+      correlationId,
+      ...metadata
+    }),
+    {
+      status: statusCode,
+      headers: { 'Content-Type': 'application/json' }
+    }
+  );
+}
 
 /**
  * Handles new non-media (text) messages from Telegram.
@@ -53,17 +75,19 @@ export async function handleOtherMessage(
       );
     }
     
-    // Use our new upsertTextMessageRecord function
+    // Use our upsertTextMessageRecord function with complete parameters matching the PostgreSQL function
     logWithCorrelation(correlationId, `Upserting text message record for telegram_message_id: ${message.message_id}`, 'INFO', functionName);
     const upsertResult = await upsertTextMessageRecord({
       supabaseClient,
       messageId: message.message_id,
       chatId: message.chat.id,
-      messageText: message.text,
-      messageData: message, // Store as telegram_data in PostgreSQL
-      chatType: message.chat.type,
-      chatTitle: message.chat.title,
+      messageText: message.text || null,
+      messageData: message,
+      chatType: message.chat.type || null,
+      chatTitle: message.chat.title || null,
       forwardInfo: forwardInfo,
+      processingState: 'pending_analysis',
+      processingError: null,
       correlationId
     });
 

@@ -796,28 +796,24 @@ export interface CreateOtherMessageParams {
 	chatType?: string | null;
 	chatTitle?: string | null;
 	correlationId: string;
-}
-
-/**
  * Input parameters for upserting a text message record in the other_messages table.
  * 
- * Note: The PostgreSQL function extracts certain fields (like message_date, chat_type,
- * and chat_title) directly from the messageData, so we don't need to provide these separately.
+ * Note: The PostgreSQL function extracts certain fields (like message_date) directly 
+ * from the messageData, but we provide all other parameters to avoid function signature
+ * ambiguity issues.
  */
 export interface UpsertTextMessageParams {
 	supabaseClient: SupabaseClient<Database>;
 	messageId: number;
 	chatId: number;
 	messageText: string | null;
-	messageData: Json; // Stored as telegram_data in PostgreSQL
+	messageData: Json;
+	correlationId: string;
 	chatType?: string | null;
 	chatTitle?: string | null;
 	forwardInfo?: ForwardInfo | null;
-	correlationId: string;
-}
-
-/**
- * Create a new record in the other_messages table.
+	processingState?: string;
+	processingError?: string | null;
  *
  * @param params - The input parameters for the other message.
  * @returns Operation result with the created message ID.
@@ -916,7 +912,11 @@ export async function createOtherMessageRecord(
  *   messageText: 'Hello world',
  *   messageData: { ... }, // The complete Telegram message
  *   chatType: 'private',
+ *   chatTitle: 'My Chat',
+ *   forwardInfo: { ... },
  *   correlationId: 'xyz',
+ *   processingState: 'pending_analysis',
+ *   processingError: null
  * });
  * 
  * if (result.success) {
@@ -933,16 +933,19 @@ export async function upsertTextMessageRecord(
 	logWithCorrelation(correlationId, `Upserting text message record for ${messageId} in chat ${chatId}`);
 
 	try {
-		// Create parameter object for the RPC call
+		// Create parameter object for the RPC call with exact parameter order matching the PostgreSQL function
+		// The order and naming here must match exactly with the PostgreSQL function declaration
 		const paramObject = {
 			p_telegram_message_id: messageId,
 			p_chat_id: chatId,
+			p_message_text: params.messageText || null,
 			p_message_data: params.messageData,
-			p_message_text: params.messageText,
-			p_chat_type: params.chatType,
-			p_chat_title: params.chatTitle,
-			p_forward_info: params.forwardInfo,
-			p_correlation_id: correlationId
+			p_correlation_id: correlationId,
+			p_chat_type: params.chatType || null,
+			p_chat_title: params.chatTitle || null,
+			p_forward_info: params.forwardInfo || null,
+			p_processing_state: params.processingState || 'pending_analysis',
+			p_processing_error: params.processingError || null
 		};
 
 		// Call the RPC function
