@@ -233,7 +233,8 @@ async function handleNewMessage(
         processingError: processingResult.error || null,
         forwardInfo: forwardInfo,                 // Use standardized forward info
         mediaGroupId: message.media_group_id || null,
-        captionData: captionData,
+        captionData: captionData,                 // Processed caption data structure
+        analyzedContent: captionData,             // Keep in sync with captionData
         correlationId
       });
       

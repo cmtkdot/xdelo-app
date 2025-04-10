@@ -379,6 +379,8 @@ export async function updateMessageRecord(
     const updateData: Record<string, any> = {
       caption: message.caption,
       caption_data: captionData,
+      // Ensure both caption_data and analyzed_content are kept in sync
+      analyzed_content: captionData,
       processing_state: 'completed',
       correlation_id: correlationId,
       edit_history: [...(existingMessage.edit_history || []), editHistoryEntry],

@@ -1,16 +1,14 @@
 /// <reference types="https://esm.sh/@supabase/functions-js/edge-runtime.d.ts" />
 
 // Shared Imports
-import { createCorsResponse } from "../../_shared/cors.ts";
-import { supabaseClient } from "../../_shared/cors.ts"; 
+import { createCorsResponse, supabaseClient } from "../../_shared/cors.ts";
 // Local Imports
-import { MessageContext, TelegramMessage, MessageRecord } from '../types.ts';
+import { MessageContext, MessageRecord, TelegramMessage } from '../types.ts';
 import {
   findMessageByTelegramId,
-  updateMessageRecord,
   logProcessingEvent,
-  DbOperationResult,
-  triggerCaptionParsing
+  triggerCaptionParsing,
+  updateMessageRecord
 } from '../utils/dbOperations.ts';
 import { logWithCorrelation } from '../utils/logger.ts';
 

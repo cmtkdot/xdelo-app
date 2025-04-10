@@ -1,20 +1,17 @@
 /// <reference types="https://esm.sh/@supabase/functions-js/edge-runtime.d.ts" />
 
 // Shared Imports
-import { createCorsResponse, supabaseClient } from "../../_shared/cors.ts";
-import { constructTelegramMessageUrl } from "../../_shared/messageUtils.ts";
+import { supabaseClient } from "../../_shared/cors.ts";
 // Local Imports
 import { MessageContext, TelegramMessage } from '../types.ts';
 // Import DB operations
 import {
-  upsertTextMessageRecord,
-  extractForwardInfo,
-  logProcessingEvent,
-  logWithCorrelation,
-  DbOperationResult
+    extractForwardInfo,
+    logProcessingEvent,
+    logWithCorrelation,
+    upsertTextMessageRecord
 } from '../utils/dbOperations.ts';
 // Import error handling utilities
-import { createTelegramErrorResponse } from '../utils/errorUtils.ts';
 
 /**
  * Handles new non-media (text) messages from Telegram.
@@ -36,7 +33,7 @@ export async function handleOtherMessage(
     if (!message || !message.chat || !message.message_id || !message.date) {
       const errorMessage = `Invalid text message structure: Missing required fields`;
       logWithCorrelation(correlationId, errorMessage, 'ERROR', functionName);
-      return createTelegramErrorResponse(errorMessage, functionName, 400, correlationId, {
+      return createErrorResponse(errorMessage, functionName, 400, correlationId, {
         messageId: message?.message_id,
         chatId: message?.chat?.id
       });
@@ -85,7 +82,7 @@ export async function handleOtherMessage(
         upsertResult.error ?? 'Unknown DB error during upsert'
       );
       
-      return createTelegramErrorResponse(
+      return createErrorResponse(
         `DB error upserting text message: ${upsertResult.error}`, 
         functionName, 
         500, 
@@ -113,7 +110,7 @@ export async function handleOtherMessage(
         'Upsert reported success but returned no record ID'
       );
       
-      return createTelegramErrorResponse(
+      return createErrorResponse(
         `DB upsert succeeded but failed to return ID`, 
         functionName, 
         500, 
@@ -173,15 +170,14 @@ export async function handleOtherMessage(
       errorMessage
     );
     
-    return createTelegramErrorResponse(
+    return createErrorResponse(
       `Exception processing text message: ${errorMessage}`,
       functionName,
       500,
       correlationId,
       {
         messageId: message?.message_id,
-        chatId: message?.chat?.id,
-        dbMessageId
+        chatId: message?.chat?.id
       }
     );
   }

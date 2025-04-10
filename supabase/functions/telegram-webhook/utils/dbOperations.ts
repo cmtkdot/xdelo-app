@@ -37,8 +37,22 @@ export interface MessageRecord {
 	chat_title?: string;
 	/** User ID who sent the message */
 	user_id?: number;
-	/** Processed caption data */
+	/**
+	 * Processed caption data as JSON
+	 * @note This field is synchronized with analyzed_content - both should contain the same data
+	 * for consistency. When updating one field, always update the other.
+	 */
 	caption_data?: Json | null;
+	/**
+	 * Structured analyzed content from caption parsing
+	 * @note This field is synchronized with caption_data - both should contain the same data
+	 * for consistency. When updating one field, always update the other.
+	 */
+	analyzed_content?: Json | null;
+	/**
+	 * Archive of previous analyzed_content values, preserving edit history
+	 */
+	old_analyzed_content?: Json[] | null;
 	/** Current processing state */
 	processing_state: ProcessingState;
 	/** Correlation ID for request tracking */
@@ -269,24 +283,52 @@ export async function createMessageRecord(
  * Input parameters for updating a message record.
  */
 export interface UpdateMessageParams {
+	/** Initialized Supabase client */
 	supabaseClient: SupabaseClient<Database>;
-	messageId: number; // Telegram Message ID
+	/** Telegram Message ID */
+	messageId: number;
+	/** Chat ID where the message was sent */
 	chatId: number;
 	// Fields to update - make all optional except identifiers
+	/** Message date and time */
 	messageDate?: Date;
+	/** Date and time when the message was edited */
 	editDate?: Date;
+	/** Caption text for media */
 	caption?: string | null;
+	/** Type of media (photo, video, document, etc.) */
 	mediaType?: string;
+	/** Telegram file ID for downloading */
 	fileId?: string;
+	/** Unique file identifier from Telegram */
 	fileUniqueId?: string;
+	/** Storage path where the file is saved */
 	storagePath?: string;
+	/** Public URL to access the file */
 	publicUrl?: string;
+	/** MIME type of the file */
 	mimeType?: string;
+	/** File extension */
 	extension?: string;
+	/** Raw message data from Telegram */
 	messageData?: Json;
+	/** Current processing state */
 	processingState?: string;
+	/** Error message if processing failed */
 	processingError?: string | null;
+	/**
+	 * Processed caption data from caption parsing
+	 * @note This field is synchronized with analyzed_content - both fields are updated with the
+	 * same data to maintain consistency across the application. The database trigger
+	 * sync_caption_fields_trigger ensures they remain in sync.
+	 */
 	captionData?: Json | null;
+	/**
+	 * Structured analyzed content from caption parsing
+	 * @note This field is synchronized with caption_data - both should contain the same data.
+	 * When updating caption_data, ensure analyzed_content is also updated with the same value.
+	 */
+	analyzedContent?: Json | null;
 	forwardInfo?: ForwardInfo | null; // Forward message information
 	isForward?: boolean;             // Flag for forwarded messages
 	isEdit?: boolean;                // Flag for edited messages
@@ -358,7 +400,12 @@ export async function updateMessageRecord(
 		if (params.messageData !== undefined) updates.message_data = params.messageData;
 		if (params.processingState !== undefined) updates.processing_state = params.processingState;
 		if (params.processingError !== undefined) updates.processing_error = params.processingError;
-		if (params.captionData !== undefined) updates.caption_data = params.captionData;
+		// Ensure both caption_data and analyzed_content are kept in sync when caption content changes
+		if (params.captionData !== undefined) {
+			updates.caption_data = params.captionData;
+			// Also update analyzed_content with the same value to maintain consistency
+			updates.analyzed_content = params.captionData;
+		}
 		
 		// Forward message fields
 		if (params.forwardInfo !== undefined) updates.forward_info = params.forwardInfo;
@@ -960,7 +1007,12 @@ export interface UpsertMediaMessageParams {
   forwardInfo?: ForwardInfo | null;
   /** Media group ID if part of a media group */
   mediaGroupId?: string | null;
-  /** Processed caption data */
+  /**
+   * Processed caption data from caption parsing
+   * @note This field is synchronized with analyzed_content - both fields are updated with the
+   * same data to maintain consistency across the application. The database trigger
+   * sync_caption_fields_trigger ensures they remain in sync.
+   */
   captionData?: Json | null;
   /** Correlation ID for request tracking */
   correlationId: string;
@@ -1008,6 +1060,11 @@ export async function upsertMediaMessageRecord(
   try {
     // Prepare parameters for the database function call
     // Handle schema flexibility by using a parameter object
+    
+    // Ensure both caption_data and analyzed_content are set to the same value for consistency
+    // This addresses the field mismatch issue where some code paths use caption_data while others use analyzed_content
+    const captionAnalysisData = params.captionData as Json | null;
+    
     const rpcParams: Record<string, any> = {
       p_telegram_message_id: messageId,
       p_chat_id: chatId,
@@ -1026,7 +1083,9 @@ export async function upsertMediaMessageRecord(
       p_media_group_id: params.mediaGroupId,
       p_forward_info: params.forwardInfo as Json | null,
       p_processing_error: params.processingError,
-      p_caption_data: params.captionData as Json | null
+      p_caption_data: captionAnalysisData,
+      // Also provide the same data for analyzed_content to ensure consistency
+      p_analyzed_content: captionAnalysisData
     };
     
     // Call the database function to handle the upsert
@@ -1145,11 +1204,16 @@ export async function findMessagesByMediaGroupId(
 /**
  * Update all messages in a media group with the same caption and caption data
  * 
+ * This function ensures all messages in a media group have consistent captions, and
+ * also synchronizes both caption_data and analyzed_content fields to the same value.
+ * When a caption is edited for one message in the group, it propagates that change
+ * to all related messages in the same media group.
+ * 
  * @param supabaseClient - The Supabase client
  * @param mediaGroupId - The media group ID
  * @param excludeMessageId - Message ID to exclude from the update (usually the one that triggered the update)
  * @param caption - The new caption
- * @param captionData - The new caption data
+ * @param captionData - The new caption data (will be used for both caption_data and analyzed_content fields)
  * @param processingState - The new processing state
  * @param correlationId - The correlation ID for request tracking
  * @returns Operation result
@@ -1217,15 +1281,16 @@ export async function syncMediaGroupCaptions(
       const updateData: Record<string, any> = {
         caption,
         processing_state: processingState,
-        caption_data: captionData
+        // Ensure both fields have the same value for consistency
+        caption_data: captionData,
+        analyzed_content: captionData
       };
 
-      // If the message has analyzed content, move it to old_analyzed_content
+      // If the message has analyzed content, move it to old_analyzed_content to maintain edit history
       if (message.analyzed_content) {
         updateData.old_analyzed_content = message.old_analyzed_content 
           ? [...(message.old_analyzed_content as any[]), message.analyzed_content]
           : [message.analyzed_content];
-        updateData.analyzed_content = null;
       }
 
       // Update the message
