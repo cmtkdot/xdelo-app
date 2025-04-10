@@ -783,6 +783,8 @@ export async function logProcessingEvent(
  */
 export function extractForwardInfo(message: TelegramMessage): ForwardInfo | undefined {
 	if (!message) return undefined;
+	// Add a check for message validity
+	if (!message || typeof message !== 'object') return undefined;
 
 	// Check if message is forwarded
 	if (!message.forward_date) return undefined;
@@ -821,6 +823,9 @@ export interface CreateOtherMessageParams {
 	chatType?: string | null;
 	chatTitle?: string | null;
 	correlationId: string;
+}
+
+/**
  * Input parameters for upserting a text message record in the other_messages table.
  * 
  * Note: The PostgreSQL function extracts certain fields (like message_date) directly 

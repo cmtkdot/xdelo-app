@@ -14,5 +14,6 @@ verify_jwt = false
 verify_jwt = false
 [functions.update-telegram-caption]
 verify_jwt = false
-[functions.xdelo_sync_media_group]
+[functions.media_group_sync_cron]
 verify_jwt = false
+
