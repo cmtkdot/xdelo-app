@@ -458,7 +458,7 @@ async function handleEditedMessage(
         updates.old_analyzed_content = existingMessage.old_analyzed_content 
           ? [...existingMessage.old_analyzed_content, existingMessage.analyzed_content]
           : [existingMessage.analyzed_content];
-        updates.analyzed_content = null;
+        updates.analyzed_content = captionData; // Set to captionData for consistency with media group sync
       }
     }
     

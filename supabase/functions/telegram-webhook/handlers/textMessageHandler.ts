@@ -51,14 +51,19 @@ export async function handleOtherMessage(
   logWithCorrelation(correlationId, `Processing text message ${message.message_id}`, 'INFO', functionName);
 
   try {
-    // Basic Validation
-    if (!message || !message.chat || !message.message_id || !message.date) {
-      const errorMessage = `Invalid text message structure: Missing required fields`;
+    // Basic Validation - but ensure we can still save partial data
+    if (!message) {
+      const errorMessage = `Invalid text message structure: Message object is null or undefined`;
       logWithCorrelation(correlationId, errorMessage, 'ERROR', functionName);
-      return createErrorResponse(errorMessage, functionName, 400, correlationId, {
-        messageId: message?.message_id,
-        chatId: message?.chat?.id
-      });
+      return createErrorResponse(errorMessage, functionName, 400, correlationId, {});
+    }
+    
+    // Even with missing fields, we'll attempt to store the raw message
+    const messageId = message.message_id || 0;
+    const chatId = message.chat?.id || 0;
+    
+    if (!messageId || !chatId) {
+      logWithCorrelation(correlationId, `Warning: Missing critical fields (message_id: ${messageId}, chat_id: ${chatId}), but will attempt to store data anyway`, 'WARN', functionName);
     }
 
     // Extract forward information if this is a forwarded message
@@ -76,15 +81,16 @@ export async function handleOtherMessage(
     }
     
     // Use our upsertTextMessageRecord function with complete parameters matching the PostgreSQL function
-    logWithCorrelation(correlationId, `Upserting text message record for telegram_message_id: ${message.message_id}`, 'INFO', functionName);
+    // The function has a fallback mechanism for PostgreSQL function ambiguity errors
+    logWithCorrelation(correlationId, `Upserting text message record for telegram_message_id: ${messageId}`, 'INFO', functionName);
     const upsertResult = await upsertTextMessageRecord({
       supabaseClient,
-      messageId: message.message_id,
-      chatId: message.chat.id,
+      messageId: messageId,
+      chatId: chatId,
       messageText: message.text || null,
-      messageData: message,
-      chatType: message.chat.type || null,
-      chatTitle: message.chat.title || null,
+      messageData: message, // Always store the complete webhook data regardless of other fields
+      chatType: message.chat?.type || null,
+      chatTitle: message.chat?.title || null,
       forwardInfo: forwardInfo,
       processingState: 'pending_analysis',
       processingError: null,
@@ -95,13 +101,14 @@ export async function handleOtherMessage(
     if (!upsertResult.success) {
       logWithCorrelation(correlationId, `Failed to upsert text message: ${upsertResult.error}`, 'ERROR', functionName);
       await logProcessingEvent(
+        supabaseClient,
         "db_upsert_text_failed", 
         null, 
         correlationId,
         { 
           function: functionName, 
-          telegram_message_id: message.message_id, 
-          chat_id: message.chat.id 
+          telegram_message_id: messageId, 
+          chat_id: chatId 
         },
         upsertResult.error ?? 'Unknown DB error during upsert'
       );
@@ -123,13 +130,14 @@ export async function handleOtherMessage(
     if (!dbMessageId) {
       logWithCorrelation(correlationId, `Upsert succeeded but no ID returned`, 'ERROR', functionName);
       await logProcessingEvent(
+        supabaseClient,
         "db_upsert_text_no_id", 
         null, 
         correlationId,
         { 
           function: functionName, 
-          telegram_message_id: message.message_id, 
-          chat_id: message.chat.id 
+          telegram_message_id: messageId, 
+          chat_id: chatId 
         },
         'Upsert reported success but returned no record ID'
       );
@@ -148,6 +156,7 @@ export async function handleOtherMessage(
 
     logWithCorrelation(correlationId, `Successfully upserted text message, DB ID: ${dbMessageId}`, 'INFO', functionName);
     await logProcessingEvent(
+      supabaseClient,
       isForwarded ? "forwarded_text_message_received" : "text_message_received", 
       dbMessageId, 
       correlationId,
@@ -155,8 +164,8 @@ export async function handleOtherMessage(
         is_forwarded: isForwarded,
         forward_source: isForwarded ? forwardInfo?.fromChatId : null,
         function: functionName, 
-        telegram_message_id: message.message_id, 
-        chat_id: message.chat.id,
+        telegram_message_id: messageId, 
+        chat_id: chatId,
         is_forward: !!message.forward_date
       },
       null // No specific message needed for success
@@ -183,13 +192,14 @@ export async function handleOtherMessage(
     logWithCorrelation(correlationId, `Exception processing text message: ${errorMessage}`, 'ERROR', functionName);
     
     await logProcessingEvent(
+      supabaseClient,
       "text_handler_exception", 
       dbMessageId, 
       correlationId,
       { 
         function: functionName, 
-        telegram_message_id: message?.message_id, 
-        chat_id: message?.chat?.id 
+        telegram_message_id: message?.message_id || 0, 
+        chat_id: message?.chat?.id || 0 
       },
       errorMessage
     );

@@ -691,9 +691,9 @@ export async function updateMessageWithError(
  * }
  */
 export async function logProcessingEvent(
-	supabaseClient: SupabaseClient<Database>,
+	supabaseClient: SupabaseClient<Database> | any,
 	eventType: string,
-	entityId: string,
+	entityId: string | null,
 	correlationId: string,
 	metadata?: Record<string, any>,
 	errorMessage?: string
@@ -701,7 +701,16 @@ export async function logProcessingEvent(
 	const functionName = 'logProcessingEvent';
 
 	try {
-		// Validate UUID format using regex
+		// Validate that we have a valid supabaseClient with a 'from' method
+		if (!supabaseClient || typeof supabaseClient.from !== 'function') {
+			logWithCorrelation(correlationId, `Invalid supabaseClient provided to logProcessingEvent`, "error");
+			return {
+				success: false,
+				error: 'Invalid supabaseClient: missing from method',
+			};
+		}
+
+		// Validate UUID format using regex or create valid UUID
 		const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 		if (!entityId || !uuidPattern.test(entityId)) {
 			// Generate a UUID v4 (random)
@@ -710,38 +719,48 @@ export async function logProcessingEvent(
 			logWithCorrelation(correlationId, `Generated new UUID for invalid entity_id: ${originalEntityId || 'undefined'}`, "warn");
 		}
 
-		// Create audit log entry
-		const { data, error } = await supabaseClient
-			.from('unified_audit_logs')
-			.insert({
-				event_type: eventType,
-				entity_id: entityId,
-				correlation_id: correlationId,
-				metadata: metadata || {},
-				error_message: errorMessage
-			})
-			.select('id')
-			.single();
+		try {
+			// Create audit log entry
+			const { data, error } = await supabaseClient
+				.from('unified_audit_logs')
+				.insert({
+					event_type: eventType,
+					entity_id: entityId,
+					correlation_id: correlationId,
+					metadata: metadata || {},
+					error_message: errorMessage
+				})
+				.select('id')
+				.single();
 
-		if (error) {
-			logWithCorrelation(correlationId, `Error creating audit log: ${error.message}`, "error");
+			if (error) {
+				logWithCorrelation(correlationId, `Error creating audit log: ${error.message}`, "error");
+				return {
+					success: false,
+					error: error.message,
+					errorCode: error.code,
+				};
+			}
+
+			return {
+				success: true,
+				data
+			};
+		} catch (innerError) {
+			// Handle specific Supabase API errors
+			const innerErrorMessage = innerError instanceof Error ? innerError.message : String(innerError);
+			logWithCorrelation(correlationId, `Inner exception creating audit log: ${innerErrorMessage}`, "error");
 			return {
 				success: false,
-				error: error.message,
-				errorCode: error.code,
+				error: `Database operation failed: ${innerErrorMessage}`,
 			};
 		}
-
-		return {
-			success: true,
-			data
-		};
 	} catch (error) {
 		const errorMessage = error instanceof Error ? error.message : String(error);
 		logWithCorrelation(correlationId, `Exception creating audit log: ${errorMessage}`, "error");
 		return {
 			success: false,
-			error: errorMessage,
+			error: `Unexpected error: ${errorMessage}`,
 		};
 	}
 }
@@ -814,7 +833,112 @@ export interface UpsertTextMessageParams {
 	forwardInfo?: ForwardInfo | null;
 	processingState?: string;
 	processingError?: string | null;
- *
+}
+
+/**
+ * Fallback function to directly insert a text message into the other_messages table
+ * when the RPC function fails. This bypasses the PostgreSQL function ambiguity issues.
+ * 
+ * @param params - The input parameters for the text message
+ * @returns Operation result with the inserted message ID
+ */
+async function insertTextMessageFallback(
+	params: UpsertTextMessageParams
+): Promise<DbOperationResult<{ id: string }>> {
+	const { correlationId, messageId, chatId, supabaseClient } = params;
+	logWithCorrelation(correlationId, `Using direct insert fallback for text message ${messageId} in chat ${chatId}`);
+	
+	try {
+		// Extract message date from messageData
+		const messageDate = new Date((params.messageData.date as number) * 1000);
+		
+		// Validate chat type
+		const rawChatType = params.chatType || params.messageData?.chat?.type;
+		const chatType = validateChatType(rawChatType);
+		const chatTitle = params.chatTitle || params.messageData?.chat?.title;
+		
+		// Check if record already exists (to handle upsert logic)
+		const { data: existingMessage, error: findError } = await supabaseClient
+			.from('other_messages')
+			.select('id')
+			.eq('telegram_message_id', messageId)
+			.eq('chat_id', chatId)
+			.maybeSingle();
+		
+		if (findError) {
+			logWithCorrelation(correlationId, `Error checking for existing message: ${findError.message}`, "error");
+			return { success: false, error: findError.message };
+		}
+		
+		let result;
+		
+		// Insert or update based on existence
+		if (existingMessage) {
+			// Update existing record
+			result = await supabaseClient
+				.from('other_messages')
+				.update({
+					message_text: params.messageText,
+					telegram_data: params.messageData,
+					chat_type: chatType,
+					chat_title: chatTitle,
+					processing_state: params.processingState || 'pending_analysis',
+					processing_error: params.processingError,
+					forward_info: params.forwardInfo,
+					correlation_id: correlationId,
+					updated_at: new Date().toISOString()
+				})
+				.eq('id', existingMessage.id)
+				.select('id')
+				.single();
+				
+			logWithCorrelation(correlationId, `Updated existing text message with ID: ${existingMessage.id}`);
+		} else {
+			// Insert new record
+			result = await supabaseClient
+				.from('other_messages')
+				.insert({
+					telegram_message_id: messageId,
+					chat_id: chatId,
+					chat_type: chatType,
+					chat_title: chatTitle,
+					message_date: messageDate.toISOString(),
+					message_type: 'text',
+					message_text: params.messageText,
+					telegram_data: params.messageData,
+					processing_state: params.processingState || 'pending_analysis',
+					processing_error: params.processingError,
+					forward_info: params.forwardInfo,
+					correlation_id: correlationId,
+					edit_history: '[]',
+					is_edited: false,
+					edit_count: 0
+				})
+				.select('id')
+				.single();
+				
+			logWithCorrelation(correlationId, `Inserted new text message via fallback method`);
+		}
+		
+		if (result.error) {
+			logWithCorrelation(correlationId, `Failed in fallback insert/update: ${result.error.message}`, "error");
+			return { success: false, error: result.error.message };
+		}
+		
+		logWithCorrelation(correlationId, `Fallback method successful for text message ID: ${result.data.id}`);
+		return { success: true, data: { id: result.data.id } };
+		
+	} catch (err) {
+		const errorMessage = err instanceof Error ? err.message : String(err);
+		logWithCorrelation(correlationId, `Exception in fallback text message insert: ${errorMessage}`, "error");
+		return {
+			success: false,
+			error: `Fallback insert failed: ${errorMessage}`
+		};
+	}
+}
+
+/**
  * @param params - The input parameters for the other message.
  * @returns Operation result with the created message ID.
  * @example
@@ -954,7 +1078,15 @@ export async function upsertTextMessageRecord(
 			.single();
 
 		if (error) {
-			logWithCorrelation(correlationId, `Failed to upsert text message: ${error.message}`, "error", { code: error.code });
+			logWithCorrelation(correlationId, `Failed to upsert text message via RPC: ${error.message}`, "warn", { code: error.code });
+			
+			// If we encounter function ambiguity error, try the direct insert fallback
+			if (error.message.includes('Could not choose the best candidate function') || 
+				error.code === 'PGRST203') {
+				logWithCorrelation(correlationId, `Function ambiguity detected. Trying direct insert fallback...`, "warn");
+				return await insertTextMessageFallback(params);
+			}
+			
 			return { success: false, error: error.message, errorCode: error.code };
 		}
 
@@ -964,10 +1096,10 @@ export async function upsertTextMessageRecord(
 	} catch (err) {
 		const errorMessage = err instanceof Error ? err.message : String(err);
 		logWithCorrelation(correlationId, `Exception upserting text message: ${errorMessage}`, "error");
-		return {
-			success: false,
-			error: errorMessage,
-		};
+		
+		// Try fallback method if RPC fails
+		logWithCorrelation(correlationId, `Trying direct insert fallback after exception...`, "warn");
+		return await insertTextMessageFallback(params);
 	}
 }
 
