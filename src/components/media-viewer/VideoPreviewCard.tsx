@@ -13,7 +13,7 @@ import {
   InfoCardFooter, 
   InfoCardAction
 } from '@/components/ui/info-card';
-import Link from 'next/link';
+import { Link } from 'react-router-dom';
 
 interface VideoPreviewCardProps {
   message: Message;
@@ -32,7 +32,7 @@ export function VideoPreviewCard({
   
   // Get duration in seconds from message data
   const duration = getVideoDuration(message);
-  const formattedDuration = duration ? formatDuration(duration) : null;
+  const formattedDuration = duration ? formatDuration(parseInt(duration)) : null;
   
   // Product name either from analyzed content or caption
   const productName = message.analyzed_content?.product_name || message.caption || 'Video';
@@ -93,7 +93,7 @@ export function VideoPreviewCard({
             </InfoCardAction>
             
             <InfoCardAction>
-              <Link href="#" className="flex flex-row items-center gap-1 text-xs hover:underline">
+              <Link to="#" className="flex flex-row items-center gap-1 text-xs hover:underline">
                 Details <ExternalLink size={12} />
               </Link>
             </InfoCardAction>
