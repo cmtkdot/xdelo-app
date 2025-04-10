@@ -14,11 +14,17 @@ import { logWithCorrelation } from "./logger.ts";
 /**
  * Define ProcessingState type
  */
+/**
+ * ProcessingState defines all possible states for message processing.
+ * This must match the database's processing_state_type enum exactly.
+ */
 export type ProcessingState =
 	| "initialized"
 	| "pending"
 	| "processing"
 	| "processed"
+	| "completed"
+	| "pending_analysis"
 	| "duplicate"
 	| "download_failed_forwarded"
 	| "error";
