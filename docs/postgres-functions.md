@@ -14,6 +14,7 @@ These database functions handle the core operations for the Telegram message pro
 9. [trigger_sync_media_group_captions](#trigger_sync_media_group_captions)
 10. [prevent_unnecessary_message_updates](#prevent_unnecessary_message_updates)
 11. [should_sync_media_group](#should_sync_media_group)
+12. [find_inconsistent_media_groups](#find_inconsistent_media_groups)
 
 ---
 
@@ -376,5 +377,48 @@ These database functions handle the core operations for the Telegram message pro
  *   '{"caption":"New caption","analyzed_content":{}}'  
  * );
  * -- Returns: false (no media group to sync)
+ */
+```
+
+## find_inconsistent_media_groups
+
+```typescript
+/**
+ * Finds media groups with inconsistent analyzed_content across messages
+ * 
+ * This function identifies media groups where some messages have analyzed_content
+ * while others don't, making them candidates for synchronization. It analyzes
+ * all media groups and returns information about those most in need of fixing.
+ * 
+ * For each inconsistent group found, the function determines the best source
+ * message to use for synchronization, prioritizing messages with:
+ * 1. Non-null analyzed_content
+ * 2. Valid captions
+ * 3. Richer analyzed content (more entities)
+ * 4. More recent updates
+ * 
+ * This function is primarily used by the media_group_sync_cron job to
+ * automatically fix inconsistencies across media group messages.
+ * 
+ * @param {INTEGER} p_limit - Maximum number of media groups to return (default: 50)
+ * @returns {TABLE} A table with the following columns:
+ *   - media_group_id: The Telegram media group ID
+ *   - message_count: Total number of messages in the group
+ *   - syncable_messages: Number of messages with analyzed_content
+ *   - needs_sync_messages: Number of messages missing analyzed_content
+ *   - best_source_id: UUID of the best message to use as source for syncing
+ * 
+ * @example
+ * -- Find up to 10 inconsistent media groups
+ * SELECT * FROM public.find_inconsistent_media_groups(10);
+ * 
+ * -- Get detailed statistics for all problematic groups
+ * SELECT
+ *   media_group_id,
+ *   message_count,
+ *   syncable_messages,
+ *   needs_sync_messages,
+ *   best_source_id
+ * FROM public.find_inconsistent_media_groups();
  */
 ```
