@@ -58,9 +58,20 @@ export class Logger {
     try {
       const eventType = `${this.source}_${level}`;
       
+      // Generate a valid UUID if entity_id is missing or invalid
+      let entityId = metadata.entity_id;
+      
+      // Validate UUID format using regex
+      const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!entityId || !uuidPattern.test(entityId)) {
+        // Generate a UUID v4 (random)
+        entityId = crypto.randomUUID();
+        console.log(`[${this.correlationId}] Generated new UUID for invalid entity_id: ${metadata.entity_id || 'undefined'}`);
+      }
+      
       await supabaseClient.from('unified_audit_logs').insert({
         event_type: eventType,
-        entity_id: metadata.entity_id || 'system',
+        entity_id: entityId,
         message,
         metadata: {
           ...metadata,
@@ -72,7 +83,7 @@ export class Logger {
       });
     } catch (error) {
       // Don't recursively log errors from logging
-      console.error(`Database logging error: ${error instanceof Error ? error.message : String(error)}`);
+      console.error(`[${this.correlationId}][logToDatabase] Error: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 }

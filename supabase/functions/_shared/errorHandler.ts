@@ -33,15 +33,25 @@ export async function logErrorToDatabase(error: ErrorDetail): Promise<string | n
   const correlationId = error.correlationId || crypto.randomUUID();
   
   try {
+    // Ensure entity_id is a valid UUID
+    let entityId: string;
+    if (error.messageId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(error.messageId)) {
+      entityId = error.messageId;
+    } else {
+      // Generate a UUID v4 if messageId is missing or invalid
+      entityId = crypto.randomUUID();
+    }
+    
     const { data, error: dbError } = await supabaseClient
       .from("unified_audit_logs")
       .insert({
         event_type: "edge_function_error",
-        entity_id: error.messageId || "unknown",
+        entity_id: entityId,
         metadata: {
           function_name: error.functionName,
           error_time: new Date().toISOString(),
           error_type: error.errorType,
+          original_entity_id: error.messageId, // Store the original ID in metadata
           ...error.metadata
         },
         error_message: error.errorMessage,

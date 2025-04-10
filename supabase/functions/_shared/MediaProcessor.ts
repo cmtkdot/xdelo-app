@@ -72,12 +72,17 @@ export interface ProcessingResult {
   mimeType: string | null;
   /** File extension */
   extension: string | null;
+  /** Content disposition for browser handling */
+  contentDisposition?: 'inline' | 'attachment';
   /** Error message if processing failed */
   error?: string;
 }
 
 /**
  * MediaProcessor class for handling Telegram media
+ * 
+ * This class provides a comprehensive set of methods for processing media files from Telegram messages.
+ * It handles downloading media from Telegram, uploading to Supabase Storage, and managing file metadata.
  */
 export class MediaProcessor {
   private supabaseClient: SupabaseClient;
@@ -87,9 +92,18 @@ export class MediaProcessor {
   /**
    * Create a new MediaProcessor instance
    * 
-   * @param supabaseClient - Initialized Supabase client
-   * @param telegramBotToken - Telegram Bot API token
-   * @param storageBucket - Name of the storage bucket (default: 'telegram-media')
+   * @param supabaseClient - Initialized Supabase client for database and storage operations
+   * @param telegramBotToken - Telegram Bot API token for authenticating download requests
+   * @param storageBucket - Name of the storage bucket where media files will be stored (default: 'telegram-media')
+   * @example
+   * ```typescript
+   * // Create a new MediaProcessor instance
+   * const mediaProcessor = new MediaProcessor(
+   *   supabaseClient,
+   *   Deno.env.get('TELEGRAM_BOT_TOKEN')!,
+   *   'telegram-media'
+   * );
+   * ```
    */
   constructor(
     supabaseClient: SupabaseClient,
@@ -104,13 +118,33 @@ export class MediaProcessor {
   /**
    * Extract media content from a Telegram message
    * 
-   * @param message - The Telegram message object
-   * @returns The media content object or undefined if no media found
+   * This method analyzes a Telegram message object and extracts media content information
+   * (photo, video, document) if present. It handles different media types and extracts
+   * relevant metadata like dimensions, file size, and MIME type.
+   * 
+   * @param message - The Telegram message object to extract media content from
+   * @returns The media content object if media is found, undefined otherwise
    * @example
+   * ```typescript
+   * // Extract media content from a Telegram message
    * const mediaContent = mediaProcessor.extractMediaContent(message);
+   * 
    * if (mediaContent) {
    *   console.log(`Found ${mediaContent.mediaType} with ID ${mediaContent.fileId}`);
+   *   console.log(`File unique ID: ${mediaContent.fileUniqueId}`);
+   *   
+   *   // Access media-specific properties
+   *   if (mediaContent.mediaType === 'photo' || mediaContent.mediaType === 'video') {
+   *     console.log(`Dimensions: ${mediaContent.width}x${mediaContent.height}`);
+   *   }
+   *   
+   *   if (mediaContent.mediaType === 'video') {
+   *     console.log(`Duration: ${mediaContent.duration} seconds`);
+   *   }
+   * } else {
+   *   console.log('No media content found in message');
    * }
+   * ```
    */
   public extractMediaContent(message: TelegramMessage): MediaContent | undefined {
     if (!message) return undefined;
@@ -159,12 +193,23 @@ export class MediaProcessor {
   /**
    * Determine if a file should be viewable in browser based on its MIME type
    * 
-   * @param mimeType - MIME type of the file
+   * This method checks if a given MIME type corresponds to a file that can be
+   * displayed inline in a browser (images, videos, PDFs, etc.) rather than
+   * requiring download. Used to set the Content-Disposition header appropriately.
+   * 
+   * @param mimeType - MIME type of the file to check
    * @returns Boolean indicating if the file should be viewable in browser
    * @example
-   * const contentDisposition = mediaProcessor.isViewableMimeType('image/jpeg') 
-   *   ? 'inline' 
+   * ```typescript
+   * // Determine if a file should be displayed inline or downloaded
+   * const mimeType = 'image/jpeg';
+   * const contentDisposition = mediaProcessor.isViewableMimeType(mimeType)
+   *   ? 'inline'
    *   : 'attachment';
+   * 
+   * console.log(`Content-Disposition for ${mimeType}: ${contentDisposition}`);
+   * // Output: "Content-Disposition for image/jpeg: inline"
+   * ```
    */
   public isViewableMimeType(mimeType: string): boolean {
     if (!mimeType) return false;
@@ -181,10 +226,19 @@ export class MediaProcessor {
   /**
    * Get file extension from MIME type with improved mapping
    * 
+   * This method takes a MIME type and returns the corresponding file extension.
+   * It uses a predefined mapping to handle common MIME types and their extensions.
+   * 
    * @param mimeType - MIME type of the file
    * @returns The file extension (without leading dot)
    * @example
-   * const extension = mediaProcessor.getExtensionFromMimeType('image/jpeg'); // 'jpeg'
+   * ```typescript
+   * // Get the file extension for a MIME type
+   * const mimeType = 'image/jpeg';
+   * const extension = mediaProcessor.getExtensionFromMimeType(mimeType);
+   * console.log(`Extension for ${mimeType}: ${extension}`);
+   * // Output: "Extension for image/jpeg: jpeg"
+   * ```
    */
   public getExtensionFromMimeType(mimeType: string): string {
     const extensionMap: Record<string, string> = {
@@ -243,48 +297,68 @@ export class MediaProcessor {
   }
   
   /**
+   * Infer MIME type from media type when not provided by Telegram
+   * 
+   * This method takes a media type and infers a reasonable MIME type
+   * when the actual MIME type is not available from Telegram.
+   * 
+   * @param mediaType - The type of media (photo, video, document)
+   * @returns The inferred MIME type
+   */
+  private inferMimeTypeFromMediaType(mediaType: string): string {
+    const mediaTypeToMimeMap: Record<string, string> = {
+      'photo': 'image/jpeg',
+      'video': 'video/mp4',
+      'document': 'application/pdf',  // Default documents to PDF rather than octet-stream
+      'audio': 'audio/mpeg',
+      'voice': 'audio/ogg',
+      'animation': 'video/mp4',
+      'sticker': 'image/webp',
+      'video_note': 'video/mp4'
+    };
+    
+    // Only return octet-stream as an absolute last resort
+    return mediaTypeToMimeMap[mediaType] || 'application/pdf';
+  }
+  
+  /**
    * Detect and standardize MIME type from Telegram data
    * 
-   * @param message - The Telegram message object
+   * This method takes a Telegram message object and attempts to detect the MIME type
+   * of the media content. It uses various methods to infer the MIME type, including
+   * checking the file extension, MIME type from the message, and defaulting to a
+   * generic type if all else fails.
+   * 
+   * @param message - The Telegram message object to detect MIME type from
    * @returns The detected MIME type
    * @example
+   * ```typescript
+   * // Detect MIME type from a Telegram message
    * const mimeType = mediaProcessor.detectMimeType(message);
    * console.log(`Detected MIME type: ${mimeType}`);
+   * ```
    */
-  public detectMimeType(message: TelegramMessage): string {
-    if (!message) return 'application/octet-stream';
+  public detectMimeType(message: TelegramMessage): string | null {
+    // Try to get MIME type from the message
+    const photo = message.photo ? message.photo[message.photo.length - 1] : null;
+    const document = message.document;
+    const video = message.video;
+    const audio = message.audio;
+    const voice = message.voice;
+    const animation = message.animation;
+    const sticker = message.sticker;
     
-    // Check for photo
-    if (message.photo && message.photo.length > 0) {
-      return 'image/jpeg'; // Telegram photos are always JPEG
-    }
+    // Get MIME type from appropriate media object
+    let mimeType = null;
     
-    // Check for video
-    if (message.video) {
-      return message.video.mime_type || 'video/mp4'; // Default to mp4 if not specified
-    }
-    
-    // Check for document
-    if (message.document) {
-      // If document has a mime_type, use it
-      if (message.document.mime_type) {
-        return message.document.mime_type;
-      }
+    if (document && document.mime_type) {
+      mimeType = document.mime_type;
       
-      // Try to infer from filename if available
-      if (message.document.file_name) {
-        const extension = message.document.file_name.split('.').pop()?.toLowerCase();
-        if (extension) {
-          // Map common extensions back to mime types
-          const extensionToMime: Record<string, string> = {
-            'jpg': 'image/jpeg',
-            'jpeg': 'image/jpeg',
-            'png': 'image/png',
-            'gif': 'image/gif',
-            'webp': 'image/webp',
-            'svg': 'image/svg+xml',
-            'mp4': 'video/mp4',
-            'webm': 'video/webm',
+      // Special handling for files with file_name - use extension to improve MIME type accuracy
+      if (document.file_name && (mimeType === 'application/octet-stream' || mimeType === 'application/zip')) {
+        const fileExtension = document.file_name.split('.').pop()?.toLowerCase();
+        if (fileExtension) {
+          const extensionMimeMap: Record<string, string> = {
             'mov': 'video/quicktime',
             'avi': 'video/x-msvideo',
             'mkv': 'video/x-matroska',
@@ -320,12 +394,22 @@ export class MediaProcessor {
   /**
    * Generate a standardized storage path for a file
    * 
-   * @param fileUniqueId - Unique identifier for the file
-   * @param mimeType - MIME type of the file
-   * @returns The storage path
+   * This method creates a consistent storage path for a file based on its unique ID and MIME type.
+   * The path follows the format: `{fileUniqueId}.{extension}` where the extension is derived
+   * from the MIME type. This ensures files are stored with consistent naming conventions.
+   * 
+   * @param fileUniqueId - Unique identifier for the file from Telegram
+   * @param mimeType - MIME type of the file used to determine the extension
+   * @returns The standardized storage path for the file
    * @example
-   * const storagePath = mediaProcessor.generateStoragePath('abc123', 'image/jpeg');
-   * // Returns: 'abc123.jpeg'
+   * ```typescript
+   * // Generate a storage path for a file
+   * const fileUniqueId = 'AgADcAUAAj-vwFc';
+   * const mimeType = 'image/jpeg';
+   * const storagePath = mediaProcessor.generateStoragePath(fileUniqueId, mimeType);
+   * console.log(`Storage path: ${storagePath}`);
+   * // Output: "Storage path: AgADcAUAAj-vwFc.jpeg"
+   * ```
    */
   public generateStoragePath(fileUniqueId: string, mimeType: string): string {
     const extension = this.getExtensionFromMimeType(mimeType);
@@ -335,13 +419,19 @@ export class MediaProcessor {
   /**
    * Check if a file already exists in the database
    * 
+   * This method checks if a file with the given unique ID exists in the database.
+   * It returns an object with a boolean indicating existence and the message data if found.
+   * 
    * @param fileUniqueId - Unique identifier for the file
    * @returns Object with exists flag and message data if found
    * @example
-   * const { exists, message } = await mediaProcessor.findExistingFile('abc123');
+   * ```typescript
+   * // Check if a file exists in the database
+   * const { exists, message } = await mediaProcessor.findExistingFile('AgADcAUAAj-vwFc');
    * if (exists) {
    *   console.log(`File already exists with ID: ${message.id}`);
    * }
+   * ```
    */
   public async findExistingFile(fileUniqueId: string): Promise<{ exists: boolean; message?: any }> {
     try {
@@ -369,11 +459,17 @@ export class MediaProcessor {
   /**
    * Check if a file exists in storage
    * 
+   * This method checks if a file with the given storage path exists in storage.
+   * It returns a boolean indicating existence.
+   * 
    * @param storagePath - Path to the file in storage
    * @returns Boolean indicating if the file exists
    * @example
-   * const exists = await mediaProcessor.verifyFileExists('abc123.jpeg');
+   * ```typescript
+   * // Check if a file exists in storage
+   * const exists = await mediaProcessor.verifyFileExists('AgADcAUAAj-vwFc.jpeg');
    * console.log(`File ${exists ? 'exists' : 'does not exist'} in storage`);
+   * ```
    */
   public async verifyFileExists(storagePath: string): Promise<boolean> {
     try {
@@ -399,20 +495,26 @@ export class MediaProcessor {
   /**
    * Download media from Telegram with improved error handling
    * 
+   * This method downloads media from Telegram using the provided file ID and unique ID.
+   * It returns a download result object with success status, blob data, and error message.
+   * 
    * @param fileId - Telegram file ID
    * @param fileUniqueId - Unique identifier for the file
    * @param mimeType - MIME type of the file
    * @param correlationId - Request correlation ID for tracing
    * @returns Download result object
    * @example
+   * ```typescript
+   * // Download media from Telegram
    * const result = await mediaProcessor.downloadMediaFromTelegram(
-   *   'abc123', 'def456', 'image/jpeg', 'corr-789'
+   *   'AgADcAUAAj-vwFc', 'AgADcAUAAj-vwFc', 'image/jpeg', 'corr-789'
    * );
    * if (result.success) {
    *   console.log(`Downloaded file: ${result.storagePath}`);
    * } else {
    *   console.error(`Download failed: ${result.error}`);
    * }
+   * ```
    */
   public async downloadMediaFromTelegram(
     fileId: string,
@@ -548,20 +650,26 @@ export class MediaProcessor {
   /**
    * Upload media to storage with improved error handling
    * 
+   * This method uploads media to storage using the provided file data and storage path.
+   * It returns an upload result object with success status, public URL, and error message.
+   * 
    * @param storagePath - Path where the file should be stored
    * @param fileData - The file data as a Blob
    * @param mimeType - MIME type of the file
    * @param correlationId - Request correlation ID for tracing
    * @returns Upload result object
    * @example
+   * ```typescript
+   * // Upload media to storage
    * const result = await mediaProcessor.uploadMediaToStorage(
-   *   'abc123.jpeg', blob, 'image/jpeg', 'corr-789'
+   *   'AgADcAUAAj-vwFc.jpeg', blob, 'image/jpeg', 'corr-789'
    * );
    * if (result.success) {
    *   console.log(`Uploaded file: ${result.publicUrl}`);
    * } else {
    *   console.error(`Upload failed: ${result.error}`);
    * }
+   * ```
    */
   public async uploadMediaToStorage(
     storagePath: string,
@@ -639,16 +747,23 @@ export class MediaProcessor {
   /**
    * Check if a file already exists in storage by its unique ID
    * 
+   * This method checks if a file with the given unique ID exists in storage.
+   * It returns an object with existence status, storage path, and public URL if found.
+   * 
    * @param fileUniqueId - The unique file ID from Telegram
    * @param extension - The file extension
    * @param correlationId - Correlation ID for logging
    * @returns Object containing existence status and file path if exists
    * @example
+   * ```typescript
+   * // Check if a file exists in storage
    * const { exists, storagePath, publicUrl } = await mediaProcessor.checkFileExistsInStorage(
-   *   'AgADBAADv6kxG-1fAUgQ8P4AAQNLrOVKiwAEgQ',
-   *   'jpeg',
-   *   correlationId
+   *   'AgADcAUAAj-vwFc', 'jpeg', 'corr-789'
    * );
+   * if (exists) {
+   *   console.log(`File exists in storage: ${storagePath}`);
+   * }
+   * ```
    */
   public async checkFileExistsInStorage(
     fileUniqueId: string,
@@ -743,11 +858,24 @@ export class MediaProcessor {
   /**
    * Gets a standardized path for a file based on its file_unique_id and extension
    * 
+   * This method creates a consistent storage path format for a file using its unique ID
+   * and extension. It ensures that all file paths follow the same convention throughout
+   * the application, making it easier to locate and manage files.
+   * 
    * @param fileUniqueId - The unique file identifier from Telegram
-   * @param extension - The file extension
-   * @returns The standardized storage path
+   * @param extension - The file extension (without leading dot)
+   * @returns The standardized storage path in the format `{fileUniqueId}.{extension}`
+   * @example
+   * ```typescript
+   * // Get a standardized path for a file
+   * const fileUniqueId = 'AgADcAUAAj-vwFc';
+   * const extension = 'jpeg';
+   * const path = mediaProcessor.getStandardizedPath(fileUniqueId, extension);
+   * console.log(`Standardized path: ${path}`);
+   * // Output: "Standardized path: AgADcAUAAj-vwFc.jpeg"
+   * ```
    */
-  getStandardizedPath(fileUniqueId: string, extension: string): string {
+  private getStandardizedPath(fileUniqueId: string, extension: string): string {
     // Ensure the extension doesn't have a leading dot
     const cleanExtension = extension.startsWith('.') ? extension.substring(1) : extension;
     return `${fileUniqueId}.${cleanExtension}`;
@@ -756,14 +884,31 @@ export class MediaProcessor {
   /**
    * Process media from a Telegram message
    * 
+   * This method processes media from a Telegram message by downloading it from Telegram,
+   * uploading it to storage, and updating the database with the file metadata.
+   * 
    * @param mediaContent - The media content to process
    * @param correlationId - Correlation ID for logging
    * @returns The processing result
    * @example
+   * ```typescript
+   * // Process media from a Telegram message
    * const result = await mediaProcessor.processMedia(mediaContent, correlationId);
    * if (result.success) {
    *   console.log(`Processed media: ${result.fileInfo.publicUrl}`);
    * }
+   * ```
+   */
+  /**
+   * Process media from Telegram and store it in Supabase storage
+   *
+   * This method extracts media content from Telegram, processes it,
+   * and stores it in Supabase storage. It handles duplicate detection,
+   * downloading, and uploading, while ensuring proper MIME type detection.
+   *
+   * @param mediaContent - Media content extracted from Telegram message
+   * @param correlationId - Request correlation ID for tracing
+   * @returns Processing result object with file details
    */
   public async processMedia(
     mediaContent: MediaContent,
@@ -773,12 +918,16 @@ export class MediaProcessor {
     console.log(`[${correlationId}][${functionName}] Processing media ${mediaContent.fileUniqueId}`);
     
     try {
+      // Detect proper MIME type from Telegram data
+      let detectedMimeType = mediaContent.mimeType || this.inferMimeTypeFromMediaType(mediaContent.mediaType);
+      
       // Determine file extension from media type or MIME type
-      let extension = 'bin';
-      if (mediaContent.mimeType) {
-        extension = this.getExtensionFromMimeType(mediaContent.mimeType);
-      } else if (mediaContent.mediaType === 'photo') {
+      let extension = this.getExtensionFromMimeType(detectedMimeType);
+      
+      // Fallback for photos without MIME type
+      if (extension === 'bin' && mediaContent.mediaType === 'photo') {
         extension = 'jpeg';
+        detectedMimeType = 'image/jpeg';
       }
       
       // Check if file already exists in storage by file_unique_id
@@ -793,9 +942,11 @@ export class MediaProcessor {
         console.log(`[${correlationId}][${functionName}] Using existing file ${existingFile.storagePath}`);
         
         // Determine content disposition based on MIME type
-        const contentDisposition = this.isViewableMimeType(mediaContent.mimeType || '')
+        const contentDisposition = this.isViewableMimeType(detectedMimeType)
           ? 'inline'
           : 'attachment';
+        
+        console.log(`[${correlationId}][${functionName}] File MIME type: ${detectedMimeType}, Content-Disposition: ${contentDisposition}`);
         
         return {
           status: 'success',
@@ -803,8 +954,9 @@ export class MediaProcessor {
           fileUniqueId: mediaContent.fileUniqueId,
           storagePath: existingFile.storagePath,
           publicUrl: existingFile.publicUrl,
-          mimeType: mediaContent.mimeType || this.getMimeTypeFromExtension(extension),
+          mimeType: detectedMimeType,  // Use the properly detected MIME type
           extension: extension,
+          contentDisposition: contentDisposition,  // Add content disposition to the result
           error: undefined
         };
       }
@@ -848,8 +1000,8 @@ export class MediaProcessor {
       
       // Upload file to storage
       const uploadResult = await this.uploadMediaToStorage(
-        downloadResult.blob,
         downloadResult.storagePath!,
+        downloadResult.blob,
         downloadResult.mimeType!,
         correlationId
       );
@@ -872,6 +1024,8 @@ export class MediaProcessor {
         ? 'inline'
         : 'attachment';
       
+      console.log(`[${correlationId}][${functionName}] File MIME type: ${downloadResult.mimeType}, Content-Disposition: ${contentDisposition}`);
+      
       return {
         status: 'success',
         fileId: mediaContent.fileId,
@@ -880,8 +1034,10 @@ export class MediaProcessor {
         publicUrl: uploadResult.publicUrl,
         mimeType: downloadResult.mimeType,
         extension: extension,
+        contentDisposition: contentDisposition,  // Add content disposition to the result
         error: undefined
       };
+      
     } catch (error) {
       console.error(`[${correlationId}][${functionName}] Exception processing media:`, error);
       return {
@@ -905,10 +1061,13 @@ export class MediaProcessor {
    * @param storageBucket - Name of the storage bucket (default: 'telegram-media')
    * @returns A new MediaProcessor instance
    * @example
+   * ```typescript
+   * // Create a new MediaProcessor instance
    * const mediaProcessor = createMediaProcessor(
    *   supabaseClient,
    *   Deno.env.get('TELEGRAM_BOT_TOKEN')
    * );
+   * ```
    */
   public static createMediaProcessor(
     supabaseClient: SupabaseClient,

@@ -10,6 +10,33 @@ import {
 } from "../_shared/mediaUtils.ts";
 import { supabaseClient as supabase } from "../_shared/cors.ts";
 
+/**
+ * Validates if a string is a valid UUID
+ * @param {string} uuid - The string to validate
+ * @returns {boolean} True if valid UUID, false otherwise
+ */
+function isValidUUID(uuid) {
+  if (!uuid) return false;
+  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  return uuidPattern.test(uuid);
+}
+
+/**
+ * Ensures an entity ID is a valid UUID, generating a new one if needed
+ * @param {string} entityId - The entity ID to validate
+ * @param {string} correlationId - Correlation ID for logging
+ * @returns {string} A valid UUID
+ */
+function ensureValidUUID(entityId, correlationId) {
+  if (isValidUUID(entityId)) {
+    return entityId;
+  }
+  
+  const newUUID = crypto.randomUUID();
+  console.log(`[${correlationId}] Generated new UUID for invalid entity_id: ${entityId || 'undefined'}`);
+  return newUUID;
+}
+
 serve(async (req) => {
   // Handle preflight CORS
   if (req.method === 'OPTIONS') {
@@ -188,6 +215,7 @@ async function repairMessages(messageIds, options, correlationId) {
     await supabase.from('unified_audit_logs').insert({
       event_type: 'media_repair_operation',
       correlation_id: correlationId,
+      entity_id: ensureValidUUID(messageIds[0], correlationId),
       metadata: {
         action: 'repair_all',
         message_count: messageIds.length,
@@ -292,6 +320,7 @@ async function fixContentDisposition(messageIds, correlationId) {
     await supabase.from('unified_audit_logs').insert({
       event_type: 'fix_content_disposition',
       correlation_id: correlationId,
+      entity_id: ensureValidUUID(messageIds[0], correlationId),
       metadata: {
         processed: messages.length,
         successful: successful.length,
@@ -414,6 +443,7 @@ async function repairStoragePaths(messageIds, correlationId) {
     await supabase.from('unified_audit_logs').insert({
       event_type: 'storage_paths_repaired',
       correlation_id: correlationId,
+      entity_id: ensureValidUUID(messageIds[0], correlationId),
       metadata: {
         messages_processed: messages?.length || 0,
         repaired_count: repairedCount
@@ -542,6 +572,7 @@ async function fixMissingMimeTypes(messageIds, correlationId) {
     await supabase.from('unified_audit_logs').insert({
       event_type: 'mime_types_fixed',
       correlation_id: correlationId,
+      entity_id: ensureValidUUID(messageIds[0], correlationId),
       metadata: {
         messages_processed: messages.length,
         fixed_count: fixedCount
@@ -591,6 +622,7 @@ async function recoverFileMetadata(messageIds, correlationId) {
     await supabase.from('unified_audit_logs').insert({
       event_type: 'file_metadata_recovered',
       correlation_id: correlationId,
+      entity_id: ensureValidUUID(messageIds[0], correlationId),
       metadata: {
         messages_processed: messageIds.length,
         recovered_count: recoveredCount
@@ -678,6 +710,7 @@ async function validateMessages(messageIds, correlationId) {
     await supabase.from('unified_audit_logs').insert({
       event_type: 'media_files_validated',
       correlation_id: correlationId,
+      entity_id: ensureValidUUID(messageIds[0], correlationId),
       metadata: {
         messages_processed: messages.length,
         issues_found: issues.length

@@ -7,9 +7,8 @@
  */
 
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
-import { TelegramMessage, ForwardInfo, Updates } from "../types.ts";
-import { ProcessingResult } from "../../_shared/MediaProcessor.ts";
 import { Database, Json } from "../../_shared/types.ts";
+import { ForwardInfo, TelegramMessage } from "../types.ts";
 import { logWithCorrelation } from "./logger.ts";
 
 /**
@@ -161,6 +160,31 @@ export interface CreateMessageParams {
  *   console.error(`Failed to create message: ${result.error}`);
  * }
  */
+/**
+ * Validates and normalizes a chat type to ensure it matches the telegram_chat_type enum
+ * 
+ * @param chatType - The chat type from Telegram
+ * @returns A valid telegram_chat_type enum value
+ */
+function validateChatType(chatType: string | undefined): 'private' | 'group' | 'supergroup' | 'channel' | 'unknown' {
+  if (!chatType) return 'unknown';
+  
+  // Check if the chat type matches one of the valid enum values
+  switch(chatType.toLowerCase()) {
+    case 'private':
+      return 'private';
+    case 'group':
+      return 'group';
+    case 'supergroup':
+      return 'supergroup';
+    case 'channel':
+      return 'channel';
+    default:
+      console.warn(`Unknown chat type: ${chatType}, falling back to 'unknown'`);
+      return 'unknown';
+  }
+}
+
 export async function createMessageRecord(
 	params: CreateMessageParams
 ): Promise<DbOperationResult<{ id: string }>> {
@@ -169,11 +193,14 @@ export async function createMessageRecord(
 	logWithCorrelation(correlationId, `Creating MEDIA message record for ${messageId} in chat ${chatId}`);
 
 	try {
+		// Validate chat type
+		const chatType = validateChatType(params.messageData?.chat?.type);
+		
 		// Prepare message record from params
 		const messageRecord: Omit<Database["public"]["Tables"]["messages"]["Insert"], "id" | "created_at" | "updated_at"> = {
 			telegram_message_id: messageId,
 			chat_id: chatId,
-			chat_type: params.messageData?.chat?.type, // Extract from messageData if possible
+			chat_type: chatType, // Use validated chat type
 			chat_title: params.messageData?.chat?.title,
 			user_id: params.userId,
 			message_date: params.messageDate.toISOString(),
@@ -246,20 +273,25 @@ export interface UpdateMessageParams {
 	messageId: number; // Telegram Message ID
 	chatId: number;
 	// Fields to update - make all optional except identifiers
-	messageDate?: Date; // Keep for potential future use?
-	editDate?: Date | null;
-	caption?: string | null; // Allow updating caption
-	mediaType?: string | null;
-	fileId?: string | null;
-	fileUniqueId?: string | null;
-	storagePath?: string | null;
-	publicUrl?: string | null;
-	mimeType?: string | null;
-	extension?: string | null;
+	messageDate?: Date;
+	editDate?: Date;
+	caption?: string | null;
+	mediaType?: string;
+	fileId?: string;
+	fileUniqueId?: string;
+	storagePath?: string;
+	publicUrl?: string;
+	mimeType?: string;
+	extension?: string;
 	messageData?: Json;
-	processingState?: ProcessingState;
+	processingState?: string;
 	processingError?: string | null;
 	captionData?: Json | null;
+	forwardInfo?: ForwardInfo | null; // Forward message information
+	isForward?: boolean;             // Flag for forwarded messages
+	isEdit?: boolean;                // Flag for edited messages
+	editHistory?: Json;              // Edit history array
+	additionalUpdates?: Record<string, any>; // Any additional custom updates
 	correlationId: string;
 }
 
@@ -312,6 +344,7 @@ export async function updateMessageRecord(
 			correlation_id: correlationId,
 		};
 
+		// Standard fields
 		if (params.messageDate) updates.message_date = params.messageDate.toISOString();
 		if (params.editDate) updates.last_edited_at = params.editDate.toISOString();
 		if (params.caption !== undefined) updates.caption = params.caption;
@@ -326,7 +359,24 @@ export async function updateMessageRecord(
 		if (params.processingState !== undefined) updates.processing_state = params.processingState;
 		if (params.processingError !== undefined) updates.processing_error = params.processingError;
 		if (params.captionData !== undefined) updates.caption_data = params.captionData;
-		// Optionally add logic to push to edit_history if needed
+		
+		// Forward message fields
+		if (params.forwardInfo !== undefined) updates.forward_info = params.forwardInfo;
+		if (params.isForward !== undefined) updates.is_forward = params.isForward;
+		
+		// Edit tracking fields
+		if (params.isEdit !== undefined) updates.is_edit = params.isEdit;
+		if (params.editHistory !== undefined) updates.edit_history = params.editHistory;
+		
+		// Additional custom updates from caller
+		if (params.additionalUpdates && typeof params.additionalUpdates === 'object') {
+			Object.entries(params.additionalUpdates).forEach(([key, value]) => {
+				// Skip updating if the value is undefined to avoid overwriting existing values
+				if (value !== undefined) {
+					(updates as any)[key] = value;
+				}
+			});
+		}
 
 		// Ensure there's something to update
 		if (Object.keys(updates).length === 0) {
@@ -604,6 +654,15 @@ export async function logProcessingEvent(
 	const functionName = 'logProcessingEvent';
 
 	try {
+		// Validate UUID format using regex
+		const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+		if (!entityId || !uuidPattern.test(entityId)) {
+			// Generate a UUID v4 (random)
+			const originalEntityId = entityId;
+			entityId = crypto.randomUUID();
+			logWithCorrelation(correlationId, `Generated new UUID for invalid entity_id: ${originalEntityId || 'undefined'}`, "warn");
+		}
+
 		// Create audit log entry
 		const { data, error } = await supabaseClient
 			.from('unified_audit_logs')
@@ -641,25 +700,33 @@ export async function logProcessingEvent(
 }
 
 /**
- * Extract forward information from a Telegram message
+ * Extracts forward information from a Telegram message and formats it according
+ * to our standardized ForwardInfo interface.
  * 
- * @param message - The Telegram message
- * @returns Forward information or undefined if not forwarded
+ * This function is used for both media and text messages to ensure
+ * consistent handling of forward information across the application.
+ * 
+ * @param message - The Telegram message containing forward data
+ * @returns A standardized ForwardInfo object or undefined if the message is not forwarded
  */
-function extractForwardInfo(message: TelegramMessage): ForwardInfo | undefined {
+export function extractForwardInfo(message: TelegramMessage): ForwardInfo | undefined {
 	if (!message) return undefined;
 
 	// Check if message is forwarded
 	if (!message.forward_date) return undefined;
 
 	const forwardInfo: ForwardInfo = {
+		// Required field (should always be present in forwarded messages)
 		date: message.forward_date,
+		
+		// Optional fields (may not be present depending on forward type)
 		fromChatId: message.forward_from_chat?.id,
 		fromChatType: message.forward_from_chat?.type,
+		fromChatTitle: message.forward_from_chat?.title,
 		fromMessageId: message.forward_from_message_id,
-		fromName: message.forward_sender_name,
 		fromUserId: message.forward_from?.id,
 		fromUserIsBot: message.forward_from?.is_bot,
+		fromName: message.forward_sender_name,
 		signature: message.forward_signature
 	};
 
@@ -668,6 +735,7 @@ function extractForwardInfo(message: TelegramMessage): ForwardInfo | undefined {
 
 /**
  * Input parameters for creating a record in the other_messages table.
+ * @deprecated Use UpsertTextMessageParams instead for consistent handling with media messages
  */
 export interface CreateOtherMessageParams {
 	supabaseClient: SupabaseClient<Database>;
@@ -680,6 +748,24 @@ export interface CreateOtherMessageParams {
 	rawMessageData: Json;
 	chatType?: string | null;
 	chatTitle?: string | null;
+	correlationId: string;
+}
+
+/**
+ * Input parameters for upserting a text message record in the other_messages table.
+ * 
+ * Note: The PostgreSQL function extracts certain fields (like message_date, chat_type,
+ * and chat_title) directly from the messageData, so we don't need to provide these separately.
+ */
+export interface UpsertTextMessageParams {
+	supabaseClient: SupabaseClient<Database>;
+	messageId: number;
+	chatId: number;
+	messageText: string | null;
+	messageData: Json; // Stored as telegram_data in PostgreSQL
+	chatType?: string | null;
+	chatTitle?: string | null;
+	forwardInfo?: ForwardInfo | null;
 	correlationId: string;
 }
 
@@ -769,7 +855,77 @@ export async function createOtherMessageRecord(
 }
 
 /**
- * Input parameters for upserting a media message record.
+ * Upsert a text message record in the other_messages table using the database function.
+ * This handles duplicates by updating the existing record if a message with the same
+ * telegram_message_id and chat_id already exists.
+ *
+ * @param params - The input parameters for the text message
+ * @returns Operation result with the upserted message ID
+ * @example
+ * const result = await upsertTextMessageRecord({
+ *   supabaseClient,
+ *   messageId: 123,
+ *   chatId: 456,
+ *   messageText: 'Hello world',
+ *   messageData: { ... }, // The complete Telegram message
+ *   chatType: 'private',
+ *   correlationId: 'xyz',
+ * });
+ * 
+ * if (result.success) {
+ *   console.log(`Text message upserted with ID: ${result.data.id}`);
+ * } else {
+ *   console.error(`Failed to upsert text message: ${result.error}`);
+ * }
+ */
+export async function upsertTextMessageRecord(
+	params: UpsertTextMessageParams
+): Promise<DbOperationResult<{ id: string }>> {
+	const functionName = "upsertTextMessageRecord";
+	const { correlationId, messageId, chatId, supabaseClient } = params;
+	logWithCorrelation(correlationId, `Upserting text message record for ${messageId} in chat ${chatId}`);
+
+	try {
+		// Create parameter object for the RPC call
+		const paramObject = {
+			p_telegram_message_id: messageId,
+			p_chat_id: chatId,
+			p_message_data: params.messageData,
+			p_message_text: params.messageText,
+			p_chat_type: params.chatType,
+			p_chat_title: params.chatTitle,
+			p_forward_info: params.forwardInfo,
+			p_correlation_id: correlationId
+		};
+
+		// Call the RPC function
+		const { data, error } = await supabaseClient
+			.rpc('upsert_text_message', paramObject)
+			.single();
+
+		if (error) {
+			logWithCorrelation(correlationId, `Failed to upsert text message: ${error.message}`, "error", { code: error.code });
+			return { success: false, error: error.message, errorCode: error.code };
+		}
+
+		logWithCorrelation(correlationId, `Successfully upserted text message with ID: ${data}`);
+		return { success: true, data: { id: data } };
+
+	} catch (err) {
+		const errorMessage = err instanceof Error ? err.message : String(err);
+		logWithCorrelation(correlationId, `Exception upserting text message: ${errorMessage}`, "error");
+		return {
+			success: false,
+			error: errorMessage,
+		};
+	}
+}
+
+/**
+ * Input parameters for upserting a media message record in the messages table.
+ * 
+ * Note: The PostgreSQL function extracts certain fields (like message_date, chat_type,
+ * and chat_title) directly from the messageData, so we don't need to provide these separately.
  */
 export interface UpsertMediaMessageParams {
   /** Initialized Supabase client */
@@ -778,17 +934,13 @@ export interface UpsertMediaMessageParams {
   messageId: number;
   /** Chat ID where the message was sent */
   chatId: number;
-  /** User ID who sent the message (optional) */
-  userId?: number;
-  /** Date when the message was sent */
-  messageDate: Date;
   /** Caption text for media (optional) */
   caption?: string | null;
   /** Type of media (photo, video, document, etc.) */
   mediaType?: string | null;
   /** Telegram file ID for downloading */
   fileId?: string | null;
-  /** Unique file identifier from Telegram */
+  /** Unique file identifier from Telegram - used as unique constraint */
   fileUniqueId?: string | null;
   /** Storage path where the file is saved */
   storagePath?: string | null;
@@ -854,8 +1006,9 @@ export async function upsertMediaMessageRecord(
   logWithCorrelation(correlationId, `Upserting media message record for ${messageId} in chat ${chatId}`);
 
   try {
-    // Call the database function to handle the upsert
-    const { data, error } = await supabaseClient.rpc('upsert_media_message', {
+    // Prepare parameters for the database function call
+    // Handle schema flexibility by using a parameter object
+    const rpcParams: Record<string, any> = {
       p_telegram_message_id: messageId,
       p_chat_id: chatId,
       p_file_unique_id: params.fileUniqueId,
@@ -869,12 +1022,15 @@ export async function upsertMediaMessageRecord(
       p_processing_state: params.processingState,
       p_message_data: params.messageData,
       p_correlation_id: correlationId,
-      p_user_id: params.userId,
+      // p_user_id removed as it's not used in PostgreSQL function
       p_media_group_id: params.mediaGroupId,
       p_forward_info: params.forwardInfo as Json | null,
       p_processing_error: params.processingError,
       p_caption_data: params.captionData as Json | null
-    });
+    };
+    
+    // Call the database function to handle the upsert
+    const { data, error } = await supabaseClient.rpc('upsert_media_message', rpcParams);
 
     if (error) {
       logWithCorrelation(correlationId, `Error upserting media message: ${error.message}`, 'ERROR');
@@ -886,15 +1042,15 @@ export async function upsertMediaMessageRecord(
     }
 
     // The function returns the message ID
-    const messageId = data;
+    const dbMessageId = data;
     
-    logWithCorrelation(correlationId, `Successfully upserted media message with ID: ${messageId}`);
+    logWithCorrelation(correlationId, `Successfully upserted media message with ID: ${dbMessageId}`);
     
     // Log the event
     await logProcessingEvent(
       supabaseClient,
       'media_message_upserted',
-      messageId,
+      dbMessageId,
       correlationId,
       {
         telegram_message_id: params.messageId,
@@ -906,7 +1062,7 @@ export async function upsertMediaMessageRecord(
 
     return {
       success: true,
-      data: { id: messageId }
+      data: { id: dbMessageId }
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);

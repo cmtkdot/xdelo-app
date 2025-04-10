@@ -23,7 +23,8 @@ import {
     upsertMediaMessageRecord,
     triggerCaptionParsing,
     findMessagesByMediaGroupId,
-    syncMediaGroupCaptions
+    syncMediaGroupCaptions,
+    extractForwardInfo
 } from '../utils/dbOperations.ts';
 import { 
     extractMediaContent, 
@@ -202,89 +203,116 @@ async function handleNewMessage(
       }
     }
 
-    // Use the upsert function to handle duplicate file_unique_id
-    const dbResult = await upsertMediaMessageRecord({
-      supabaseClient,
-      messageId: message.message_id,
-      chatId: message.chat.id,
-      userId: message.from?.id,
-      messageDate: new Date(message.date * 1000),
-      caption: message.caption || null,
-      mediaType: mediaContent.mediaType,
-      fileId: processingResult.fileId,
-      fileUniqueId: processingResult.fileUniqueId,
-      storagePath: processingResult.storagePath,
-      publicUrl: processingResult.publicUrl,
-      mimeType: processingResult.mimeType,
-      extension: processingResult.extension,
-      messageData: message as unknown as Json,
-      processingState: processingState,
-      processingError: processingResult.error || null,
-      forwardInfo: message.forward_date ? { 
-        date: message.forward_date,
-        fromChatId: message.forward_from_chat?.id,
-        fromChatType: message.forward_from_chat?.type,
-        fromMessageId: message.forward_from_message_id,
-        fromChatTitle: message.forward_from_chat?.title,
-        fromSenderName: message.forward_sender_name,
-        fromSignature: message.forward_signature
-      } : null,
-      mediaGroupId: message.media_group_id || null,
-      captionData: captionData,
-      correlationId
-    });
+    // Define dbResult outside the inner try block to fix the variable scope issue
+    let dbResult: any = { success: false, error: 'Not initialized' };
 
-    if (!dbResult.success) {
-      logWithCorrelation(correlationId, `Failed to create message: ${dbResult.error}`, 'ERROR', functionName);
+    // Use the upsert function to handle duplicate file_unique_id
+    // PostgreSQL function extracts message_date, chat_type, chat_title from message data
+    try {
+      // Use extractForwardInfo for consistent handling of forward data
+      const forwardInfo = message.forward_date ? extractForwardInfo(message) : null;
+      const isForwarded = !!message.forward_date;
+
+      dbResult = await upsertMediaMessageRecord({
+        supabaseClient,
+        messageId: message.message_id,
+        chatId: message.chat.id,
+        caption: message.caption || null,
+        mediaType: mediaContent.mediaType,
+        fileId: processingResult.fileId,
+        fileUniqueId: processingResult.fileUniqueId,
+        storagePath: processingResult.storagePath,
+        publicUrl: processingResult.publicUrl,
+        mimeType: processingResult.mimeType,
+        extension: processingResult.extension,
+        messageData: message as unknown as Json,  // Use messageData to match PostgreSQL parameter
+        processingState: processingState,         // Ensure this matches the enum in PostgreSQL
+        processingError: processingResult.error || null,
+        forwardInfo: forwardInfo,                 // Use standardized forward info
+        mediaGroupId: message.media_group_id || null,
+        captionData: captionData,
+        correlationId
+      });
+      
+      if (!dbResult.success) {
+        logWithCorrelation(correlationId, `Failed to create message: ${dbResult.error}`, 'ERROR', functionName);
+        
+        // Log the error
+        await logProcessingEvent(
+          supabaseClient,
+          'media_message_creation_failed',
+          crypto.randomUUID(), 
+          correlationId,
+          {
+            message_id: message.message_id,
+            chat_id: message.chat.id,
+            media_group_id: message.media_group_id,
+            error_type: typeof dbResult.error,
+            error_keys: Object.keys(dbResult.error || {})
+          },
+          dbResult.error
+        );
+        
+        return createErrorResponse(
+          `Failed to create message: ${dbResult.error}`,
+          functionName,
+          500,
+          correlationId,
+          { messageId: message.message_id, chatId: message.chat.id }
+        );
+      }
+
+      // If caption has changed, trigger the caption parser
+      if (captionChanged && message.caption) {
+        logWithCorrelation(correlationId, `Caption changed, triggering parser for message ${dbResult.data.id}`, 'INFO', functionName);
+        
+        // Trigger caption parsing asynchronously
+        triggerCaptionParsing({
+          supabaseClient,
+          messageId: dbResult.data.id,
+          correlationId
+        }).catch(error => {
+          logWithCorrelation(correlationId, `Error triggering caption parser: ${error instanceof Error ? error.message : String(error)}`, 'ERROR', functionName);
+        });
+      }
+
+    } catch (dbError) {
+      // Handle schema mismatch errors gracefully
+      const errorMsg = dbError instanceof Error ? dbError.message : String(dbError);
+      logWithCorrelation(correlationId, `Database schema error: ${errorMsg}`, 'ERROR', functionName);
       
       // Log the error
       await logProcessingEvent(
         supabaseClient,
-        'media_message_creation_failed',
-        'N/A',
+        'media_message_db_schema_error',
+        crypto.randomUUID(),
         correlationId,
         {
           message_id: message.message_id,
           chat_id: message.chat.id,
-          media_group_id: message.media_group_id,
-          error_type: typeof dbResult.error,
-          error_keys: Object.keys(dbResult.error || {})
-        },
-        dbResult.error
+          error_type: dbError instanceof Error ? dbError.name : 'Unknown',
+          error_details: errorMsg
+        }
       );
       
       return createErrorResponse(
-        `Failed to create message: ${dbResult.error}`,
+        `Database schema error: ${errorMsg}`,
         functionName,
         500,
         correlationId,
         { messageId: message.message_id, chatId: message.chat.id }
       );
     }
-
-    // If caption has changed, trigger the caption parser
-    if (captionChanged && message.caption) {
-      logWithCorrelation(correlationId, `Caption changed, triggering parser for message ${dbResult.data.id}`, 'INFO', functionName);
-      
-      // Trigger caption parsing asynchronously
-      triggerCaptionParsing({
-        supabaseClient,
-        messageId: dbResult.data.id,
-        correlationId
-      }).catch(error => {
-        logWithCorrelation(correlationId, `Error triggering caption parser: ${error instanceof Error ? error.message : String(error)}`, 'ERROR', functionName);
-      });
-    }
-
+    
     // Log success
     logWithCorrelation(correlationId, `Successfully processed message ${message.message_id}`, 'INFO', functionName);
     
-    // Return success response
+    // Return success response with proper null/undefined checking
     return new Response(
       JSON.stringify({
         success: true,
         message: "Message processed successfully",
-        messageId: dbResult.data.id,
+        messageId: dbResult?.data?.id || 'unknown',
         processingTime: Date.now() - new Date(message.date * 1000).getTime(),
         captionChanged,
         correlationId
@@ -300,7 +328,7 @@ async function handleNewMessage(
     await logProcessingEvent(
       supabaseClient,
       'media_message_processing_error',
-      'N/A',
+      crypto.randomUUID(), // Generate a valid UUID instead of using 'N/A'
       correlationId,
       {
         message_id: message.message_id,
@@ -383,7 +411,16 @@ async function handleEditedMessage(
       edit_history: editHistory,
       last_edited_at: new Date(message.edit_date * 1000).toISOString(),
       correlation_id: correlationId,
+      message_data: message, // Update the complete message data
+      is_edit: true          // Flag as edited message
     };
+    
+    // Update forward info if this is a forwarded message
+    const forwardInfo = message.forward_date ? extractForwardInfo(message) : null;
+    if (forwardInfo) {
+      updates.forward_info = forwardInfo;
+      updates.is_forward = true;
+    }
     
     // If media has changed, process the new media
     if (hasNewMedia) {
@@ -434,7 +471,8 @@ async function handleEditedMessage(
         extension: updates.extension
       } : null,
       captionData,
-      correlationId
+      correlationId,
+      updates // Pass all updates to ensure forward_info and other fields are properly updated
     );
     
     if (!updateResult) {
@@ -502,7 +540,7 @@ async function handleEditedMessage(
     await logProcessingEvent(
       supabaseClient,
       'edited_media_message_processing_error',
-      existingMessage?.id || 'N/A',
+      crypto.randomUUID(), // Generate a valid UUID instead of using 'N/A'
       correlationId,
       {
         message_id: message.message_id,
@@ -522,22 +560,29 @@ async function handleEditedMessage(
 }
 
 /**
- * Map a processing status to a database processing state
+ * Maps a processing status from MediaProcessor to a database processing_state
+ * using the values defined in the PostgreSQL processing_state_type enum.
  * 
- * @param status - The processing status from the MediaProcessor
- * @returns The corresponding database processing state
+ * @param status - The processing status from MediaProcessor
+ * @returns The corresponding database processing state value
  */
 function mapStatusToProcessingState(status: string): string {
-  switch (status) {
+  // Map media processor status to database processing state enum values
+  // The enum in PostgreSQL is: {initialized, pending, processing, completed, error, processed}
+  switch (status.toLowerCase()) {
     case 'success':
-      return 'processed';
-    case 'duplicate':
-      return 'duplicate';
-    case 'download_failed_forwarded':
-      return 'download_failed_forwarded';
+      return 'completed';
     case 'error':
       return 'error';
+    case 'processing':
+      return 'processing';
+    case 'pending':
+      return 'pending';
+    case 'initialized':
+      return 'initialized';
+    case 'processed':
+      return 'processed';
     default:
-      return 'error';
+      return 'pending'; // Default to pending for unknown statuses
   }
 }

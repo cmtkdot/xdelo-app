@@ -32,20 +32,41 @@ export interface MessageInput {
   text?: string;
 }
 
+/**
+ * Standardized structure for forwarded message information.
+ * 
+ * This interface is used by both media and text messages to
+ * ensure consistent handling of forwarded content.
+ * 
+ * In PostgreSQL, this is stored as a JSONB object in the forward_info field.
+ */
 export interface ForwardInfo {
-  is_forwarded?: boolean;
-  from_chat_id?: number;
-  from_message_id?: number;
-  from_chat_title?: string;
-  forward_date?: string;
-  forward_origin_type?: string;
-  forward_from_chat_id?: number;
-  forward_from_chat_title?: string;
-  forward_from_chat_type?: string;
-  forward_from_message_id?: number;
-  original_chat_id?: number;
-  original_chat_title?: string;
-  original_message_id?: number;
+  /** Timestamp when the message was forwarded */
+  date: number;
+  
+  /** ID of the chat the message was forwarded from */
+  fromChatId?: number;
+  
+  /** Type of the chat the message was forwarded from (private, group, channel, etc.) */
+  fromChatType?: string;
+  
+  /** Title of the chat the message was forwarded from */
+  fromChatTitle?: string;
+  
+  /** ID of the original message in the source chat */
+  fromMessageId?: number;
+  
+  /** ID of the user who sent the original message */
+  fromUserId?: number;
+  
+  /** Whether the original sender is a bot */
+  fromUserIsBot?: boolean;
+  
+  /** Sender name for messages forwarded from users who disallow adding a link to their account */
+  fromName?: string;
+  
+  /** For messages forwarded from channels, signature of the post author */
+  signature?: string;
 }
 
 /**

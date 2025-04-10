@@ -3,20 +3,22 @@
 // Shared Imports
 import { createCorsResponse, supabaseClient } from "../../_shared/cors.ts";
 import { constructTelegramMessageUrl } from "../../_shared/messageUtils.ts";
-// Removed: import { logAuditEvent } from "../../_shared/dbUtils.ts";
 // Local Imports
-import { MessageContext, TelegramMessage, MessageRecord } from '../types.ts';
+import { MessageContext, TelegramMessage } from '../types.ts';
 // Import the specific DB operations needed
 import {
-  createMessageRecord, // Assuming this is the function to create a record
-  logProcessingEvent,       // Assuming logAuditEvent is now here
+  upsertTextMessageRecord,
+  extractForwardInfo,
+  logProcessingEvent,
+  createErrorResponse,
+  logWithCorrelation,
   DbOperationResult
 } from '../utils/dbOperations.ts';
 
 /**
  * Handles new non-media (text) messages from Telegram.
  * Assumes edited messages are routed to handleEditedMessage.
- * Inserts a new record into the 'messages' table using utility functions.
+ * Inserts a new record into the other_messages table using the upsert_text_message PostgreSQL function.
  */
 export async function handleOtherMessage(
   message: TelegramMessage,
@@ -26,115 +28,159 @@ export async function handleOtherMessage(
   const functionName = 'handleOtherMessage';
   let dbMessageId: string | undefined = undefined;
 
-  console.log(`[${correlationId}][${functionName}] Processing text message ${message.message_id}`);
+  logWithCorrelation(correlationId, `Processing text message ${message.message_id}`, 'INFO', functionName);
 
   try {
     // Basic Validation
-    if (!message || !message.chat || !message.message_id || !message.text || !message.date) {
-      throw new Error(`Invalid text message structure: Missing required fields`);
+    if (!message || !message.chat || !message.message_id || !message.date) {
+      const errorMessage = `Invalid text message structure: Missing required fields`;
+      logWithCorrelation(correlationId, errorMessage, 'ERROR', functionName);
+      return createErrorResponse(errorMessage, functionName, 400, correlationId, {
+        messageId: message?.message_id,
+        chatId: message?.chat?.id
+      });
     }
 
-    // Prepare data for insertion using MessageRecord type
-    const messageRecord: Partial<MessageRecord> = {
-      telegram_message_id: message.message_id,
-      chat_id: message.chat.id,
-      user_id: message.from?.id,
-      username: message.from?.username,
-      first_name: message.from?.first_name,
-      last_name: message.from?.last_name,
-      message_type: 'text', // Explicitly set for text messages
-      text_content: message.text,
-      // caption: null, // Explicitly null for text
-      // analyzed_content: null, // Will be set by analysis later
-      message_timestamp: new Date(message.date * 1000).toISOString(),
-      // last_edited_at: null,
-      // edit_history: [],
-      // edit_count: 0,
-      // file_id: null,
-      // file_unique_id: null,
-      // file_size: null,
-      // mime_type: null,
-      // storage_path: null,
-      // public_url: null,
-      // dimensions: null,
-      // duration: null,
-      media_group_id: message.media_group_id,
-      processing_state: 'pending_analysis', // Text messages usually need analysis
-      retry_count: 0,
-      // error_message: null,
-      // last_error_at: null,
-      telegram_data: message, // Store raw message data
-      message_url: constructTelegramMessageUrl(message),
-      correlation_id: correlationId,
-    };
-
-    // --- Insert the Message Record using Utility Function ---
-    console.log(`[${correlationId}][${functionName}] Attempting to create message record for tg_msg_id: ${message.message_id}`);
-    const createResult = await createMessageRecord(
+    // Extract forward information if this is a forwarded message
+    const forwardInfo = extractForwardInfo(message);
+    const isForwarded = !!forwardInfo;
+    
+    // Log forwarded message details if applicable
+    if (isForwarded) {
+      logWithCorrelation(
+        correlationId, 
+        `Processing forwarded message from ${forwardInfo?.fromChatId || 'unknown source'} (original msg ID: ${forwardInfo?.fromMessageId || 'unknown'})`, 
+        'INFO', 
+        functionName
+      );
+    }
+    
+    // Use our new upsertTextMessageRecord function
+    logWithCorrelation(correlationId, `Upserting text message record for telegram_message_id: ${message.message_id}`, 'INFO', functionName);
+    const upsertResult = await upsertTextMessageRecord({
       supabaseClient,
-      messageRecord,
+      messageId: message.message_id,
+      chatId: message.chat.id,
+      messageText: message.text,
+      messageData: message, // Store as telegram_data in PostgreSQL
+      chatType: message.chat.type,
+      chatTitle: message.chat.title,
+      forwardInfo: forwardInfo,
       correlationId
-    );
+    });
 
-    // --- Handle Insertion Result ---    
-    if (!createResult.success || !createResult.data || createResult.data.length === 0) {
-      console.error(`[${correlationId}][${functionName}] Failed to insert text message:`, createResult.error);
+    // Handle upsert result
+    if (!upsertResult.success) {
+      logWithCorrelation(correlationId, `Failed to upsert text message: ${upsertResult.error}`, 'ERROR', functionName);
       await logProcessingEvent(
-          "db_insert_text_failed", null, correlationId,
-          { function: functionName, telegram_message_id: message.message_id, chat_id: message.chat.id },
-          createResult.error ?? 'Unknown DB error during insert'
+        "db_upsert_text_failed", 
+        null, 
+        correlationId,
+        { 
+          function: functionName, 
+          telegram_message_id: message.message_id, 
+          chat_id: message.chat.id 
+        },
+        upsertResult.error ?? 'Unknown DB error during upsert'
       );
-      // Original logic returned 200 even on DB failure, maintaining that for now
-      return createCorsResponse(
-        { success: false, error: `DB error inserting text message: ${createResult.error}`, correlationId },
-        { status: 200 }
+      
+      return createErrorResponse(
+        `DB error upserting text message: ${upsertResult.error}`, 
+        functionName, 
+        500, 
+        correlationId, 
+        {
+          messageId: message.message_id,
+          chatId: message.chat.id
+        }
       );
     }
 
-    // Assuming createResult.data[0] contains the inserted record with its ID
-    // Adjust based on the actual return type of createMessageRecord
-    dbMessageId = createResult.data[0]?.id; 
+    // Get the message ID from the result
+    dbMessageId = upsertResult.data?.id;
     if (!dbMessageId) {
-        console.error(`[${correlationId}][${functionName}] Insert succeeded but no ID returned.`);
-         await logProcessingEvent(
-          "db_insert_text_no_id", null, correlationId,
-          { function: functionName, telegram_message_id: message.message_id, chat_id: message.chat.id },
-          'Insert reported success but returned no record ID'
-        );
-        // Treat as failure if ID is missing
-        return createCorsResponse(
-            { success: false, error: 'DB insert succeeded but failed to return ID', correlationId },
-            { status: 200 } // Still 200 as per original pattern
-        );
+      logWithCorrelation(correlationId, `Upsert succeeded but no ID returned`, 'ERROR', functionName);
+      await logProcessingEvent(
+        "db_upsert_text_no_id", 
+        null, 
+        correlationId,
+        { 
+          function: functionName, 
+          telegram_message_id: message.message_id, 
+          chat_id: message.chat.id 
+        },
+        'Upsert reported success but returned no record ID'
+      );
+      
+      return createErrorResponse(
+        `DB upsert succeeded but failed to return ID`, 
+        functionName, 
+        500, 
+        correlationId, 
+        {
+          messageId: message.message_id,
+          chatId: message.chat.id
+        }
+      );
     }
 
-    console.log(`[${correlationId}][${functionName}] Successfully inserted text message, DB ID: ${dbMessageId}`);
+    logWithCorrelation(correlationId, `Successfully upserted text message, DB ID: ${dbMessageId}`, 'INFO', functionName);
     await logProcessingEvent(
-      "text_message_received", dbMessageId, correlationId,
-      { function: functionName, telegram_message_id: message.message_id, chat_id: message.chat.id },
+      isForwarded ? "forwarded_text_message_received" : "text_message_received", 
+      dbMessageId, 
+      correlationId,
+      { 
+        is_forwarded: isForwarded,
+        forward_source: isForwarded ? forwardInfo?.fromChatId : null,
+        function: functionName, 
+        telegram_message_id: message.message_id, 
+        chat_id: message.chat.id,
+        is_forward: !!message.forward_date
+      },
       null // No specific message needed for success
     );
 
-    // TODO: Trigger downstream processing if needed (e.g., NLP analysis)
-    
-    // Final success response
-    return createCorsResponse(
-      { success: true, operation: 'created', messageId: dbMessageId, correlationId },
-      { status: 200 }
+    // Return success response
+    return new Response(
+      JSON.stringify({
+        success: true, 
+        operation: 'upserted', 
+        messageId: dbMessageId, 
+        correlationId
+      }),
+      { 
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      }
     );
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error(`[${correlationId}][${functionName}] Exception processing text message:`, errorMessage);
+    logWithCorrelation(correlationId, `Exception processing text message: ${errorMessage}`, 'ERROR', functionName);
+    
     await logProcessingEvent(
-        "text_handler_exception", dbMessageId, correlationId, // Use dbMessageId if available
-        { function: functionName, telegram_message_id: message?.message_id, chat_id: message?.chat?.id },
-        errorMessage
+      "text_handler_exception", 
+      dbMessageId, 
+      correlationId,
+      { 
+        function: functionName, 
+        telegram_message_id: message?.message_id, 
+        chat_id: message?.chat?.id 
+      },
+      errorMessage
     );
-    // Consistent error response (though original had 200, 500 seems more appropriate for exceptions)
-    return createCorsResponse(
-      { success: false, error: errorMessage, correlationId },
-      { status: 500 }
+    
+    return createErrorResponse(
+      `Exception processing text message: ${errorMessage}`,
+      functionName,
+      500,
+      correlationId,
+      {
+        messageId: message?.message_id,
+        chatId: message?.chat?.id
+      }
     );
   }
 }

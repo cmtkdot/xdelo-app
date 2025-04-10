@@ -82,15 +82,20 @@ async function handleMediaGroupSync(req: Request): Promise<Response> {
     }
     
     // 4. Log the sync event
+    // Validate UUID format using regex
+    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const entityId = uuidPattern.test(mediaGroupId) ? mediaGroupId : crypto.randomUUID();
+    
     await supabaseClient.from('unified_audit_logs').insert({
       event_type: 'media_group_content_synced',
-      entity_id: mediaGroupId,
+      entity_id: entityId,
       metadata: {
         source_message_id: sourceMessageId,
         target_message_ids: updates,
         correlation_id: correlationId,
         timestamp: new Date().toISOString(),
-        sync_edit_history: syncEditHistory
+        sync_edit_history: syncEditHistory,
+        original_media_group_id: mediaGroupId // Store the original media group ID in metadata
       }
     });
     
