@@ -241,36 +241,27 @@ export class MediaProcessor {
    * ```
    */
   public getExtensionFromMimeType(mimeType: string): string {
-    const extensionMap: Record<string, string> = {
-      // Images
-      'image/jpeg': 'jpeg', // Changed from 'jpg' to 'jpeg'
-      'image/jpg': 'jpg',
-      'image/png': 'png',
-      'image/gif': 'gif',
-      'image/webp': 'webp',
-      'image/svg+xml': 'svg',
-      'image/avif': 'avif',
-      'image/bmp': 'bmp',
-      'image/tiff': 'tiff',
-      
-      // Videos
-      'video/mp4': 'mp4',
-      'video/webm': 'webm',
-      'video/quicktime': 'mov',
-      'video/x-msvideo': 'avi',
-      'video/x-matroska': 'mkv',
-      'video/ogg': 'ogv',
-      'video/mpeg': 'mpg',
-      
-      // Audio
-      'audio/mpeg': 'mp3',
-      'audio/ogg': 'ogg',
-      'audio/webm': 'weba',
-      'audio/wav': 'wav',
-      'audio/aac': 'aac',
-      'audio/flac': 'flac',
-      
-      // Documents
+    if (!mimeType) return 'bin';
+    
+    // Common MIME type patterns
+    if (mimeType.startsWith('image/jpeg') || mimeType === 'image/jpg') return 'jpeg';
+    if (mimeType.startsWith('image/')) return mimeType.substring(6);
+    if (mimeType.startsWith('video/')) {
+      const subtype = mimeType.substring(6);
+      if (subtype === 'quicktime') return 'mov';
+      if (subtype === 'x-msvideo') return 'avi';
+      if (subtype === 'x-matroska') return 'mkv';
+      if (subtype === 'ogg') return 'ogv';
+      return subtype;
+    }
+    if (mimeType.startsWith('audio/')) {
+      const subtype = mimeType.substring(6);
+      if (subtype === 'webm') return 'weba';
+      return subtype;
+    }
+    
+    // Full mapping for special cases
+    const mimeToExtensionMap: Record<string, string> = {
       'application/pdf': 'pdf',
       'application/msword': 'doc',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
@@ -293,7 +284,7 @@ export class MediaProcessor {
       'application/octet-stream': 'bin'
     };
     
-    return extensionMap[mimeType] || 'bin';
+    return mimeToExtensionMap[mimeType] || 'bin';
   }
   
   /**
@@ -306,6 +297,8 @@ export class MediaProcessor {
    * @returns The inferred MIME type
    */
   private inferMimeTypeFromMediaType(mediaType: string): string {
+    if (!mediaType) return 'application/pdf';
+    
     const mediaTypeToMimeMap: Record<string, string> = {
       'photo': 'image/jpeg',
       'video': 'video/mp4',
@@ -321,6 +314,73 @@ export class MediaProcessor {
     return mediaTypeToMimeMap[mediaType] || 'application/pdf';
   }
   
+  /**
+   * Get MIME type from file extension
+   * 
+   * This method maps a file extension to its corresponding MIME type
+   * using a comprehensive mapping table.
+   * 
+   * @param extension - File extension (without leading dot)
+   * @returns The corresponding MIME type or null if not found
+   * @private
+   */
+  private getMimeTypeFromExtension(extension: string): string | null {
+    if (!extension) return null;
+    
+    const extensionToMimeMap: Record<string, string> = {
+      // Images
+      'jpg': 'image/jpeg',
+      'jpeg': 'image/jpeg',
+      'png': 'image/png',
+      'gif': 'image/gif',
+      'webp': 'image/webp',
+      'svg': 'image/svg+xml',
+      'avif': 'image/avif',
+      'bmp': 'image/bmp',
+      'tiff': 'image/tiff',
+      
+      // Videos
+      'mp4': 'video/mp4',
+      'webm': 'video/webm',
+      'mov': 'video/quicktime',
+      'avi': 'video/x-msvideo',
+      'mkv': 'video/x-matroska',
+      'ogv': 'video/ogg',
+      'mpg': 'video/mpeg',
+      
+      // Audio
+      'mp3': 'audio/mpeg',
+      'ogg': 'audio/ogg',
+      'weba': 'audio/webm',
+      'wav': 'audio/wav',
+      'aac': 'audio/aac',
+      'flac': 'audio/flac',
+      
+      // Documents
+      'pdf': 'application/pdf',
+      'doc': 'application/msword',
+      'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'xls': 'application/vnd.ms-excel',
+      'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'ppt': 'application/vnd.ms-powerpoint',
+      'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'zip': 'application/zip',
+      'rar': 'application/x-rar-compressed',
+      '7z': 'application/x-7z-compressed',
+      'tar': 'application/x-tar',
+      'gz': 'application/gzip',
+      'bz2': 'application/x-bzip2',
+      'txt': 'text/plain',
+      'html': 'text/html',
+      'css': 'text/css',
+      'js': 'text/javascript',
+      'json': 'application/json',
+      'xml': 'application/xml'
+    };
+    
+    return extensionToMimeMap[extension.toLowerCase()] || null;
+  }
+
   /**
    * Detect and standardize MIME type from Telegram data
    * 
@@ -338,7 +398,7 @@ export class MediaProcessor {
    * console.log(`Detected MIME type: ${mimeType}`);
    * ```
    */
-  public detectMimeType(message: TelegramMessage): string | null {
+  public detectMimeType(message: TelegramMessage): string {
     // Try to get MIME type from the message
     const photo = message.photo ? message.photo[message.photo.length - 1] : null;
     const document = message.document;
@@ -349,46 +409,71 @@ export class MediaProcessor {
     const sticker = message.sticker;
     
     // Get MIME type from appropriate media object
-    let mimeType = null;
+    let mimeType: string | null = null;
     
+    // First try to get explicit MIME type from Telegram objects
     if (document && document.mime_type) {
       mimeType = document.mime_type;
       
-      // Special handling for files with file_name - use extension to improve MIME type accuracy
+      // Special handling for files with file_name when MIME type is generic
       if (document.file_name && (mimeType === 'application/octet-stream' || mimeType === 'application/zip')) {
         const fileExtension = document.file_name.split('.').pop()?.toLowerCase();
         if (fileExtension) {
-          const extensionMimeMap: Record<string, string> = {
-            'mov': 'video/quicktime',
-            'avi': 'video/x-msvideo',
-            'mkv': 'video/x-matroska',
-            'mp3': 'audio/mpeg',
-            'ogg': 'audio/ogg',
-            'wav': 'audio/wav',
-            'pdf': 'application/pdf',
-            'doc': 'application/msword',
-            'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            'xls': 'application/vnd.ms-excel',
-            'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            'zip': 'application/zip',
-            'rar': 'application/x-rar-compressed',
-            'txt': 'text/plain',
-            'html': 'text/html',
-            'css': 'text/css',
-            'js': 'text/javascript',
-            'json': 'application/json',
-            'xml': 'application/xml'
-          };
-          
-          if (extensionToMime[extension]) {
-            return extensionToMime[extension];
+          const extensionMimeType = this.getMimeTypeFromExtension(fileExtension);
+          if (extensionMimeType) {
+            return extensionMimeType;
           }
         }
       }
+    } else if (video && video.mime_type) {
+      mimeType = video.mime_type;
+    } else if (audio && audio.mime_type) {
+      mimeType = audio.mime_type;
+    } else if (voice && voice.mime_type) {
+      mimeType = voice.mime_type;
+    } else if (animation && animation.mime_type) {
+      mimeType = animation.mime_type;
+    } else if (sticker && sticker.mime_type) {
+      mimeType = sticker.mime_type;
+    } else if (photo) {
+      // Photos typically don't include mime_type in Telegram API response
+      mimeType = 'image/jpeg';
     }
     
-    // Default fallback
-    return 'application/octet-stream';
+    // If we still don't have a MIME type, infer based on media type
+    if (!mimeType) {
+      // Try to get from media type
+      if (photo) {
+        mimeType = 'image/jpeg';
+      } else if (video) {
+        mimeType = 'video/mp4';
+      } else if (audio) {
+        mimeType = 'audio/mpeg';
+      } else if (voice) {
+        mimeType = 'audio/ogg';
+      } else if (animation) {
+        mimeType = 'video/mp4';
+      } else if (sticker) {
+        mimeType = 'image/webp';
+      } else if (document) {
+        // Try to infer from filename if available
+        if (document.file_name) {
+          const fileExtension = document.file_name.split('.').pop()?.toLowerCase();
+          if (fileExtension) {
+            const extensionMimeType = this.getMimeTypeFromExtension(fileExtension);
+            if (extensionMimeType) {
+              return extensionMimeType;
+            }
+          }
+        }
+        
+        // Default document type to PDF instead of octet-stream if we can't determine
+        mimeType = 'application/pdf';
+      }
+    }
+    
+    // Default fallback - only use octet-stream as a last resort
+    return mimeType || 'application/octet-stream';
   }
   
   /**
@@ -413,7 +498,7 @@ export class MediaProcessor {
    */
   public generateStoragePath(fileUniqueId: string, mimeType: string): string {
     const extension = this.getExtensionFromMimeType(mimeType);
-    return `${fileUniqueId}.${extension}`;
+    return this.getStandardizedPath(fileUniqueId, extension);
   }
   
   /**
@@ -870,38 +955,6 @@ export class MediaProcessor {
    * // Get a standardized path for a file
    * const fileUniqueId = 'AgADcAUAAj-vwFc';
    * const extension = 'jpeg';
-   * const path = mediaProcessor.getStandardizedPath(fileUniqueId, extension);
-   * console.log(`Standardized path: ${path}`);
-   * // Output: "Standardized path: AgADcAUAAj-vwFc.jpeg"
-   * ```
-   */
-  private getStandardizedPath(fileUniqueId: string, extension: string): string {
-    // Ensure the extension doesn't have a leading dot
-    const cleanExtension = extension.startsWith('.') ? extension.substring(1) : extension;
-    return `${fileUniqueId}.${cleanExtension}`;
-  }
-  
-  /**
-   * Process media from a Telegram message
-   * 
-   * This method processes media from a Telegram message by downloading it from Telegram,
-   * uploading it to storage, and updating the database with the file metadata.
-   * 
-   * @param mediaContent - The media content to process
-   * @param correlationId - Correlation ID for logging
-   * @returns The processing result
-   * @example
-   * ```typescript
-   * // Process media from a Telegram message
-   * const result = await mediaProcessor.processMedia(mediaContent, correlationId);
-   * if (result.success) {
-   *   console.log(`Processed media: ${result.fileInfo.publicUrl}`);
-   * }
-   * ```
-   */
-  /**
-   * Process media from Telegram and store it in Supabase storage
-   *
    * This method extracts media content from Telegram, processes it,
    * and stores it in Supabase storage. It handles duplicate detection,
    * downloading, and uploading, while ensuring proper MIME type detection.
@@ -909,6 +962,14 @@ export class MediaProcessor {
    * @param mediaContent - Media content extracted from Telegram message
    * @param correlationId - Request correlation ID for tracing
    * @returns Processing result object with file details
+   * @example
+   * ```typescript
+   * // Process media from a Telegram message
+   * const result = await mediaProcessor.processMedia(mediaContent, correlationId);
+   * if (result.status === 'success') {
+   *   console.log(`Processed media: ${result.publicUrl}`);
+   * }
+   * ```
    */
   public async processMedia(
     mediaContent: MediaContent,

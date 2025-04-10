@@ -1121,29 +1121,29 @@ export async function upsertTextMessageRecord(
  * and chat_title) directly from the messageData, so we don't need to provide these separately.
  */
 export interface UpsertMediaMessageParams {
-  /** Initialized Supabase client */
+  /** Supabase client for database operations */
   supabaseClient: SupabaseClient<Database>;
   /** Telegram message ID */
   messageId: number;
   /** Chat ID where the message was sent */
   chatId: number;
-  /** Caption text for media (optional) */
+  /** Caption of the media */
   caption?: string | null;
-  /** Type of media (photo, video, document, etc.) */
+  /** Media type (photo, video, document, audio, etc.) */
   mediaType?: string | null;
-  /** Telegram file ID for downloading */
+  /** File ID from Telegram */
   fileId?: string | null;
-  /** Unique file identifier from Telegram - used as unique constraint */
+  /** Unique file ID from Telegram */
   fileUniqueId?: string | null;
-  /** Storage path where the file is saved */
+  /** Path where the file is stored */
   storagePath?: string | null;
-  /** Public URL to access the file */
+  /** Public URL of the file */
   publicUrl?: string | null;
   /** MIME type of the file */
   mimeType?: string | null;
   /** File extension */
   extension?: string | null;
-  /** Raw message data from Telegram */
+  /** Complete Telegram message data */
   messageData: Json;
   /** Current processing state */
   processingState: ProcessingState;
@@ -1151,15 +1151,14 @@ export interface UpsertMediaMessageParams {
   processingError?: string | null;
   /** Forward information if message is forwarded */
   forwardInfo?: ForwardInfo | null;
-  /** Media group ID if part of a media group */
+  /** Media group ID if message is part of a media group */
   mediaGroupId?: string | null;
-  /**
-   * Processed caption data from caption parsing
-   * @note This field is synchronized with analyzed_content - both fields are updated with the
-   * same data to maintain consistency across the application. The database trigger
-   * sync_caption_fields_trigger ensures they remain in sync.
-   */
+  /** Processed caption data structure (synchronized with analyzed_content) */
   captionData?: Json | null;
+  /** Analyzed content from caption parsing (synchronized with caption_data) */
+  analyzedContent?: Json | null;
+  /** Additional updates to apply during upsert (e.g., old_analyzed_content) */
+  additionalUpdates?: Record<string, any>;
   /** Correlation ID for request tracking */
   correlationId: string;
 }
@@ -1209,8 +1208,9 @@ export async function upsertMediaMessageRecord(
     
     // Ensure both caption_data and analyzed_content are set to the same value for consistency
     // This addresses the field mismatch issue where some code paths use caption_data while others use analyzed_content
-    const captionAnalysisData = params.captionData as Json | null;
+    const captionAnalysisData = params.captionData || params.analyzedContent || null;
     
+    // Prepare RPC parameters
     const rpcParams: Record<string, any> = {
       p_telegram_message_id: messageId,
       p_chat_id: chatId,
@@ -1229,10 +1229,28 @@ export async function upsertMediaMessageRecord(
       p_media_group_id: params.mediaGroupId,
       p_forward_info: params.forwardInfo as Json | null,
       p_processing_error: params.processingError,
-      p_caption_data: captionAnalysisData,
-      // Also provide the same data for analyzed_content to ensure consistency
-      p_analyzed_content: captionAnalysisData
+      p_caption_data: captionAnalysisData
     };
+    
+    // Check if we need to handle additional fields for caption updates
+    // (old_analyzed_content, analyzed_content)
+    if (params.additionalUpdates) {
+      // For any additional database parameters that might need to be added
+      if (params.additionalUpdates.old_analyzed_content) {
+        rpcParams.p_old_analyzed_content = params.additionalUpdates.old_analyzed_content;
+      }
+      
+      // If analyzed_content is explicitly provided in additionalUpdates, use that
+      if (params.additionalUpdates.analyzed_content) {
+        rpcParams.p_analyzed_content = params.additionalUpdates.analyzed_content;
+      } else {
+        // Otherwise maintain consistency with caption_data
+        rpcParams.p_analyzed_content = captionAnalysisData;
+      }
+    } else {
+      // Maintain consistency between caption_data and analyzed_content
+      rpcParams.p_analyzed_content = captionAnalysisData;
+    }
     
     // Call the database function to handle the upsert
     const { data, error } = await supabaseClient.rpc('upsert_media_message', rpcParams);
@@ -1251,7 +1269,7 @@ export async function upsertMediaMessageRecord(
     
     logWithCorrelation(correlationId, `Successfully upserted media message with ID: ${dbMessageId}`);
     
-    // Log the event
+    // Log the event with additional context about caption updates if relevant
     await logProcessingEvent(
       supabaseClient,
       'media_message_upserted',
@@ -1261,7 +1279,8 @@ export async function upsertMediaMessageRecord(
         telegram_message_id: params.messageId,
         chat_id: params.chatId,
         file_unique_id: params.fileUniqueId,
-        media_type: params.mediaType
+        media_type: params.mediaType,
+        has_caption_updates: !!params.additionalUpdates?.old_analyzed_content
       }
     );
 

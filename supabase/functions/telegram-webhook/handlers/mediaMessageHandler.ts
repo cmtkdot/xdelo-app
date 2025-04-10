@@ -203,6 +203,12 @@ async function handleNewMessage(
       if (existingMessage.data.caption !== message.caption) {
         captionChanged = true;
         logWithCorrelation(correlationId, `Caption changed for message ${message.message_id}. Old: "${existingMessage.data.caption}", New: "${message.caption}"`, 'INFO', functionName);
+        
+        // When caption changes, we need to:
+        // 1. Move current analyzed_content to old_analyzed_content array
+        // 2. Reset processing_state to trigger reprocessing
+        // 3. Set analyzed_content to new captionData
+        // We'll handle this by preparing additional updates for the upsert operation
       }
     }
 
@@ -215,6 +221,25 @@ async function handleNewMessage(
       // Use extractForwardInfo for consistent handling of forward data
       const forwardInfo = message.forward_date ? extractForwardInfo(message) : null;
       const isForwarded = !!message.forward_date;
+      
+      // Prepare additional updates for caption changes in existing messages
+      let additionalUpdates = {};
+      
+      if (captionChanged && existingMessage.success && existingMessage.data) {
+        // Reset processing state to trigger reprocessing
+        processingState = 'initialized';
+        
+        // If the message has analyzed content, move it to old_analyzed_content
+        if (existingMessage.data.analyzed_content) {
+          additionalUpdates = {
+            old_analyzed_content: existingMessage.data.old_analyzed_content 
+              ? [...existingMessage.data.old_analyzed_content, existingMessage.data.analyzed_content]
+              : [existingMessage.data.analyzed_content],
+            // Set the new analyzed content
+            analyzed_content: captionData
+          };
+        }
+      }
 
       dbResult = await upsertMediaMessageRecord({
         supabaseClient,
@@ -235,7 +260,8 @@ async function handleNewMessage(
         mediaGroupId: message.media_group_id || null,
         captionData: captionData,                 // Processed caption data structure
         analyzedContent: captionData,             // Keep in sync with captionData
-        correlationId
+        correlationId,
+        additionalUpdates: additionalUpdates      // Include our additional updates for caption changes
       });
       
       if (!dbResult.success) {
@@ -278,6 +304,24 @@ async function handleNewMessage(
         }).catch(error => {
           logWithCorrelation(correlationId, `Error triggering caption parser: ${error instanceof Error ? error.message : String(error)}`, 'ERROR', functionName);
         });
+        
+        // If this message is part of a media group, sync the caption changes to other messages in the group
+        if (message.media_group_id) {
+          logWithCorrelation(correlationId, `Caption changed for message in media group ${message.media_group_id}, syncing to other messages`, 'INFO', functionName);
+          
+          // Sync caption changes to other messages in the group
+          syncMediaGroupCaptions(
+            supabaseClient,
+            message.media_group_id,
+            dbResult.data.id,
+            message.caption,
+            captionData,
+            'initialized', // Reset processing state for other messages
+            correlationId
+          ).catch(error => {
+            logWithCorrelation(correlationId, `Error syncing media group captions: ${error instanceof Error ? error.message : String(error)}`, 'ERROR', functionName);
+          });
+        }
       }
 
     } catch (dbError) {

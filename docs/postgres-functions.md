@@ -22,47 +22,146 @@ These database functions handle the core operations for the Telegram message pro
 
 ```typescript
 /**
- * Upserts a media message record in the database
+ * Upserts a media message record in the database with enhanced caption change handling
  * 
  * This function creates or updates a media message record in the 'messages' table.
  * It handles various types of media including photos, videos, documents, etc.
+ * The function includes specialized handling for caption changes in duplicate messages,
+ * preserving analysis history and properly managing caption updates across media groups.
  * 
  * @param {BIGINT} p_telegram_message_id - Telegram message ID
  * @param {BIGINT} p_chat_id - Telegram chat ID
- * @param {TEXT} p_telegram_file_id - Telegram file ID for the media
- * @param {TEXT} p_telegram_file_unique_id - Unique file ID from Telegram
+ * @param {TEXT} p_file_unique_id - Unique file ID from Telegram (primary duplicate detection key)
+ * @param {TEXT} p_file_id - Telegram file ID for the media
+ * @param {TEXT} p_storage_path - Storage path where the file is saved
+ * @param {TEXT} p_public_url - Public URL to access the file
+ * @param {TEXT} p_mime_type - MIME type of the media
+ * @param {TEXT} p_extension - File extension
  * @param {TEXT} p_media_type - Type of media (photo, video, document, etc.)
- * @param {TEXT} p_caption - Media caption text (optional)
+ * @param {TEXT} p_caption - Media caption text
+ * @param {TEXT} p_processing_state - Processing state (initialized, pending, processed, etc.)
  * @param {JSONB} p_message_data - Complete Telegram message data
- * @param {TEXT} p_mime_type - MIME type of the media (optional)
- * @param {public.telegram_chat_type} p_chat_type - Type of chat (private, group, etc.) (optional)
- * @param {TEXT} p_chat_title - Title of the chat (optional)
- * @param {TEXT} p_file_extension - File extension (optional)
- * @param {TEXT} p_media_group_id - Media group ID for grouped messages (optional)
- * @param {JSONB} p_forward_info - Forwarded message information (optional)
- * @param {UUID} p_uploader_user_id - ID of the user who uploaded the file (optional)
- * @param {public.processing_state_type} p_processing_state - Processing state (optional, default: 'initialized')
+ * @param {TEXT} p_correlation_id - Correlation ID for tracking requests
+ * @param {BIGINT} p_user_id - User ID (optional, default: NULL)
+ * @param {TEXT} p_media_group_id - Media group ID (optional, default: NULL)
+ * @param {JSONB} p_forward_info - Forward information (optional, default: NULL)
+ * @param {TEXT} p_processing_error - Processing error message (optional, default: NULL)
+ * @param {JSONB} p_caption_data - Processed caption data (optional, default: NULL)
+ * @param {JSONB} p_old_analyzed_content - Array of previous analyzed content (optional, default: NULL)
+ * @param {JSONB} p_analyzed_content - Current analyzed content (optional, default: NULL)
  * @returns {UUID} - The ID of the created or updated message record
  * 
+ * @notes
+ * - When a caption changes in a duplicate message (same file_unique_id), the function:
+ *   1. Detects the caption change
+ *   2. Moves existing analyzed_content to old_analyzed_content array
+ *   3. Updates the caption and related fields
+ *   4. Resets processing_state to trigger reprocessing
+ * - The function handles both new insertions and updates to existing records
+ * - Media groups are properly maintained with consistent caption data
+ * 
  * @example
+ * -- Basic usage:
  * SELECT * FROM public.upsert_media_message(
- *   123456789, -- telegram_message_id
- *   987654321, -- chat_id
- *   'file_id_from_telegram', -- telegram_file_id
- *   'unique_file_id', -- telegram_file_unique_id
- *   'photo', -- media_type
- *   'Photo caption', -- caption
- *   '{"message_id": 123456789, "chat": {"id": 987654321}}', -- message_data
- *   'image/jpeg', -- mime_type
- *   'private', -- chat_type
- *   'Chat title', -- chat_title
- *   'jpg', -- file_extension
- *   'media_group_123', -- media_group_id
- *   '{"from_chat_id": 123, "date": "2023-01-01"}', -- forward_info
- *   NULL, -- uploader_user_id
- *   'initialized' -- processing_state
+ *   123456789, -- p_telegram_message_id
+ *   987654321, -- p_chat_id
+ *   'AQADfg4xG-9H-Unm', -- p_file_unique_id
+ *   'AgACAgQAAxkBAAI6K2Yqn9R9AAGxZvs_QVMfPtO7dzTKtAAC_AIAAo1ZAAFSgJ-XYjEGNTQwBA', -- p_file_id
+ *   'media/photos/AQADfg4xG-9H-Unm.jpg', -- p_storage_path
+ *   'https://example.com/storage/media/photos/AQADfg4xG-9H-Unm.jpg', -- p_public_url
+ *   'image/jpeg', -- p_mime_type
+ *   'jpg', -- p_extension
+ *   'photo', -- p_media_type
+ *   'Beautiful sunset!', -- p_caption
+ *   'initialized', -- p_processing_state
+ *   '{"message_id": 123456789, "chat": {"id": 987654321, "type": "private"}}', -- p_message_data
+ *   'corr-abc-123', -- p_correlation_id
+ *   NULL, -- p_user_id
+ *   'BAACAgIAAxkDAAIC_GXlb00qJCLUXS6MB3xAJehCmPl-AAL7RAACiqc4Swo7HF5S5rCDMwQ', -- p_media_group_id
+ *   NULL, -- p_forward_info
+ *   NULL, -- p_processing_error
+ *   '{"parsed_entities": [{"type": "hashtag", "text": "#sunset"}]}' -- p_caption_data
+ * );
+ * 
+ * -- With caption change (updating existing record):
+ * SELECT * FROM public.upsert_media_message(
+ *   123456789, -- p_telegram_message_id
+ *   987654321, -- p_chat_id
+ *   'AQADfg4xG-9H-Unm', -- p_file_unique_id (existing record)
+ *   'AgACAgQAAxkBAAI6K2Yqn9R9AAGxZvs_QVMfPtO7dzTKtAAC_AIAAo1ZAAFSgJ-XYjEGNTQwBA', -- p_file_id
+ *   'media/photos/AQADfg4xG-9H-Unm.jpg', -- p_storage_path
+ *   'https://example.com/storage/media/photos/AQADfg4xG-9H-Unm.jpg', -- p_public_url
+ *   'image/jpeg', -- p_mime_type
+ *   'jpg', -- p_extension
+ *   'photo', -- p_media_type
+ *   'Beautiful sunset at the beach! #vacation', -- p_caption (changed)
+ *   'initialized', -- p_processing_state
+ *   '{"message_id": 123456789, "chat": {"id": 987654321, "type": "private"}}', -- p_message_data
+ *   'corr-abc-124', -- p_correlation_id
+ *   NULL, -- p_user_id
+ *   'BAACAgIAAxkDAAIC_GXlb00qJCLUXS6MB3xAJehCmPl-AAL7RAACiqc4Swo7HF5S5rCDMwQ', -- p_media_group_id
+ *   NULL, -- p_forward_info
+ *   NULL, -- p_processing_error
+ *   '{"parsed_entities": [{"type": "hashtag", "text": "#sunset"}, {"type": "hashtag", "text": "#vacation"}]}', -- p_caption_data
+ *   NULL, -- p_old_analyzed_content (function will automatically move current analyzed_content here)
+ *   NULL -- p_analyzed_content (will use p_caption_data if NULL)
  * );
  */
+```
+
+### TypeScript Interface
+
+```typescript
+/**
+ * Input parameters for upserting a media message record in the messages table.
+ * 
+ * Note: The PostgreSQL function extracts certain fields (like message_date, chat_type,
+ * and chat_title) directly from the messageData, so we don't need to provide these separately.
+ * 
+ * @interface UpsertMediaMessageParams
+ */
+export interface UpsertMediaMessageParams {
+  /** Supabase client for database operations */
+  supabaseClient: SupabaseClient<Database>;
+  /** Telegram message ID */
+  messageId: number;
+  /** Chat ID where the message was sent */
+  chatId: number;
+  /** Caption of the media */
+  caption?: string | null;
+  /** Media type (photo, video, document, audio, etc.) */
+  mediaType?: string | null;
+  /** File ID from Telegram */
+  fileId?: string | null;
+  /** Unique file ID from Telegram */
+  fileUniqueId?: string | null;
+  /** Path where the file is stored */
+  storagePath?: string | null;
+  /** Public URL of the file */
+  publicUrl?: string | null;
+  /** MIME type of the file */
+  mimeType?: string | null;
+  /** File extension */
+  extension?: string | null;
+  /** Complete Telegram message data */
+  messageData: Json;
+  /** Current processing state */
+  processingState: ProcessingState;
+  /** Error message if processing failed */
+  processingError?: string | null;
+  /** Forward information if message is forwarded */
+  forwardInfo?: ForwardInfo | null;
+  /** Media group ID if message is part of a media group */
+  mediaGroupId?: string | null;
+  /** Processed caption data structure (synchronized with analyzed_content) */
+  captionData?: Json | null;
+  /** Analyzed content from caption parsing (synchronized with caption_data) */
+  analyzedContent?: Json | null;
+  /** Additional updates to apply during upsert (e.g., old_analyzed_content) */
+  additionalUpdates?: Record<string, any>;
+  /** Correlation ID for request tracking */
+  correlationId: string;
+}
 ```
 
 ## update_message_analyzed_content
