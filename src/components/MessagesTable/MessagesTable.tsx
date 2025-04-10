@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState } from "react";
 import {
   Table,
@@ -15,6 +16,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Edit2, Save, X, Trash2, Search, ArrowUp, ArrowDown } from "lucide-react";
 import { cn } from "@/lib/generalUtils";
+import { VideoPreviewCard } from "@/components/media-viewer/VideoPreviewCard";
+import { isVideoMessage } from "@/utils/mediaUtils";
 
 interface MessagesTableProps {
   messages: Message[];
@@ -125,11 +128,15 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
   const renderMediaPreview = (message: Message) => {
     if (!message.public_url) return null;
 
-    if (message.mime_type?.startsWith('video/')) {
+    // Use enhanced isVideoMessage check to determine if this is a video
+    if (isVideoMessage(message)) {
       return (
-        <div className="relative w-16 h-16 cursor-pointer" onClick={() => handleMediaClick(message)}>
-          <video src={message.public_url} className="w-16 h-16 object-cover rounded-md" />
-        </div>
+        <VideoPreviewCard 
+          message={message} 
+          onClick={handleMediaClick}
+          className="w-28 h-28"
+          showTitle={false}
+        />
       );
     }
 

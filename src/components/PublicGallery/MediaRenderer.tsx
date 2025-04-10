@@ -1,6 +1,8 @@
 
 import { Message } from "@/types/MessagesTypes";
 import { ImageIcon } from "lucide-react";
+import { VideoPreviewCard } from "@/components/media-viewer/VideoPreviewCard";
+import { isVideoMessage } from "@/utils/mediaUtils";
 
 interface MediaRendererProps {
   message: Message;
@@ -16,18 +18,14 @@ export const MediaRenderer = ({ message, onClick }: MediaRendererProps) => {
     );
   }
 
-  if (message.mime_type?.startsWith('video/')) {
+  // Use the enhanced isVideoMessage function from mediaUtils
+  if (isVideoMessage(message)) {
     return (
-      <div className="relative w-full h-full cursor-pointer" onClick={() => onClick(message)}>
-        <video src={message.public_url} className="w-full h-full object-cover rounded-md" />
-        <div className="absolute inset-0 flex items-center justify-center bg-black/30 hover:bg-black/40 transition-colors">
-          <div className="w-10 h-10 rounded-full bg-white/80 flex items-center justify-center">
-            <svg className="w-5 h-5 text-black" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M8 5v14l11-7z"></path>
-            </svg>
-          </div>
-        </div>
-      </div>
+      <VideoPreviewCard 
+        message={message} 
+        onClick={onClick}
+        className="w-full h-full"
+      />
     );
   }
 
