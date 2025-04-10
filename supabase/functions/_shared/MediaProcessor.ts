@@ -1,4 +1,4 @@
-import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
+import { SupabaseClient } from './supabaseClient.ts';
 import { corsHeaders } from './cors.ts';
 import { TelegramMessage } from '../telegram-webhook/types.ts';
 
