@@ -5,15 +5,16 @@ import { createCorsResponse, supabaseClient } from "../../_shared/cors.ts";
 import { constructTelegramMessageUrl } from "../../_shared/messageUtils.ts";
 // Local Imports
 import { MessageContext, TelegramMessage } from '../types.ts';
-// Import the specific DB operations needed
+// Import DB operations
 import {
   upsertTextMessageRecord,
   extractForwardInfo,
   logProcessingEvent,
-  createErrorResponse,
   logWithCorrelation,
   DbOperationResult
 } from '../utils/dbOperations.ts';
+// Import error handling utilities
+import { createTelegramErrorResponse } from '../utils/errorUtils.ts';
 
 /**
  * Handles new non-media (text) messages from Telegram.
@@ -35,7 +36,7 @@ export async function handleOtherMessage(
     if (!message || !message.chat || !message.message_id || !message.date) {
       const errorMessage = `Invalid text message structure: Missing required fields`;
       logWithCorrelation(correlationId, errorMessage, 'ERROR', functionName);
-      return createErrorResponse(errorMessage, functionName, 400, correlationId, {
+      return createTelegramErrorResponse(errorMessage, functionName, 400, correlationId, {
         messageId: message?.message_id,
         chatId: message?.chat?.id
       });
@@ -84,7 +85,7 @@ export async function handleOtherMessage(
         upsertResult.error ?? 'Unknown DB error during upsert'
       );
       
-      return createErrorResponse(
+      return createTelegramErrorResponse(
         `DB error upserting text message: ${upsertResult.error}`, 
         functionName, 
         500, 
@@ -112,7 +113,7 @@ export async function handleOtherMessage(
         'Upsert reported success but returned no record ID'
       );
       
-      return createErrorResponse(
+      return createTelegramErrorResponse(
         `DB upsert succeeded but failed to return ID`, 
         functionName, 
         500, 
@@ -172,14 +173,15 @@ export async function handleOtherMessage(
       errorMessage
     );
     
-    return createErrorResponse(
+    return createTelegramErrorResponse(
       `Exception processing text message: ${errorMessage}`,
       functionName,
       500,
       correlationId,
       {
         messageId: message?.message_id,
-        chatId: message?.chat?.id
+        chatId: message?.chat?.id,
+        dbMessageId
       }
     );
   }

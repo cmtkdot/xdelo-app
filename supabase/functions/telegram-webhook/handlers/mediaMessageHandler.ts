@@ -1,14 +1,17 @@
 /// <reference types="https://esm.sh/@supabase/functions-js/edge-runtime.d.ts" />
 
 // Shared Imports
-import { createCorsResponse } from "../../_shared/cors.ts"; 
-import { supabaseClient } from "../../_shared/cors.ts";
+import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
+import { createCorsResponse, supabaseClient } from "../../_shared/cors.ts";
+import { corsHeaders } from "../../_shared/cors.ts";
 import { MediaProcessor, ProcessingResult } from "../../_shared/MediaProcessor.ts";
 import { createMediaProcessor } from "../../_shared/mediaUtils.ts";
 import { handleError } from "../../_shared/ErrorHandler.ts";
 
+// Error handling
+import { createTelegramErrorResponse } from "../utils/errorUtils.ts";
+
 // Local Imports
-import { createErrorResponse } from "../utils/errorHandler.ts";
 import {
     MessageContext,
     TelegramMessage,
@@ -78,7 +81,7 @@ export async function handleMediaMessage(
     // Extract media content
     const mediaContent = extractMediaContent(message);
     if (!mediaContent) {
-      return createErrorResponse(
+      return createTelegramErrorResponse(
         "No media content found in message",
         functionName,
         400,
@@ -253,7 +256,7 @@ async function handleNewMessage(
           dbResult.error
         );
         
-        return createErrorResponse(
+        return createTelegramErrorResponse(
           `Failed to create message: ${dbResult.error}`,
           functionName,
           500,
@@ -295,7 +298,7 @@ async function handleNewMessage(
         }
       );
       
-      return createErrorResponse(
+      return createTelegramErrorResponse(
         `Database schema error: ${errorMsg}`,
         functionName,
         500,
@@ -477,7 +480,7 @@ async function handleEditedMessage(
     
     if (!updateResult) {
       logWithCorrelation(correlationId, `Failed to update message ${existingMessage.id}`, 'ERROR', functionName);
-      return createErrorResponse(
+      return createTelegramErrorResponse(
         `Failed to update message`,
         functionName,
         500,
