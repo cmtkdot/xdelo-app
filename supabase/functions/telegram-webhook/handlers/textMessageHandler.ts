@@ -8,9 +8,9 @@ import { MessageContext, TelegramMessage } from '../types.ts';
 import {
     extractForwardInfo,
     logProcessingEvent,
-    logWithCorrelation,
     upsertTextMessageRecord
 } from '../utils/dbOperations.ts';
+import { logWithCorrelation } from '../utils/logger.ts';
 
 // Helper function to create consistent error responses
 function createErrorResponse(

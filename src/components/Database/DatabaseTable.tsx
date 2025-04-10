@@ -52,6 +52,12 @@ export type MessageData = {
   product_sku: string | null;
   message_url: string | null;
   glide_row_id: string | null;
+  // Additional columns
+  telegram_metadata: Record<string, any> | null;
+  message_data: Record<string, any> | null;
+  caption_data: string | null;
+  analyzed_content: Record<string, any> | null;
+  telegram_data: Record<string, any> | null;
 };
 
 export function DatabaseTable() {
@@ -84,6 +90,12 @@ export function DatabaseTable() {
         media_group_id: false,
         product_code: false,
         public_url: false,
+        caption_data: false,
+        analyzed_content: false,
+        message_url: false,
+        telegram_metadata: false,
+        message_data: false,
+        telegram_data: false,
       });
     }
     
@@ -102,7 +114,7 @@ export function DatabaseTable() {
       const { data, error } = await supabase
         .from("messages")
         .select(
-          "id, telegram_message_id, chat_title, media_group_id, caption, file_unique_id, public_url, processing_state, correlation_id, product_name, product_code, vendor_uid, media_group_sync, product_sku, message_url, glide_row_id"
+          "id, telegram_message_id, chat_title, media_group_id, caption, file_unique_id, public_url, processing_state, correlation_id, product_name, product_code, vendor_uid, media_group_sync, product_sku, message_url, glide_row_id, telegram_metadata, message_data, caption_data, analyzed_content, telegram_data"
         )
         .order("telegram_message_id", { ascending: false })
         .limit(100);
@@ -184,6 +196,27 @@ export function DatabaseTable() {
       },
     },
     {
+      accessorKey: "caption_data",
+      header: "Caption Data",
+      cell: ({ row }) => (
+        <div className="max-w-[150px] truncate">
+          {row.getValue("caption_data") || "-"}
+        </div>
+      ),
+    },
+    {
+      accessorKey: "analyzed_content",
+      header: "Analyzed Content",
+      cell: ({ row }) => {
+        const content = row.getValue("analyzed_content") as Record<string, any> | null;
+        return (
+          <div className="max-w-[150px] truncate">
+            {content ? "✓" : "-"}
+          </div>
+        );
+      },
+    },
+    {
       accessorKey: "product_name",
       header: "Product Name",
       cell: ({ row }) => (
@@ -206,6 +239,22 @@ export function DatabaseTable() {
           <Button variant="link" size="sm" asChild className="p-0 h-auto">
             <a href={url} target="_blank" rel="noopener noreferrer">
               View
+            </a>
+          </Button>
+        ) : (
+          "-"
+        );
+      },
+    },
+    {
+      accessorKey: "message_url",
+      header: "Message URL",
+      cell: ({ row }) => {
+        const url = row.getValue("message_url") as string | null;
+        return url ? (
+          <Button variant="link" size="sm" asChild className="p-0 h-auto">
+            <a href={url} target="_blank" rel="noopener noreferrer">
+              Telegram
             </a>
           </Button>
         ) : (
