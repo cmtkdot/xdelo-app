@@ -1,8 +1,5 @@
 import { corsHeaders } from './cors.ts';
-import { createSupabaseClient } from './cors.ts';
-
-// Create a Supabase client with the service role key
-export const supabaseClient = createSupabaseClient();
+import { supabaseClient } from './supabaseClient.ts';
 
 /**
  * Unified logging function for all Telegram webhook operations
