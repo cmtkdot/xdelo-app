@@ -811,7 +811,7 @@ export function extractForwardInfo(message: TelegramMessage): ForwardInfo | unde
  * Input parameters for creating a record in the other_messages table.
  * @deprecated Use UpsertTextMessageParams instead for consistent handling with media messages
  */
-export interface CreateOtherMessageParams {
+export type CreateOtherMessageParams = {
 	supabaseClient: SupabaseClient<Database>;
 	messageId: number;
 	chatId: number;
@@ -832,7 +832,7 @@ export interface CreateOtherMessageParams {
  * from the messageData, but we provide all other parameters to avoid function signature
  * ambiguity issues.
  */
-export interface UpsertTextMessageParams {
+export type UpsertTextMessageParams = {
 	supabaseClient: SupabaseClient<Database>;
 	messageId: number;
 	chatId: number;

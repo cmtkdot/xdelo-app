@@ -5,7 +5,7 @@ import { AccountCard } from "@/components/Settings/AccountCard";
 import { TelegramCard } from "@/components/Settings/Telegram";
 import { DangerZoneCard } from "@/components/Settings/DangerZoneCard";
 import { DatabaseFixCard } from "@/components/Settings/DatabaseFixCard";
-import { LogFixerCard } from "@/components/Settings/LogFixerCard";
+import { MediaGroupSyncCard } from "@/components/Settings/MediaGroupSyncCard";
 
 const Settings = () => {
   const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -43,8 +43,8 @@ const Settings = () => {
         botToken={botToken} 
         webhookUrl={webhookUrl}
       />
-      <LogFixerCard />
       <DatabaseFixCard />
+      <MediaGroupSyncCard />
       <DangerZoneCard />
     </div>
   );

@@ -16,6 +16,7 @@ import {
   ImageIcon,
   Table,
   LucideIcon,
+  Database,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -71,6 +72,12 @@ export const NavItems: React.FC<NavItemsProps> = ({
       href: "/media-table",
       icon: <PanelLeft size={20} />,
       isActive: currentPath === "/media-table",
+    },
+    {
+      title: "Database",
+      href: "/database",
+      icon: <Database size={20} />,
+      isActive: currentPath === "/database",
     },
     {
       title: "Table Demo",

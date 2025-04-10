@@ -9,7 +9,7 @@ The cron job:
 1. Finds media groups with inconsistent `analyzed_content` (some messages have it, others don't)
 2. Identifies the best source message to use as a reference (prioritizing messages with captions)
 3. Uses the `sync_media_group_captions` function to synchronize all messages in each group
-4. Records all operations to the `audit_logs` table for monitoring
+4. Records all operations to the `unified_audit_logs` table for monitoring
 
 ## Schedule
 
@@ -47,7 +47,7 @@ The function returns a JSON response with:
 
 - Uses `find_inconsistent_media_groups` database function to identify targets
 - Uses `sync_media_group_captions` function to synchronize groups
-- Records operations using `audit_logs` table
+- Records operations using `unified_audit_logs` table
 
 ## Authorization
 

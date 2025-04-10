@@ -98,7 +98,7 @@ BEGIN
     );
     
     -- Log successful sync to audit trail
-    INSERT INTO public.audit_logs (
+    INSERT INTO public.unified_audit_logs (
       action_type,
       table_name,
       record_id,
@@ -122,7 +122,7 @@ BEGIN
     -- Log error but don't fail the transaction
     _sync_error := SQLERRM;
     
-    INSERT INTO public.audit_logs (
+    INSERT INTO public.unified_audit_logs (
       action_type,
       table_name,
       record_id,

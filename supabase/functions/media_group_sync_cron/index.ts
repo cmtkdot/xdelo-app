@@ -189,8 +189,8 @@ async function syncMediaGroup(
     return { messagesUpdated: 0 };
   }
   
-  // Log the sync to audit_logs
-  await supabaseClient.from('audit_logs').insert({
+  // Log the sync to unified_audit_logs
+  await supabaseClient.from('unified_audit_logs').insert({
     action_type: 'cron_media_group_sync',
     table_name: 'messages',
     record_id: sourceMessageId,
