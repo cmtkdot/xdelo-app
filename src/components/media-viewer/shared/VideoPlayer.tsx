@@ -28,7 +28,6 @@ export function VideoPlayer({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showControls, setShowControls] = useState(false);
-  const [isPlaying, setIsPlaying] = useState(autoPlay);
   const videoRef = useRef<HTMLVideoElement>(null);
   
   // Get proper dimensions from telegram_data if available
@@ -39,13 +38,6 @@ export function VideoPlayer({
     setIsLoading(false);
     setError(null);
     onLoad?.();
-    
-    // Auto-play if specified
-    if (autoPlay && videoRef.current) {
-      videoRef.current.play().catch(err => {
-        console.warn('Auto-play prevented by browser:', err);
-      });
-    }
   };
 
   const handleLoadError = () => {
@@ -61,7 +53,6 @@ export function VideoPlayer({
       videoRef.current.play().catch(err => {
         console.warn('Auto-play prevented by browser:', err);
       });
-      setIsPlaying(true);
     }
   };
 
@@ -69,21 +60,6 @@ export function VideoPlayer({
     setShowControls(false);
     if (videoRef.current && autoPlay) {
       videoRef.current.pause();
-      setIsPlaying(false);
-    }
-  };
-
-  const handleVideoClick = () => {
-    if (videoRef.current) {
-      if (isPlaying) {
-        videoRef.current.pause();
-        setIsPlaying(false);
-      } else {
-        videoRef.current.play().catch(err => {
-          console.warn('Play prevented by browser:', err);
-        });
-        setIsPlaying(true);
-      }
     }
   };
 
@@ -126,7 +102,7 @@ export function VideoPlayer({
 
   return (
     <div 
-      className={cn("relative w-full cursor-pointer", className)}
+      className={cn("relative w-full", className)}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
@@ -159,20 +135,6 @@ export function VideoPlayer({
         </div>
       )}
       
-      {/* Play/Pause overlay on top of video */}
-      {!isLoading && !error && !showControls && !isPlaying && (
-        <div 
-          className="absolute inset-0 flex items-center justify-center bg-black/30 z-10"
-          onClick={handleVideoClick}
-        >
-          <div className="rounded-full bg-black/50 p-3 backdrop-blur-sm">
-            <svg viewBox="0 0 24 24" className="w-10 h-10 text-white fill-current">
-              <path d="M8 5v14l11-7z"></path>
-            </svg>
-          </div>
-        </div>
-      )}
-      
       {/* Video player */}
       <AspectRatio ratio={aspectRatio} className="w-full h-auto overflow-hidden rounded-md">
         <video
@@ -186,7 +148,6 @@ export function VideoPlayer({
           controlsList="nodownload"
           poster="/placeholder.svg"
           preload="metadata"
-          onClick={handleVideoClick}
         >
           <source src={src} type={getVideoType()} />
           Your browser does not support the video tag.

@@ -15,8 +15,6 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Edit2, Save, X, Trash2, Search, ArrowUp, ArrowDown } from "lucide-react";
 import { cn } from "@/lib/generalUtils";
-import { VideoPreviewCard } from "@/components/media-viewer/VideoPreviewCard";
-import { isVideoMessage } from "@/utils/mediaUtils";
 
 interface MessagesTableProps {
   messages: Message[];
@@ -42,6 +40,7 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
     handleMediaClick
   } = useMessageTableState(initialMessages);
 
+  // Search and sort functionality
   const [searchTerm, setSearchTerm] = useState("");
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
@@ -56,6 +55,7 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
   };
 
   const filteredAndSortedMessages = useMemo(() => {
+    // First filter messages based on search term
     const filtered = messages.filter((message) => {
       const searchContent = [
         message.caption,
@@ -70,11 +70,13 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
       return searchTerm === "" || searchContent.includes(searchTerm.toLowerCase());
     });
 
+    // Then sort the filtered messages
     if (!sortColumn) return filtered;
 
     return [...filtered].sort((a, b) => {
       let valueA, valueB;
 
+      // Determine values for comparison based on the sort column
       switch (sortColumn) {
         case "product_name":
           valueA = a.analyzed_content?.product_name || "";
@@ -105,6 +107,7 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
           valueB = b[sortColumn as keyof Message] || "";
       }
 
+      // Compare values based on sort direction
       const comparison = typeof valueA === "string"
         ? valueA.localeCompare(valueB as string)
         : (valueA as number) - (valueB as number);
@@ -113,6 +116,7 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
     });
   }, [messages, searchTerm, sortColumn, sortDirection]);
 
+  // Render functions
   const renderSortIcon = (column: string) => {
     if (sortColumn !== column) return null;
     return sortDirection === "asc" ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />;
@@ -121,15 +125,10 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
   const renderMediaPreview = (message: Message) => {
     if (!message.public_url) return null;
 
-    if (isVideoMessage(message)) {
+    if (message.mime_type?.startsWith('video/')) {
       return (
-        <div className="w-16 h-16">
-          <VideoPreviewCard 
-            message={message} 
-            onClick={handleMediaClick}
-            className="w-full h-full"
-            showTitle={false}
-          />
+        <div className="relative w-16 h-16 cursor-pointer" onClick={() => handleMediaClick(message)}>
+          <video src={message.public_url} className="w-16 h-16 object-cover rounded-md" />
         </div>
       );
     }
@@ -146,6 +145,7 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
 
   return (
     <div className="space-y-4">
+      {/* Search bar */}
       <div className="flex items-center space-x-2">
         <div className="relative flex-grow">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -158,6 +158,7 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
         </div>
       </div>
 
+      {/* Table */}
       <div className="rounded-md border overflow-hidden">
         <Table>
           <TableHeader>
