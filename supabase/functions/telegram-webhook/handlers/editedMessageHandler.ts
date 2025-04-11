@@ -1,6 +1,4 @@
-/// <reference path="../../types/edge-runtime.d.ts" />
-
-// Shared Imports
+// Shared Imports 
 import { createCorsResponse, supabaseClient } from "../../_shared/cors.ts";
 // Local Imports
 import { MessageContext, MessageRecord, TelegramMessage } from '../types.ts';
@@ -101,13 +99,21 @@ export async function handleEditedMessage(
 
     logWithCorrelation(correlationId, `Found existing message with DB ID: ${dbMessageId}`, 'debug', functionName);
 
-    // --- Check for Caption Changes (Media Messages) ---
-    const hasCaptionChanged = isMediaEdit && 
-                             (existingRecord.caption !== message.caption) && 
+    // --- Check for Caption Changes ---
+    const hasCaptionChanged = isMediaEdit && (existingRecord.caption !== message.caption) && 
                              (message.caption !== undefined); // Only consider if caption is actually present
 
+    // Prepare for old_analyzed_content tracking
+    let oldAnalyzedContent = null;
+    
     if (hasCaptionChanged) {
       logWithCorrelation(correlationId, `Caption changed for media message. Old: "${existingRecord.caption}", New: "${message.caption}"`, 'debug', functionName);
+      
+      // Store existing analyzed_content as old_analyzed_content (as a single JSONB object)
+      if (existingRecord.analyzed_content) {
+        oldAnalyzedContent = existingRecord.analyzed_content;
+        logWithCorrelation(correlationId, `Storing previous analyzed_content as old_analyzed_content for message ${existingRecord.id}`, 'info', functionName);
+      }
     }
 
     // --- Update the Message Record ---
@@ -119,7 +125,12 @@ export async function handleEditedMessage(
       message,
       null, // No media result since we're not re-processing media
       null, // No caption data - will be processed by caption parser if needed
-      correlationId
+      correlationId,
+      // Pass oldAnalyzedContent through updates parameter
+      hasCaptionChanged ? { 
+        old_analyzed_content: oldAnalyzedContent,
+        processing_state: 'initialized' // Reset processing state to trigger reprocessing
+      } : {}
     );
 
     if (!updateResult || !updateResult.success) {

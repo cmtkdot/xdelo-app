@@ -102,15 +102,18 @@ export async function upsertMediaMessageRecord({
       // Otherwise leave as is (assuming it's already an object)
     }
     
-    // Simplify old_analyzed_content handling to avoid array vs non-array issues
-    // We'll just pass it directly as a JSONB value without trying to make it an array
+    // Simplify old_analyzed_content handling - always treat as a single JSONB object
+    // This will override the previous value every time there's a caption change
     let formattedOldAnalyzedContent = oldAnalyzedContent;
     
-    if (oldAnalyzedContent && typeof oldAnalyzedContent === 'string') {
-      try {
-        formattedOldAnalyzedContent = JSON.parse(oldAnalyzedContent);
-      } catch (e) {
-        formattedOldAnalyzedContent = { text: oldAnalyzedContent };
+    if (oldAnalyzedContent) {
+      // If it's a string, try to parse it
+      if (typeof oldAnalyzedContent === 'string') {
+        try {
+          formattedOldAnalyzedContent = JSON.parse(oldAnalyzedContent);
+        } catch (e) {
+          formattedOldAnalyzedContent = { text: oldAnalyzedContent };
+        }
       }
     }
     
@@ -263,6 +266,12 @@ export async function updateMessageRecord(supabaseClient, existingMessage, messa
       updated_at: new Date().toISOString(),
       ...updates
     };
+    
+    // If caption changed, store existing analyzed_content in old_analyzed_content
+    if (message.caption !== existingMessage.caption && existingMessage.analyzed_content) {
+      updateData.old_analyzed_content = existingMessage.analyzed_content;
+      logWithCorrelation(correlationId, `Caption changed during edit. Storing previous analyzed_content as old_analyzed_content for message ${existingMessage.id}`, 'info', 'updateMessageRecord');
+    }
     
     if (mediaInfo) {
       updateData.file_unique_id = mediaInfo.fileUniqueId;
