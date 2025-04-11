@@ -61,6 +61,7 @@ function adaptProcessingResult(result: OriginalProcessingResult): MediaProcessin
 
 import { createRetryHandler } from "../../_shared/retryHandler.ts";
 import { processCaptionText } from "../../_shared/captionParser.ts";
+import { logWithCorrelation } from "./logger.ts";
 
 /**
  * Extract forward information from a Telegram message

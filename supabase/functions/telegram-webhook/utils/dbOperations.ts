@@ -1,36 +1,6 @@
+// Import only what we need from this file - we'll keep most of the existing code
+import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { logWithCorrelation } from './logger.ts';
-
-/**
- * Processing state for messages
- */
-export type ProcessingState = 'pending' | 'processing' | 'processed' | 'error' | 'initialized';
-
-/**
- * Telegram chat type enum values supported in the database
- */
-export type TelegramChatType = 'private' | 'group' | 'supergroup' | 'channel' | 'unknown';
-
-/**
- * Validates and normalizes a chat type to ensure it matches the telegram_chat_type enum.
- */
-export function validateChatType(chatType: string | undefined): TelegramChatType {
-  if (!chatType) return 'unknown';
-  
-  // Check if the chat type matches one of the valid enum values
-  switch (chatType.toLowerCase()) {
-    case 'private':
-      return 'private';
-    case 'group':
-      return 'group';
-    case 'supergroup':
-      return 'supergroup';
-    case 'channel':
-      return 'channel';
-    default:
-      return 'unknown';
-  }
-}
-
 
 /**
  * Upsert a media message record in the database
@@ -49,224 +19,191 @@ export async function upsertMediaMessageRecord({
   extension,
   messageData,
   processingState,
-  processingError = null,
-  forwardInfo = null,
-  mediaGroupId = null,
-  captionData = null,
-  analyzedContent = null,
-  oldAnalyzedContent = null,
+  processingError,
+  forwardInfo,
+  mediaGroupId,
+  captionData,
+  analyzedContent,
   correlationId,
   additionalUpdates = {}
 }: {
-  supabaseClient: any;
+  supabaseClient: SupabaseClient;
   messageId: number;
   chatId: number;
   caption: string | null;
   mediaType: string;
   fileId: string;
   fileUniqueId: string;
-  storagePath: string | null;
-  publicUrl: string | null;
-  mimeType: string | null;
-  extension: string | null;
+  storagePath: string;
+  publicUrl: string;
+  mimeType: string;
+  extension: string;
   messageData: any;
   processingState: string;
-  processingError?: string | null;
+  processingError: string | null;
   forwardInfo?: any;
   mediaGroupId?: string | null;
   captionData?: any;
   analyzedContent?: any;
-  oldAnalyzedContent?: any;
   correlationId: string;
   additionalUpdates?: Record<string, any>;
 }): Promise<{ success: boolean; data?: any; error?: any }> {
   try {
-    logWithCorrelation(correlationId, `Upserting media message record for ${messageId} in chat ${chatId}`, 'info', 'upsertMediaMessageRecord');
+    logWithCorrelation(correlationId, `Upserting media message record for ${messageId} in chat ${chatId}`, 'INFO', 'upsertMediaMessageRecord');
     
-    // Ensure captionData is properly formatted as JSONB
-    let formattedCaptionData = captionData;
-    if (captionData) {
-      if (typeof captionData === 'string') {
-        // If it's a string that looks like JSON, parse it
-        if (captionData.trim().startsWith('{') || captionData.trim().startsWith('[')) {
-          // Try to parse as JSON, fallback to text object if parsing fails
-          formattedCaptionData = (() => {
-            try { return JSON.parse(captionData); } 
-            catch { return { text: captionData }; }
-          })()
-        } else {
-          formattedCaptionData = { text: captionData };
-        }
-      }
-      // Otherwise leave as is (assuming it's already an object)
-    }
+    // Call the RPC function to upsert the media message
+    const { data, error } = await supabaseClient.rpc('upsert_media_message', {
+      p_telegram_message_id: messageId,
+      p_chat_id: chatId,
+      p_file_unique_id: fileUniqueId,
+      p_file_id: fileId,
+      p_storage_path: storagePath,
+      p_public_url: publicUrl,
+      p_mime_type: mimeType,
+      p_extension: extension,
+      p_media_type: mediaType,
+      p_caption: caption,
+      p_processing_state: processingState, // Passed as string, will be cast in the function
+      p_message_data: messageData,
+      p_correlation_id: correlationId,
+      p_media_group_id: mediaGroupId,
+      p_forward_info: forwardInfo,
+      p_processing_error: processingError,
+      p_caption_data: captionData || analyzedContent,
+      p_old_analyzed_content: additionalUpdates.old_analyzed_content,
+      p_analyzed_content: additionalUpdates.analyzed_content || captionData || analyzedContent
+    });
     
-    // Simplify old_analyzed_content handling - always treat as a single JSONB object
-    // This will override the previous value every time there's a caption change
-    let formattedOldAnalyzedContent = oldAnalyzedContent;
-    
-    if (oldAnalyzedContent) {
-      // If it's a string, try to parse it
-      if (typeof oldAnalyzedContent === 'string') {
-        // Try to parse as JSON, fallback to text object if parsing fails
-        formattedOldAnalyzedContent = (() => {
-          try { return JSON.parse(oldAnalyzedContent); } 
-          catch { return { text: oldAnalyzedContent }; }
-        })()
-      }
-    }
-    
-    logWithCorrelation(
-      correlationId, 
-      `Calling upsert_media_message with caption_data and analyzed_content: ${JSON.stringify({
-        caption_data: captionData ? '[set]' : '[not set]',
-        analyzed_content: analyzedContent ? '[set]' : '[not set]',
-        old_analyzed_content: formattedOldAnalyzedContent ? '[set]' : '[not set]'
-      })}`, 
-      'debug', 
-      'upsertMediaMessageRecord'
-    );
-    
-    // Helper function to handle empty objects 
-    const handleEmptyObject = (obj: any): any => {
-      if (obj === null || obj === undefined) return null;
-      if (typeof obj === 'object' && !Array.isArray(obj) && Object.keys(obj).length === 0) return null;
-      return obj;
-    };
-    
-    // Create an array of parameters in the exact order defined in the PostgreSQL function
-    // This avoids issues with named parameters being sent alphabetically
-    const params = [
-      handleEmptyObject(analyzedContent),               // p_analyzed_content
-      caption,                                          // p_caption
-      handleEmptyObject(formattedCaptionData),          // p_caption_data
-      chatId,                                           // p_chat_id
-      correlationId,                                    // p_correlation_id
-      extension,                                        // p_extension
-      fileId,                                           // p_file_id
-      fileUniqueId,                                     // p_file_unique_id
-      handleEmptyObject(forwardInfo),                   // p_forward_info
-      mediaGroupId,                                     // p_media_group_id
-      mediaType,                                        // p_media_type
-      handleEmptyObject(messageData),                   // p_message_data
-      mimeType,                                         // p_mime_type
-      handleEmptyObject(formattedOldAnalyzedContent),   // p_old_analyzed_content
-      processingError,                                  // p_processing_error
-      processingState,                                  // p_processing_state
-      publicUrl,                                        // p_public_url
-      storagePath,                                      // p_storage_path
-      messageId,                                        // p_telegram_message_id
-      null,                                             // p_user_id
-      false,                                            // p_is_edited
-      handleEmptyObject(additionalUpdates)              // p_additional_updates
-    ];
-
-    // Call function with positional parameters
-    const { data, error } = await supabaseClient
-      .rpc('upsert_media_message', params, { count: 'exact' });
-
     if (error) {
-      logWithCorrelation(
-        correlationId, 
-        `Error upserting media message: ${error.message}`, 
-        'error', 
-        'upsertMediaMessageRecord'
-      );
+      logWithCorrelation(correlationId, `Error upserting media message: ${error.message}`, 'ERROR', 'upsertMediaMessageRecord');
+      console.error("DB error upserting media message:", error);
       return { success: false, error };
     }
-
-    logWithCorrelation(
-      correlationId, 
-      `Successfully upserted media message with ID: ${data}`, 
-      'debug', 
-      'upsertMediaMessageRecord'
-    );
+    
+    // Apply any additional updates if needed
+    if (Object.keys(additionalUpdates).length > 0 && data) {
+      try {
+        // Filter out updates that were already applied via the RPC
+        const filteredUpdates = { ...additionalUpdates };
+        delete filteredUpdates.old_analyzed_content;
+        delete filteredUpdates.analyzed_content;
+        
+        if (Object.keys(filteredUpdates).length > 0) {
+          const { error: updateError } = await supabaseClient
+            .from('messages')
+            .update(filteredUpdates)
+            .eq('id', data);
+            
+          if (updateError) {
+            logWithCorrelation(correlationId, `Error applying additional updates: ${updateError.message}`, 'WARN', 'upsertMediaMessageRecord');
+          }
+        }
+      } catch (updateError) {
+        logWithCorrelation(correlationId, `Exception applying additional updates: ${updateError.message}`, 'WARN', 'upsertMediaMessageRecord');
+      }
+    }
+    
+    // Fetch the complete record
+    if (data) {
+      const { data: completeRecord, error: fetchError } = await supabaseClient
+        .from('messages')
+        .select('*')
+        .eq('id', data)
+        .single();
+        
+      if (fetchError) {
+        logWithCorrelation(correlationId, `Error fetching complete record: ${fetchError.message}`, 'WARN', 'upsertMediaMessageRecord');
+        return { success: true, data };
+      }
+      
+      return { success: true, data: completeRecord };
+    }
     
     return { success: true, data };
   } catch (error) {
-    logWithCorrelation(
-      correlationId, 
-      `Exception in upsertMediaMessageRecord: ${error}`, 
-      'error', 
-      'upsertMediaMessageRecord'
-    );
-    return { success: false, error: error instanceof Error ? error.message : String(error) };
+    logWithCorrelation(correlationId, `Exception upserting media message: ${error.message}`, 'ERROR', 'upsertMediaMessageRecord');
+    console.error("Exception upserting media message:", error);
+    return { success: false, error: error.message || String(error) };
   }
 }
 
 /**
  * Create a message record in the database
  */
-export async function createMessageRecord(supabaseClient, message, mediaType, fileId, fileUniqueId, storagePath, publicUrl, mimeType, extension, captionData, correlationId) {
+export async function createMessageRecord(
+  supabaseClient: SupabaseClient,
+  message: any,
+  mediaType: string,
+  fileId: string,
+  fileUniqueId: string,
+  storagePath: string,
+  publicUrl: string,
+  mimeType: string,
+  extension: string,
+  captionData: any,
+  correlationId: string
+): Promise<{ success: boolean; data?: any; error?: any }> {
   try {
-    const { data, error } = await supabaseClient.from("messages").insert([
-      {
-        telegram_message_id: message.message_id,
-        chat_id: message.chat.id,
-        chat_type: message.chat.type,
-        chat_title: message.chat.title,
-        message_date: new Date(message.date * 1000).toISOString(),
-        caption: message.caption,
-        media_type: mediaType,
-        file_id: fileId,
-        file_unique_id: fileUniqueId,
-        storage_path: storagePath,
-        public_url: publicUrl,
-        mime_type: mimeType,
-        extension: extension,
-        message_data: message,
-        processing_state: "pending",
-        caption_data: captionData,
-        analyzed_content: captionData,
-        correlation_id: correlationId,
-        edit_history: []
-      }
-    ]).select().single();
+    const { data, error } = await supabaseClient
+      .from("messages")
+      .insert([
+        {
+          telegram_message_id: message.message_id,
+          chat_id: message.chat.id,
+          chat_type: message.chat.type,
+          chat_title: message.chat.title,
+          message_date: new Date(message.date * 1000).toISOString(),
+          caption: message.caption,
+          media_type: mediaType,
+          file_id: fileId,
+          file_unique_id: fileUniqueId,
+          storage_path: storagePath,
+          public_url: publicUrl,
+          mime_type: mimeType,
+          extension: extension,
+          message_data: message,
+          processing_state: "pending",
+          caption_data: captionData,
+          analyzed_content: captionData,
+          correlation_id: correlationId,
+          edit_history: []
+        }
+      ])
+      .select()
+      .single();
+      
     if (error) {
       console.error("DB error creating message:", error);
-      return {
-        success: false,
-        error
-      };
+      return { success: false, error };
     }
-    return {
-      success: true,
-      data
-    };
+    
+    return { success: true, data };
   } catch (error) {
     console.error("Exception creating message:", error);
-    return {
-      success: false,
-      error
-    };
+    return { success: false, error };
   }
 }
 
 /**
  * Update a message record in the database
  */
-export async function updateMessageRecord(supabaseClient, existingMessage, message, mediaInfo, captionData, correlationId, updates = {}): Promise<{ success: boolean; error?: any }> {
+export async function updateMessageRecord(
+  supabaseClient: SupabaseClient,
+  existingMessage: any,
+  message: any,
+  mediaInfo: {
+    fileUniqueId: string;
+    storagePath: string;
+    publicUrl: string;
+    mimeType: string;
+    extension: string;
+  } | null,
+  captionData: any,
+  correlationId: string,
+  updates: any = {}
+): Promise<boolean> {
   try {
-    interface MessageUpdateData {
-      telegram_message_id: number;
-      chat_id: number;
-      chat_type: string;
-      chat_title?: string;
-      caption?: string;
-      message_data: any;
-      caption_data: any;
-      analyzed_content: any;
-      correlation_id: string;
-      updated_at: string;
-      file_unique_id?: string;
-      storage_path?: string;
-      public_url?: string;
-      mime_type?: string;
-      extension?: string;
-      [key: string]: any; // For additional properties from updates
-    }
-    
-    const updateData: MessageUpdateData = {
+    const updateData: any = {
       telegram_message_id: message.message_id,
       chat_id: message.chat.id,
       chat_type: message.chat.type,
@@ -280,12 +217,6 @@ export async function updateMessageRecord(supabaseClient, existingMessage, messa
       ...updates
     };
     
-    // If caption changed, store existing analyzed_content in old_analyzed_content
-    if (message.caption !== existingMessage.caption && existingMessage.analyzed_content) {
-      updateData.old_analyzed_content = existingMessage.analyzed_content;
-      logWithCorrelation(correlationId, `Caption changed during edit. Storing previous analyzed_content as old_analyzed_content for message ${existingMessage.id}`, 'info', 'updateMessageRecord');
-    }
-    
     if (mediaInfo) {
       updateData.file_unique_id = mediaInfo.fileUniqueId;
       updateData.storage_path = mediaInfo.storagePath;
@@ -293,15 +224,21 @@ export async function updateMessageRecord(supabaseClient, existingMessage, messa
       updateData.mime_type = mediaInfo.mimeType;
       updateData.extension = mediaInfo.extension;
     }
-    const { error } = await supabaseClient.from("messages").update(updateData).eq("id", existingMessage.id);
+    
+    const { error } = await supabaseClient
+      .from("messages")
+      .update(updateData)
+      .eq("id", existingMessage.id);
+      
     if (error) {
       console.error("DB error updating message:", error);
-      return { success: false, error };
+      return false;
     }
-    return { success: true };
+    
+    return true;
   } catch (error) {
     console.error("Exception updating message:", error);
-    return { success: false, error: error instanceof Error ? error.message : String(error) };
+    return false;
   }
 }
 
@@ -309,38 +246,33 @@ export async function updateMessageRecord(supabaseClient, existingMessage, messa
  * Find a message by Telegram message ID and chat ID
  */
 export async function findMessageByTelegramId(
-  supabaseClient: any,
+  supabaseClient: SupabaseClient,
   telegramMessageId: number,
   chatId: number,
   correlationId: string
-): Promise<{ success: boolean; data?: any; error?: any }> {
+): Promise<{ success: boolean; message?: any }> {
   try {
-    logWithCorrelation(correlationId, `Finding message with Telegram ID ${telegramMessageId} in chat ${chatId}`, 'info', 'findMessageByTelegramId');
-    
     const { data, error } = await supabaseClient
-      .from('messages')
-      .select('*')
-      .eq('telegram_message_id', telegramMessageId)
-      .eq('chat_id', chatId)
-      .limit(1)
+      .from("messages")
+      .select("*")
+      .eq("telegram_message_id", telegramMessageId)
+      .eq("chat_id", chatId)
       .single();
-    
+      
     if (error) {
-      if (error.code === 'PGRST116') {
-        // Not found, which is a valid result
-        logWithCorrelation(correlationId, `Message ${telegramMessageId} not found in chat ${chatId}`, 'info', 'findMessageByTelegramId');
-        return { success: true, data: null };
+      // Not found is not an error
+      if (error.message.includes('No rows found')) {
+        return { success: false };
       }
       
-      logWithCorrelation(correlationId, `Error finding message: ${error.message}`, 'error', 'findMessageByTelegramId');
-      return { success: false, error };
+      console.error(`DB error finding message by Telegram ID ${telegramMessageId} in chat ${chatId}:`, error);
+      return { success: false };
     }
     
-    logWithCorrelation(correlationId, `Found message ${telegramMessageId} in chat ${chatId}`, 'info', 'findMessageByTelegramId');
-    return { success: true, data: data };
+    return { success: true, message: data };
   } catch (error) {
-    logWithCorrelation(correlationId, `Exception in findMessageByTelegramId: ${error}`, 'error', 'findMessageByTelegramId');
-    return { success: false, error: error instanceof Error ? error.message : String(error) };
+    console.error(`Exception finding message by Telegram ID ${telegramMessageId} in chat ${chatId}:`, error);
+    return { success: false };
   }
 }
 
@@ -348,55 +280,61 @@ export async function findMessageByTelegramId(
  * Find a message by file_unique_id
  */
 export async function findMessageByFileUniqueId(
-  supabaseClient: any,
+  supabaseClient: SupabaseClient,
   fileUniqueId: string,
   correlationId: string
-): Promise<{ success: boolean; data?: any; error?: any }> {
+): Promise<{ success: boolean; data?: any }> {
   try {
-    logWithCorrelation(correlationId, `Finding message with file_unique_id ${fileUniqueId}`, 'info', 'findMessageByFileUniqueId');
-    
     const { data, error } = await supabaseClient
-      .from('messages')
-      .select('*')
-      .eq('file_unique_id', fileUniqueId)
-      .limit(1)
+      .from("messages")
+      .select("*")
+      .eq("file_unique_id", fileUniqueId)
       .single();
-    
+      
     if (error) {
-      if (error.code === 'PGRST116') {
-        // Not found, which is a valid result
-        logWithCorrelation(correlationId, `Message with file_unique_id ${fileUniqueId} not found`, 'info', 'findMessageByFileUniqueId');
-        return { success: true, data: null };
+      // Not found is not an error
+      if (error.message.includes('No rows found')) {
+        return { success: false };
       }
       
-      logWithCorrelation(correlationId, `Error finding message by file_unique_id: ${error.message}`, 'error', 'findMessageByFileUniqueId');
-      return { success: false, error };
+      console.error(`DB error finding message by file_unique_id ${fileUniqueId}:`, error);
+      return { success: false };
     }
     
-    logWithCorrelation(correlationId, `Found message with file_unique_id ${fileUniqueId}`, 'info', 'findMessageByFileUniqueId');
-    return { success: true, data };
+    return { success: true, data: data };
   } catch (error) {
-    logWithCorrelation(correlationId, `Exception in findMessageByFileUniqueId: ${error}`, 'error', 'findMessageByFileUniqueId');
-    return { success: false, error: error instanceof Error ? error.message : String(error) };
+    console.error(`Exception finding message by file_unique_id ${fileUniqueId}:`, error);
+    return { success: false };
   }
 }
 
 /**
  * Update a message with an error
  */
-export async function updateMessageWithError(supabaseClient, messageId, errorMessage, correlationId, errorType) {
+export async function updateMessageWithError(
+  supabaseClient: SupabaseClient,
+  messageId: string,
+  errorMessage: string,
+  correlationId: string,
+  errorType?: string
+): Promise<boolean> {
   try {
-    const { error } = await supabaseClient.from("messages").update({
-      processing_state: "error",
-      error_message: errorMessage,
-      error_type: errorType,
-      last_error_at: new Date().toISOString(),
-      correlation_id: correlationId
-    }).eq("id", messageId);
+    const { error } = await supabaseClient
+      .from("messages")
+      .update({
+        processing_state: "error",
+        error_message: errorMessage,
+        error_type: errorType,
+        last_error_at: new Date().toISOString(),
+        correlation_id: correlationId
+      })
+      .eq("id", messageId);
+      
     if (error) {
       console.error("DB error updating message with error:", error);
       return false;
     }
+    
     return true;
   } catch (error) {
     console.error("Exception updating message with error:", error);
@@ -407,15 +345,25 @@ export async function updateMessageWithError(supabaseClient, messageId, errorMes
 /**
  * Log a processing event
  */
-export async function logProcessingEvent(supabaseClient, event_type, entity_id, correlation_id, metadata, error) {
+export async function logProcessingEvent(
+  supabaseClient: SupabaseClient,
+  event_type: string,
+  entity_id: string,
+  correlation_id: string,
+  metadata: Record<string, any>,
+  error?: any
+): Promise<void> {
   try {
-    const { error: dbError } = await supabaseClient.from("unified_audit_logs").insert({
-      event_type: event_type,
-      entity_id: entity_id,
-      correlation_id: correlation_id,
-      metadata: metadata,
-      error_message: error ? error instanceof Error ? error.message : String(error) : null
-    });
+    const { error: dbError } = await supabaseClient
+      .from("unified_audit_logs")
+      .insert({
+        event_type: event_type,
+        entity_id: entity_id,
+        correlation_id: correlation_id,
+        metadata: metadata,
+        error_message: error ? (error instanceof Error ? error.message : String(error)) : null
+      });
+      
     if (dbError) {
       console.error("DB error logging processing event:", dbError);
     }
@@ -426,9 +374,16 @@ export async function logProcessingEvent(supabaseClient, event_type, entity_id, 
 
 /**
  * Trigger caption parsing by invoking an Edge Function
- * @returns {Promise<{success: boolean, data?: any, error?: any}>}
  */
-export async function triggerCaptionParsing({ supabaseClient, messageId, correlationId }): Promise<{success: boolean, data?: any, error?: any}> {
+export async function triggerCaptionParsing({
+  supabaseClient,
+  messageId,
+  correlationId
+}: {
+  supabaseClient: SupabaseClient;
+  messageId: string;
+  correlationId: string;
+}): Promise<void> {
   try {
     const { data, error } = await supabaseClient.functions.invoke('xdelo_parse_caption', {
       body: {
@@ -436,150 +391,92 @@ export async function triggerCaptionParsing({ supabaseClient, messageId, correla
         correlationId: correlationId
       }
     });
+    
     if (error) {
       console.error(`Error invoking caption parsing function for message ${messageId}:`, error);
-      return { success: false, error: error };
     } else {
-      logWithCorrelation(correlationId, `Caption parsing triggered successfully for message ${messageId}`, 'info', 'triggerCaptionParsing');
-      return { success: true, data: data };
+      console.log(`Caption parsing triggered successfully for message ${messageId}`);
     }
-  } catch (error) {
-    // Using logWithCorrelation instead of console.error for consistency
-    logWithCorrelation(
-      correlationId,
-      `Exception invoking caption parsing function for message ${messageId}: ${error instanceof Error ? error.message : String(error)}`,
-      'error',
-      'triggerCaptionParsing'
-    );
-    return { success: false, error: error instanceof Error ? error.message : String(error) };
+  } catch (e) {
+    console.error(`Exception invoking caption parsing function for message ${messageId}:`, e);
   }
 }
 
 /**
  * Find messages by media group ID
  */
-export async function findMessagesByMediaGroupId(supabaseClient, mediaGroupId, _correlationId) {
+export async function findMessagesByMediaGroupId(
+  supabaseClient: SupabaseClient,
+  mediaGroupId: string,
+  correlationId: string
+): Promise<{ success: boolean; messages?: any[] }> {
   try {
-    const { data, error } = await supabaseClient.from("messages").select("*").eq("media_group_id", mediaGroupId);
+    const { data, error } = await supabaseClient
+      .from("messages")
+      .select("*")
+      .eq("media_group_id", mediaGroupId);
+      
     if (error) {
       console.error(`DB error finding messages by media group ID ${mediaGroupId}:`, error);
-      return {
-        success: false
-      };
+      return { success: false };
     }
-    return {
-      success: true,
-      messages: data
-    };
+    
+    return { success: true, messages: data };
   } catch (error) {
     console.error(`Exception finding messages by media group ID ${mediaGroupId}:`, error);
-    return {
-      success: false
-    };
+    return { success: false };
   }
 }
 
 /**
- * Sync captions for media group messages
+ * Sync media group captions
  */
-export async function syncMediaGroupCaptions({ 
-  supabaseClient, 
-  mediaGroupId, 
-  sourceMessageId, 
-  newCaption, 
-  captionData, 
-  processingState = 'pending_analysis', 
-  correlationId 
-}) {
+export async function syncMediaGroupCaptions(
+  supabaseClient: SupabaseClient,
+  mediaGroupId: string,
+  sourceMessageId: string,
+  newCaption: string,
+  captionData: any,
+  processingState: string,
+  correlationId: string
+): Promise<void> {
   try {
-    // Validation - only mediaGroupId is critical
-    if (!mediaGroupId) {
-      const errorMsg = 'Media group ID is required for caption synchronization';
-      logWithCorrelation(correlationId, errorMsg, 'error', 'syncMediaGroupCaptions');
-      return {
-        success: false,
-        error: errorMsg
-      };
+    // Find all messages in the media group except the source message
+    const { success, messages } = await findMessagesByMediaGroupId(
+      supabaseClient,
+      mediaGroupId,
+      correlationId
+    );
+    
+    if (!success || !messages) {
+      console.warn(`Could not find messages in media group ${mediaGroupId} to sync captions`);
+      return;
     }
     
-    logWithCorrelation(correlationId, `Syncing captions for media group ${mediaGroupId}${sourceMessageId ? ` from source message ${sourceMessageId}` : ''}`, 'info', 'syncMediaGroupCaptions');
+    // Filter out the source message
+    const messagesToUpdate = messages.filter(msg => msg.id !== sourceMessageId);
     
-    // Ensure captionData is a proper object for JSONB conversion
-    // Same pattern as in upsertMediaMessageRecord
-    const preparedCaptionData = typeof captionData === 'string' ? 
-      (captionData.trim().startsWith('{') || captionData.trim().startsWith('[') ? 
-        JSON.parse(captionData) : { text: captionData }) : 
-      captionData || {};
-    
-    // Debug the parameters to help identify issues
-    logWithCorrelation(correlationId, `Calling sync_media_group_captions with mediaGroupId=${mediaGroupId}, sourceMessageId=${sourceMessageId || 'none'}`, 'debug', 'syncMediaGroupCaptions');
-    
-    // Call the PostgreSQL function with properly typed parameters
-    const { data, error } = await supabaseClient.rpc('sync_media_group_captions', {
-      p_media_group_id: mediaGroupId,
-      p_exclude_message_id: sourceMessageId,
-      p_caption: newCaption,
-      p_caption_data: preparedCaptionData,
-      p_processing_state: processingState
-    });
-    
-    if (error) {
-      logWithCorrelation(correlationId, `Error syncing captions for media group ${mediaGroupId}: ${error.message}`, 'error', 'syncMediaGroupCaptions');
-      
-      // Log a detailed error with parameter types for troubleshooting
-      await logProcessingEvent(supabaseClient, 'media_group_sync_error', sourceMessageId, correlationId, {
-        media_group_id: mediaGroupId,
-        caption: newCaption,
-        params: {
-          p_media_group_id_type: typeof mediaGroupId,
-          p_exclude_message_id_type: typeof sourceMessageId,
-          p_caption_type: typeof newCaption,
-          p_caption_data_type: typeof preparedCaptionData,
-          p_processing_state_type: typeof processingState
-        }
-      }, error.message);
-      
-      return {
-        success: false,
-        error
-      };
-    } else {
-      const updatedCount = Array.isArray(data) ? data.length : 0;
-      logWithCorrelation(correlationId, `Successfully synced captions for ${updatedCount} messages in media group ${mediaGroupId}`, 'info', 'syncMediaGroupCaptions');
-      
-      // Log success event
-      await logProcessingEvent(supabaseClient, 'media_group_sync_success', sourceMessageId, correlationId, {
-        media_group_id: mediaGroupId,
-        caption: newCaption,
-        updated_messages: updatedCount,
-        synchronized_fields: [
-          'caption',
-          'analyzed_content',
-          'old_analyzed_content',
-          'processing_state'
-        ]
-      }, null);
-      
-      return {
-        success: true,
-        data
-      };
+    // Update the captions for all messages in the media group
+    for (const message of messagesToUpdate) {
+      const { error } = await supabaseClient
+        .from("messages")
+        .update({
+          caption: newCaption,
+          caption_data: captionData,
+          analyzed_content: captionData,
+          processing_state: processingState,
+          correlation_id: correlationId
+        })
+        .eq("id", message.id);
+        
+      if (error) {
+        console.error(`Error updating caption for message ${message.id} in media group ${mediaGroupId}:`, error);
+      } else {
+        console.log(`Caption synced for message ${message.id} in media group ${mediaGroupId}`);
+      }
     }
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    logWithCorrelation(correlationId, `Exception syncing media group captions for media group ${mediaGroupId}: ${errorMessage}`, 'error', 'syncMediaGroupCaptions');
-    
-    // Log the exception with stack trace for debugging
-    await logProcessingEvent(supabaseClient, 'media_group_sync_exception', sourceMessageId, correlationId, {
-      media_group_id: mediaGroupId,
-      caption: newCaption,
-      stack: error instanceof Error ? error.stack : undefined
-    }, errorMessage);
-    
-    return {
-      success: false,
-      error: errorMessage
-    };
+    console.error(`Exception syncing media group captions for media group ${mediaGroupId}:`, error);
   }
 }
 
@@ -587,112 +484,97 @@ export async function syncMediaGroupCaptions({
  * Extract forward information from a message
  */
 export function extractForwardInfo(message: any): any {
-  if (!message) return null;
-  
-  const forwardInfo = {};
-  
-  // Check for forwarded message attributes
   if (message.forward_from) {
-    Object.assign(forwardInfo, {
-      is_forwarded: true,
-      forward_from: message.forward_from,
-      forward_date: message.forward_date ? new Date(message.forward_date * 1000).toISOString() : null
-    });
+    return {
+      forwarded_from_type: 'user',
+      forwarded_from_id: message.forward_from.id,
+      forwarded_from_username: message.forward_from.username,
+      forwarded_date: new Date(message.forward_date * 1000).toISOString()
+    };
+  } else if (message.forward_from_chat) {
+    return {
+      forwarded_from_type: message.forward_from_chat.type,
+      forwarded_from_id: message.forward_from_chat.id,
+      forwarded_from_title: message.forward_from_chat.title,
+      forwarded_from_username: message.forward_from_chat.username,
+      forwarded_date: new Date(message.forward_date * 1000).toISOString()
+    };
+  } else {
+    return null;
   }
-  
-  if (message.forward_from_chat) {
-    Object.assign(forwardInfo, {
-      is_forwarded: true,
-      forward_from_chat: message.forward_from_chat,
-      forward_from_message_id: message.forward_from_message_id,
-      forward_signature: message.forward_signature,
-      forward_date: message.forward_date ? new Date(message.forward_date * 1000).toISOString() : null
-    });
-  }
-  
-  // Return null if no forwarding info was found
-  return Object.keys(forwardInfo).length > 0 ? forwardInfo : null;
 }
 
 /**
  * Upsert a text message record in the database
  */
-export async function upsertTextMessageRecord({ 
-  supabaseClient, 
-  messageId, 
-  chatId, 
-  messageText, 
-  messageData, 
-  chatType, 
-  chatTitle, 
-  forwardInfo, 
-  processingState, 
-  processingError, 
-  correlationId 
-}) {
+export async function upsertTextMessageRecord({
+  supabaseClient,
+  messageId,
+  chatId,
+  messageText,
+  messageData,
+  chatType,
+  chatTitle,
+  forwardInfo,
+  processingState,
+  processingError,
+  correlationId
+}: {
+  supabaseClient: SupabaseClient;
+  messageId: number;
+  chatId: number;
+  messageText: string | null;
+  messageData: any;
+  chatType: string | null;
+  chatTitle: string | null;
+  forwardInfo?: any;
+  processingState: string;
+  processingError: string | null;
+  correlationId: string;
+}): Promise<{ success: boolean; data?: any; error?: any }> {
   try {
-    logWithCorrelation(correlationId, `Upserting text message record for ${messageId} in chat ${chatId}`, 'info', 'upsertTextMessageRecord');
+    logWithCorrelation(correlationId, `Upserting text message record for ${messageId} in chat ${chatId}`, 'INFO', 'upsertTextMessageRecord');
     
-    // Call the RPC function to upsert the text message - parameters must match the database function signature
-    const { data, error } = await supabaseClient.rpc('upsert_text_message', {
-      p_telegram_message_id: messageId,
-      p_chat_id: chatId,
-      p_message_text: messageText,
-      p_message_data: messageData,
-      p_correlation_id: correlationId,
-      p_chat_type: chatType,
-      p_chat_title: chatTitle,
-      p_forward_info: forwardInfo,
-      p_processing_state: processingState,
-      p_processing_error: processingError
-    });
+    // Call the RPC function to upsert the text message
+    const { data, error } = await supabaseClient.rpc('upsert_text_message', [
+      messageId,         // p_telegram_message_id
+      chatId,            // p_chat_id
+      messageText,       // p_message_text
+      messageData,       // p_message_data
+      chatType,          // p_chat_type
+      chatTitle,         // p_chat_title
+      forwardInfo,       // p_forward_info
+      processingState,   // p_processing_state
+      processingError,   // p_processing_error
+      correlationId      // p_correlation_id
+    ], { count: 'exact' });
     
     if (error) {
-      logWithCorrelation(correlationId, `Error upserting text message: ${error.message}`, 'error', 'upsertTextMessageRecord');
+      logWithCorrelation(correlationId, `Error upserting text message: ${error.message}`, 'ERROR', 'upsertTextMessageRecord');
       console.error("DB error upserting text message:", error);
-      return {
-        success: false,
-        error
-      };
+      return { success: false, error };
     }
     
     // Fetch the complete record
     if (data) {
-      const { data: completeRecord, error: fetchError } = await supabaseClient.from('other_messages').select('*').eq('id', data).single();
-      
+      const { data: completeRecord, error: fetchError } = await supabaseClient
+        .from('other_messages')
+        .select('*')
+        .eq('id', data)
+        .single();
+        
       if (fetchError) {
-        logWithCorrelation(correlationId, `Warning: Successfully upserted text message with ID ${data}, but failed to fetch complete record: ${fetchError.message}`, 'warn', 'upsertTextMessageRecord');
-        return {
-          success: true,
-          data
-        };
+        logWithCorrelation(correlationId, `Error fetching complete record: ${fetchError.message}`, 'WARN', 'upsertTextMessageRecord');
+        return { success: true, data };
       }
       
-      return {
-        success: true,
-        data: completeRecord
-      };
+      return { success: true, data: completeRecord };
     }
     
-    return {
-      success: true,
-      data
-    };
+    return { success: true, data };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    logWithCorrelation(correlationId, `Exception upserting text message: ${errorMessage}`, 'error', 'upsertTextMessageRecord');
-    console.error("Exception upserting text message:", error);
-    return {
-      success: false,
-      error: errorMessage
-    };
+    logWithCorrelation(correlationId, `Exception upserting text message: ${errorMessage}`, 'ERROR', 'upsertTextMessageRecord');
+    return { success: false, error };
   }
 }
-
-export default {
-  upsertMediaMessageRecord,
-  findMessageByTelegramId,
-  findMessageByFileUniqueId,
-  extractForwardInfo,
-  upsertTextMessageRecord,
-};

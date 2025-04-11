@@ -1,215 +1,164 @@
 // Shared Imports 
 import { createCorsResponse, supabaseClient } from "../../_shared/cors.ts";
-// Local Imports
-import { MessageContext, MessageRecord, TelegramMessage } from '../types.ts';
-import {
-  findMessageByTelegramId,
-  logProcessingEvent,
-  triggerCaptionParsing,
-  updateMessageRecord
-} from '../utils/dbOperations.ts';
+import { findMessageByTelegramId, logProcessingEvent, triggerCaptionParsing, updateMessageRecord } from '../utils/dbOperations.ts';
 import { logWithCorrelation } from '../utils/logger.ts';
-
 /**
  * Handles edited messages (both text and media captions) from Telegram.
  * Finds the original message record and updates the relevant content (text or caption)
  * and its edit history.
- */
-export async function handleEditedMessage(
-  message: TelegramMessage,
-  context: MessageContext
-): Promise<Response> {
+ */ export async function handleEditedMessage(message, context) {
   const { correlationId } = context;
   const functionName = 'handleEditedMessage';
-  let dbMessageId: string | undefined = undefined;
-
+  let dbMessageId = undefined;
   logWithCorrelation(correlationId, `Processing edited message ${message.message_id}`, 'info', functionName);
-
   try {
     // Basic Validation
     if (!message || !message.chat || !message.message_id || !message.edit_date) {
       throw new Error(`Invalid edited message structure: Missing chat, message_id, or edit_date`);
     }
-
     // Determine Edit Type (Text vs. Media)
     const isTextEdit = !!message.text;
     const isMediaEdit = !!(message.photo || message.video || message.document);
-
     if (!isTextEdit && !isMediaEdit) {
-        // Neither text nor known media - likely unsupported edit type (e.g., poll)
-        logWithCorrelation(correlationId, `Received edit for unsupported message type (no text/photo/video/document). Skipping.`, 'warn', functionName);
-        await logProcessingEvent(
-            supabaseClient,
-            "edit_skipped_unsupported_type",
-            null,
-            correlationId,
-            { function: functionName, telegram_message_id: message.message_id, chat_id: message.chat.id },
-            "Edit target message has no text or recognized media."
-        );
-        return createCorsResponse(
-            { success: true, operation: 'skipped', reason: 'Unsupported message type for edit', correlationId },
-            { status: 200 }
-        );
+      // Neither text nor known media - likely unsupported edit type (e.g., poll)
+      logWithCorrelation(correlationId, `Received edit for unsupported message type (no text/photo/video/document). Skipping.`, 'warn', functionName);
+      await logProcessingEvent(supabaseClient, "edit_skipped_unsupported_type", null, correlationId, {
+        function: functionName,
+        telegram_message_id: message.message_id,
+        chat_id: message.chat.id
+      }, "Edit target message has no text or recognized media.");
+      return createCorsResponse({
+        success: true,
+        operation: 'skipped',
+        reason: 'Unsupported message type for edit',
+        correlationId
+      }, {
+        status: 200
+      });
     }
-
     // --- Find the Original Message --- (Use new utility function)
     logWithCorrelation(correlationId, `Looking up original message by tg_msg_id: ${message.message_id}, chat_id: ${message.chat.id}`, 'debug', functionName);
-    const findResult = await findMessageByTelegramId(
-      supabaseClient, // Pass client explicitly
-      message.message_id,
-      message.chat.id,
-      correlationId
-    );
-
+    const findResult = await findMessageByTelegramId(supabaseClient, message.message_id, message.chat.id, correlationId);
     // --- Handle Find Errors or Not Found ---    
     if (!findResult.success) {
       logWithCorrelation(correlationId, `Error finding message to edit: ${findResult.error}`, 'error', functionName);
-      await logProcessingEvent(
-        supabaseClient,
-        "db_find_edit_target_failed", 
-        null, 
-        correlationId,
-        { function: functionName, telegram_message_id: message.message_id, chat_id: message.chat.id },
-        findResult.error ?? 'Unknown DB error'
-      );
-      return createCorsResponse(
-        { success: false, error: `DB error finding message to edit: ${findResult.error}`, correlationId },
-        { status: 200 } // Respond with 200 as per original logic
+      await logProcessingEvent(supabaseClient, "db_find_edit_target_failed", null, correlationId, {
+        function: functionName,
+        telegram_message_id: message.message_id,
+        chat_id: message.chat.id
+      }, findResult.error ?? 'Unknown DB error');
+      return createCorsResponse({
+        success: false,
+        error: `DB error finding message to edit: ${findResult.error}`,
+        correlationId
+      }, {
+        status: 200
+      } // Respond with 200 as per original logic
       );
     }
-
     if (!findResult.data) {
       logWithCorrelation(correlationId, `Original message not found for edit (tg_msg_id: ${message.message_id}, chat_id: ${message.chat.id}). Cannot process edit.`, 'warn', functionName);
-      await logProcessingEvent(
-        supabaseClient,
-        "edit_target_not_found", 
-        null, 
-        correlationId,
-        { function: functionName, telegram_message_id: message.message_id, chat_id: message.chat.id },
-        "Original message not found for edit"
-      );
-      return createCorsResponse(
-        { success: true, operation: 'skipped', reason: 'Original message not found', correlationId },
-        { status: 200 } // Respond with 200 as per original logic
+      await logProcessingEvent(supabaseClient, "edit_target_not_found", null, correlationId, {
+        function: functionName,
+        telegram_message_id: message.message_id,
+        chat_id: message.chat.id
+      }, "Original message not found for edit");
+      return createCorsResponse({
+        success: true,
+        operation: 'skipped',
+        reason: 'Original message not found',
+        correlationId
+      }, {
+        status: 200
+      } // Respond with 200 as per original logic
       );
     }
-
-    const existingRecord = findResult.data as MessageRecord; // Cast to expected type
+    const existingRecord = findResult.data; // Cast to expected type
     dbMessageId = existingRecord.id; // Store for later use
-
     logWithCorrelation(correlationId, `Found existing message with DB ID: ${dbMessageId}`, 'debug', functionName);
-
     // --- Check for Caption Changes ---
-    const hasCaptionChanged = isMediaEdit && (existingRecord.caption !== message.caption) && 
-                             (message.caption !== undefined); // Only consider if caption is actually present
-
+    const hasCaptionChanged = isMediaEdit && existingRecord.caption !== message.caption && message.caption !== undefined; // Only consider if caption is actually present
     // Prepare for old_analyzed_content tracking
     let oldAnalyzedContent = null;
-    
     if (hasCaptionChanged) {
       logWithCorrelation(correlationId, `Caption changed for media message. Old: "${existingRecord.caption}", New: "${message.caption}"`, 'debug', functionName);
-      
       // Store existing analyzed_content as old_analyzed_content (as a single JSONB object)
       if (existingRecord.analyzed_content) {
         oldAnalyzedContent = existingRecord.analyzed_content;
         logWithCorrelation(correlationId, `Storing previous analyzed_content as old_analyzed_content for message ${existingRecord.id}`, 'info', functionName);
       }
     }
-
     // --- Update the Message Record ---
     // For media edits, we currently only support caption changes
     // For text edits, we update the text content
-    const updateResult = await updateMessageRecord(
-      supabaseClient,
-      existingRecord,
-      message,
-      null, // No media result since we're not re-processing media
-      null, // No caption data - will be processed by caption parser if needed
-      correlationId,
-      // Pass oldAnalyzedContent through updates parameter
-      hasCaptionChanged ? { 
-        old_analyzed_content: oldAnalyzedContent,
-        processing_state: 'initialized' // Reset processing state to trigger reprocessing
-      } : {}
-    );
-
+    const updateResult = await updateMessageRecord(supabaseClient, existingRecord, message, null, null, correlationId, // Pass oldAnalyzedContent through updates parameter
+    hasCaptionChanged ? {
+      old_analyzed_content: oldAnalyzedContent,
+      processing_state: 'initialized' // Reset processing state to trigger reprocessing
+    } : {});
     if (!updateResult || !updateResult.success) {
       logWithCorrelation(correlationId, `Failed to update message record for edit`, 'error', functionName);
-      await logProcessingEvent(
-        supabaseClient,
-        "edit_db_update_failed", 
-        dbMessageId, 
-        correlationId,
-        { function: functionName },
-        "Failed to update message record for edit"
-      );
-      return createCorsResponse(
-        { success: false, error: "Failed to update message record", correlationId },
-        { status: 200 } // Respond with 200 as per original logic
+      await logProcessingEvent(supabaseClient, "edit_db_update_failed", dbMessageId, correlationId, {
+        function: functionName
+      }, "Failed to update message record for edit");
+      return createCorsResponse({
+        success: false,
+        error: "Failed to update message record",
+        correlationId
+      }, {
+        status: 200
+      } // Respond with 200 as per original logic
       );
     }
-
     // --- Process Caption Changes (if applicable) ---
     if (hasCaptionChanged) {
       logWithCorrelation(correlationId, `Triggering caption parser for edited message ${dbMessageId}`, 'debug', functionName);
-      
       // Use the new triggerCaptionParsing function
       const parserResult = await triggerCaptionParsing({
         supabaseClient,
         messageId: dbMessageId,
         correlationId
       });
-      
       if (!parserResult.success) {
         const errorMsg = typeof parserResult.error === 'string' ? parserResult.error : 'Unknown error';
         logWithCorrelation(correlationId, `Failed to trigger caption parser: ${errorMsg}`, 'error', functionName);
-        await logProcessingEvent(
-          supabaseClient,
-          'caption_parser_invoke_failed',
-          dbMessageId,
-          correlationId,
-          { error: errorMsg, function: functionName },
-          `Failed to trigger caption parser: ${errorMsg}`
-        );
+        await logProcessingEvent(supabaseClient, 'caption_parser_invoke_failed', dbMessageId, correlationId, {
+          error: errorMsg,
+          function: functionName
+        }, `Failed to trigger caption parser: ${errorMsg}`);
       } else {
         logWithCorrelation(correlationId, `Successfully triggered caption parser for edited message ${dbMessageId}`, 'debug', functionName);
-        await logProcessingEvent(
-          supabaseClient,
-          'caption_parser_invoked',
-          dbMessageId,
-          correlationId,
-          { function: functionName },
-          'Caption parser invoked successfully'
-        );
+        await logProcessingEvent(supabaseClient, 'caption_parser_invoked', dbMessageId, correlationId, {
+          function: functionName
+        }, 'Caption parser invoked successfully');
       }
     } else {
-       await logProcessingEvent(
-            supabaseClient,
-            "edit_processed_no_caption_change", 
-            dbMessageId ?? null, 
-            correlationId, // Handle potential undefined dbMessageId if update failed
-            { function: functionName, edit_type: isTextEdit ? 'text' : 'media_no_caption_change' },
-            `Message edit processed successfully.`
-        );
+      await logProcessingEvent(supabaseClient, "edit_processed_no_caption_change", dbMessageId ?? null, correlationId, {
+        function: functionName,
+        edit_type: isTextEdit ? 'text' : 'media_no_caption_change'
+      }, `Message edit processed successfully.`);
     }
-
     // Final success response
-    return createCorsResponse({ success: true, operation: 'updated', messageId: dbMessageId, correlationId });
-
+    return createCorsResponse({
+      success: true,
+      operation: 'updated',
+      messageId: dbMessageId,
+      correlationId
+    });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     logWithCorrelation(correlationId, `Exception processing edited message: ${errorMessage}`, 'error', functionName);
-    await logProcessingEvent(
-        supabaseClient,
-        "edit_handler_exception", 
-        dbMessageId, 
-        correlationId, // Use dbMessageId if available
-        { function: functionName, telegram_message_id: message?.message_id, chat_id: message?.chat?.id },
-        errorMessage
-    );
-    return createCorsResponse(
-      { success: false, error: errorMessage, correlationId },
-      { status: 500 }
-    );
+    await logProcessingEvent(supabaseClient, "edit_handler_exception", dbMessageId, correlationId, {
+      function: functionName,
+      telegram_message_id: message?.message_id,
+      chat_id: message?.chat?.id
+    }, errorMessage);
+    return createCorsResponse({
+      success: false,
+      error: errorMessage,
+      correlationId
+    }, {
+      status: 500
+    });
   }
 }
