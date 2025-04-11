@@ -6,14 +6,10 @@ verify_jwt = false
 verify_jwt = false
 [functions.delete-telegram-message]
 verify_jwt = false
-[functions.manual-caption-parser]
-verify_jwt = false
 [functions.product-matching]
 verify_jwt = false
 [functions.telegram-webhook]
 verify_jwt = false
 [functions.update-telegram-caption]
-verify_jwt = false
-[functions.media_group_sync_cron]
 verify_jwt = false
 
