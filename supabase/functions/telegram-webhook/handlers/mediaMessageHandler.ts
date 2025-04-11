@@ -373,15 +373,15 @@ async function handleNewMessage(
           logWithCorrelation(correlationId, `Caption changed for message in media group ${message.media_group_id}, syncing to other messages`, 'INFO', functionName);
           
           // Sync caption changes to other messages in the group
-          syncMediaGroupCaptions(
+          syncMediaGroupCaptions({
             supabaseClient,
-            message.media_group_id,
-            dbResult.data.id,
-            message.caption,
+            mediaGroupId: message.media_group_id,
+            sourceMessageId: dbResult.data.id,
+            newCaption: message.caption,
             captionData,
-            'initialized', // Reset processing state for other messages
+            processingState: 'initialized', // Reset processing state for other messages
             correlationId
-          ).catch(error => {
+          }).catch(error => {
             logWithCorrelation(correlationId, `Error syncing media group captions: ${error instanceof Error ? error.message : String(error)}`, 'ERROR', functionName);
           });
         }
@@ -602,15 +602,15 @@ async function handleEditedMessage(
       logWithCorrelation(correlationId, `Caption changed for message in media group ${message.media_group_id}, syncing to other messages`, 'INFO', functionName);
       
       // Sync caption changes to other messages in the group
-      await syncMediaGroupCaptions(
+      await syncMediaGroupCaptions({
         supabaseClient,
-        message.media_group_id,
-        existingMessage.id,
-        message.caption,
+        mediaGroupId: message.media_group_id,
+        sourceMessageId: existingMessage.id,
+        newCaption: message.caption,
         captionData,
-        'initialized', // Reset processing state for other messages
+        processingState: 'initialized', // Reset processing state for other messages
         correlationId
-      );
+      });
     }
     
     // If caption has changed, trigger the caption parser

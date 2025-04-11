@@ -24,6 +24,7 @@ export async function upsertMediaMessageRecord({
   mediaGroupId,
   captionData,
   analyzedContent,
+  oldAnalyzedContent,
   correlationId,
   additionalUpdates = {}
 }: {
@@ -45,14 +46,16 @@ export async function upsertMediaMessageRecord({
   mediaGroupId?: string | null;
   captionData?: any;
   analyzedContent?: any;
+  oldAnalyzedContent?: any[];
   correlationId: string;
   additionalUpdates?: Record<string, any>;
 }): Promise<{ success: boolean; data?: any; error?: any }> {
   try {
     logWithCorrelation(correlationId, `Upserting media message record for ${messageId} in chat ${chatId}`, 'INFO', 'upsertMediaMessageRecord');
     
-    // Call the RPC function to upsert the media message - ensure parameters match the exact database function signature
-    const { data, error } = await supabaseClient.rpc('upsert_media_message', {
+    // Prepare parameters for the upsert_media_message function with consistent naming
+    // and proper handling of analyzed_content and old_analyzed_content
+    const rpcParams: Record<string, any> = {
       p_telegram_message_id: messageId,
       p_chat_id: chatId,
       p_file_unique_id: fileUniqueId,
@@ -63,14 +66,30 @@ export async function upsertMediaMessageRecord({
       p_extension: extension,
       p_media_type: mediaType,
       p_caption: caption,
-      p_processing_state: processingState, // Passed as string, will be cast in the function
+      p_processing_state: processingState,
       p_message_data: messageData,
       p_correlation_id: correlationId,
       p_media_group_id: mediaGroupId,
       p_forward_info: forwardInfo,
       p_processing_error: processingError,
-      p_caption_data: captionData || analyzedContent // Use this for analyzed content storage
-    });
+      p_caption_data: captionData,
+      p_analyzed_content: analyzedContent || captionData, // Directly use the analyzed_content parameter
+      p_old_analyzed_content: oldAnalyzedContent // Use old_analyzed_content for history tracking
+    };
+    
+    // Log the parameters being passed for debugging
+    logWithCorrelation(
+      correlationId, 
+      `Calling upsert_media_message with caption_data and analyzed_content: ${JSON.stringify({ 
+        caption_data: captionData ? '[set]' : '[not set]', 
+        analyzed_content: analyzedContent ? '[set]' : '[not set]' 
+      })}`, 
+      'DEBUG', 
+      'upsertMediaMessageRecord'
+    );
+    
+    // Call the RPC function with the enhanced parameter set
+    const { data, error } = await supabaseClient.rpc('upsert_media_message', rpcParams);
     
     if (error) {
       logWithCorrelation(correlationId, `Error upserting media message: ${error.message}`, 'ERROR', 'upsertMediaMessageRecord');
@@ -78,15 +97,23 @@ export async function upsertMediaMessageRecord({
       return { success: false, error };
     }
     
-    // Apply any additional updates if needed
+    // Apply any additional updates if needed that weren't handled by the RPC call
     if (Object.keys(additionalUpdates).length > 0 && data) {
       try {
-        // Filter out updates that were already applied via the RPC
+        // These fields are now handled directly in the RPC call, don't duplicate them in additionalUpdates
         const filteredUpdates = { ...additionalUpdates };
         delete filteredUpdates.old_analyzed_content;
         delete filteredUpdates.analyzed_content;
+        delete filteredUpdates.caption_data;
         
         if (Object.keys(filteredUpdates).length > 0) {
+          logWithCorrelation(
+            correlationId, 
+            `Applying additional updates: ${JSON.stringify(Object.keys(filteredUpdates))}`, 
+            'DEBUG', 
+            'upsertMediaMessageRecord'
+          );
+          
           const { error: updateError } = await supabaseClient
             .from('messages')
             .update(filteredUpdates)
@@ -101,7 +128,7 @@ export async function upsertMediaMessageRecord({
       }
     }
     
-    // Fetch the complete record
+    // Fetch the complete record to return the full state
     if (data) {
       const { data: completeRecord, error: fetchError } = await supabaseClient
         .from('messages')
@@ -423,58 +450,154 @@ export async function findMessagesByMediaGroupId(
   } catch (error) {
     console.error(`Exception finding messages by media group ID ${mediaGroupId}:`, error);
     return { success: false };
-  }
+ * Sync media group captions across all messages in a media group
+ * Uses the PostgreSQL sync_media_group_captions function to synchronize:
+ * - caption
+ * - analyzed_content (derived from caption_data)
+ * - old_analyzed_content (archives history of caption analysis)
+ * - processing_state
+ * 
+ * @returns Promise with success/error result object consistent with other DB operations
+ */
+interface SyncMediaGroupCaptionsParams {
+  supabaseClient: SupabaseClient;
+  mediaGroupId: string;
+  sourceMessageId?: string;
+  newCaption?: string | null;
+  captionData?: any;
+  processingState?: string;
+  correlationId: string;
 }
 
-/**
- * Sync media group captions
- */
-export async function syncMediaGroupCaptions(
-  supabaseClient: SupabaseClient,
-  mediaGroupId: string,
-  sourceMessageId: string,
-  newCaption: string,
-  captionData: any,
-  processingState: string,
-  correlationId: string
-): Promise<void> {
+export async function syncMediaGroupCaptions({
+  supabaseClient,
+  mediaGroupId,
+  sourceMessageId,
+  newCaption,
+  captionData,
+  processingState = 'pending_analysis',
+  correlationId
+}: SyncMediaGroupCaptionsParams): Promise<{ success: boolean; data?: any; error?: any }> {
   try {
-    // Find all messages in the media group except the source message
-    const { success, messages } = await findMessagesByMediaGroupId(
-      supabaseClient,
-      mediaGroupId,
-      correlationId
+    // Validation - only mediaGroupId is critical
+    if (!mediaGroupId) {
+      const errorMsg = 'Media group ID is required for caption synchronization';
+      logWithCorrelation(
+        correlationId, 
+        errorMsg, 
+        'ERROR', 
+        'syncMediaGroupCaptions'
+      );
+      return { success: false, error: errorMsg };
+    }
+    
+    logWithCorrelation(
+      correlationId, 
+      `Syncing captions for media group ${mediaGroupId}${sourceMessageId ? ` from source message ${sourceMessageId}` : ''}`, 
+      'INFO', 
+      'syncMediaGroupCaptions'
     );
     
-    if (!success || !messages) {
-      console.warn(`Could not find messages in media group ${mediaGroupId} to sync captions`);
-      return;
-    }
+    // Ensure captionData is a proper object for JSONB conversion
+    const preparedCaptionData = typeof captionData === 'string' 
+      ? JSON.parse(captionData) 
+      : captionData || {};
     
-    // Filter out the source message
-    const messagesToUpdate = messages.filter(msg => msg.id !== sourceMessageId);
+    // Debug the parameters to help identify issues
+    logWithCorrelation(
+      correlationId, 
+      `Calling sync_media_group_captions with mediaGroupId=${mediaGroupId}, sourceMessageId=${sourceMessageId || 'none'}`, 
+      'DEBUG', 
+      'syncMediaGroupCaptions'
+    );
     
-    // Update the captions for all messages in the media group
-    for (const message of messagesToUpdate) {
-      const { error } = await supabaseClient
-        .from("messages")
-        .update({
+    // Call the PostgreSQL function with properly typed parameters
+    // The PostgreSQL function has been updated to handle null parameters gracefully
+    const { data, error } = await supabaseClient.rpc('sync_media_group_captions', {
+      p_media_group_id: mediaGroupId,
+      p_exclude_message_id: sourceMessageId,
+      p_caption: newCaption,
+      p_caption_data: preparedCaptionData,
+      p_processing_state: processingState
+    });
+    
+    if (error) {
+      logWithCorrelation(
+        correlationId, 
+        `Error syncing captions for media group ${mediaGroupId}: ${error.message}`, 
+        'ERROR', 
+        'syncMediaGroupCaptions'
+      );
+      
+      // Log a detailed error with parameter types for troubleshooting
+      await logProcessingEvent(
+        supabaseClient,
+        'media_group_sync_error',
+        sourceMessageId,
+        correlationId,
+        {
+          media_group_id: mediaGroupId,
           caption: newCaption,
-          caption_data: captionData,
-          analyzed_content: captionData,
-          processing_state: processingState,
-          correlation_id: correlationId
-        })
-        .eq("id", message.id);
-        
-      if (error) {
-        console.error(`Error updating caption for message ${message.id} in media group ${mediaGroupId}:`, error);
-      } else {
-        console.log(`Caption synced for message ${message.id} in media group ${mediaGroupId}`);
-      }
+          params: {
+            p_media_group_id_type: typeof mediaGroupId,
+            p_exclude_message_id_type: typeof sourceMessageId,
+            p_caption_type: typeof newCaption,
+            p_caption_data_type: typeof preparedCaptionData,
+            p_processing_state_type: typeof processingState
+          }
+        },
+        error.message
+      );
+      
+      return { success: false, error };
+    } else {
+      const updatedCount = Array.isArray(data) ? data.length : 0;
+      logWithCorrelation(
+        correlationId, 
+        `Successfully synced captions for ${updatedCount} messages in media group ${mediaGroupId}`, 
+        'INFO', 
+        'syncMediaGroupCaptions'
+      );
+      
+      // Log success event
+      await logProcessingEvent(
+        supabaseClient,
+        'media_group_sync_success',
+        sourceMessageId,
+        correlationId,
+        {
+          media_group_id: mediaGroupId,
+          caption: newCaption,
+          updated_messages: updatedCount,
+          synchronized_fields: ['caption', 'analyzed_content', 'old_analyzed_content', 'processing_state']
+        }
+      );
+      
+      return { success: true, data };
     }
   } catch (error) {
-    console.error(`Exception syncing media group captions for media group ${mediaGroupId}:`, error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logWithCorrelation(
+      correlationId, 
+      `Exception syncing media group captions for media group ${mediaGroupId}: ${errorMessage}`, 
+      'ERROR', 
+      'syncMediaGroupCaptions'
+    );
+    
+    // Log the exception with stack trace for debugging
+    await logProcessingEvent(
+      supabaseClient,
+      'media_group_sync_exception',
+      sourceMessageId,
+      correlationId,
+      {
+        media_group_id: mediaGroupId,
+        caption: newCaption,
+        stack: error instanceof Error ? error.stack : undefined
+      },
+      errorMessage
+    );
+    return { success: false, error: errorMessage };
   }
 }
 

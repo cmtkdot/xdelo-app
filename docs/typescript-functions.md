@@ -339,6 +339,71 @@
  */
 ```
 
+## Upsert Text Message
+
+```typescript
+/**
+ * Upserts a text message record in the database using the PostgreSQL function
+ * 
+ * This function creates or updates a text message record in the 'other_messages' table,
+ * handling regular text messages, commands, and forwarded messages.
+ * 
+ * IMPORTANT: This function has been aligned with the PostgreSQL upsert_text_message function's
+ * parameter order and naming. When using RPC calls, parameter names must match exactly.
+ * Parameter order is critical - 'correlationId' is the 5th parameter, not the last one.
+ * 
+ * @param {Object} params - Function parameters
+ * @param {SupabaseClient<Database>} params.supabaseClient - Initialized Supabase client
+ * @param {number} params.messageId - Telegram message ID
+ * @param {number} params.chatId - Chat ID
+ * @param {string} params.messageText - Text content of the message
+ * @param {Json} params.messageData - Complete Telegram message data
+ * @param {string} params.correlationId - Request correlation ID for tracing (CRITICAL: 5th parameter)
+ * @param {string} [params.chatType] - Type of chat (private, group, etc.)
+ * @param {string} [params.chatTitle] - Title of the chat
+ * @param {ForwardInfo} [params.forwardInfo] - Forward information (standardized format)
+ * @param {string} [params.processingState] - Processing state (default: 'pending_analysis')
+ * @param {string} [params.processingError] - Error message if processing failed
+ * @returns {Promise<DbOperationResult<{ id: string }>>} Operation result with the message ID
+ * 
+ * @behavior
+ * - The function handles standard text messages and commands
+ * - For forwarded messages, it properly stores standardized forward_info data
+ * - Processing state is set based on message content requirements
+ * 
+ * @example
+ * // Basic text message
+ * const result = await upsertTextMessageRecord({
+ *   supabaseClient,
+ *   messageId: 12345,
+ *   chatId: 67890,
+ *   messageText: "Hello world!",
+ *   messageData: { /* Telegram message object */ },
+ *   correlationId: "abc-123",
+ *   chatType: "private",
+ *   processingState: "pending_analysis"
+ * });
+ * 
+ * // Forwarded message
+ * const forwardResult = await upsertTextMessageRecord({
+ *   supabaseClient,
+ *   messageId: 12346,
+ *   chatId: 67890,
+ *   messageText: "Forwarded content",
+ *   messageData: { /* Telegram message object */ },
+ *   correlationId: "abc-124",
+ *   chatType: "private",
+ *   forwardInfo: {
+ *     date: 1628753086,
+ *     fromChatId: 98765,
+ *     fromMessageId: 54321,
+ *     senderName: "Original Sender"
+ *   },
+ *   processingState: "initialized"
+ * });
+ */
+```
+
 ## Database Result Types
 
 ```typescript
