@@ -29,6 +29,9 @@ These database functions handle the core operations for the Telegram message pro
  * The function includes specialized handling for caption changes in duplicate messages,
  * preserving analysis history and properly managing caption updates across media groups.
  * 
+ * IMPORTANT: Parameter order matters when using positional parameters in SQL calls.
+ * When using RPC calls from TypeScript, parameter names must match exactly.
+ * 
  * @param {BIGINT} p_telegram_message_id - Telegram message ID
  * @param {BIGINT} p_chat_id - Telegram chat ID
  * @param {TEXT} p_file_unique_id - Unique file ID from Telegram (primary duplicate detection key)
@@ -47,11 +50,14 @@ These database functions handle the core operations for the Telegram message pro
  * @param {JSONB} p_forward_info - Forward information (optional, default: NULL)
  * @param {TEXT} p_processing_error - Processing error message (optional, default: NULL)
  * @param {JSONB} p_caption_data - Processed caption data (optional, default: NULL)
- * @param {JSONB} p_old_analyzed_content - Array of previous analyzed content (optional, default: NULL)
- * @param {JSONB} p_analyzed_content - Current analyzed content (optional, default: NULL)
  * @returns {UUID} - The ID of the created or updated message record
  * 
- * @notes
+ * @important_notes
+ * - The current database function does NOT have parameters for p_old_analyzed_content and p_analyzed_content
+ * - When using this function from TypeScript, pass analyzed_content in the p_caption_data parameter
+ * - Analyzed content handling is managed internally in the function
+ * 
+ * @behavior_notes
  * - When a caption changes in a duplicate message (same file_unique_id), the function:
  *   1. Detects the caption change
  *   2. Moves existing analyzed_content to old_analyzed_content array
@@ -59,6 +65,7 @@ These database functions handle the core operations for the Telegram message pro
  *   4. Resets processing_state to trigger reprocessing
  * - The function handles both new insertions and updates to existing records
  * - Media groups are properly maintained with consistent caption data
+ * - Forward information handling is standardized across media and text messages
  * 
  * @example
  * -- Basic usage:
@@ -220,16 +227,19 @@ export interface UpsertMediaMessageParams {
  * This function creates or updates a text message record, handling various
  * message attributes and forward information.
  * 
+ * IMPORTANT: Parameter order matters when using positional parameters in SQL calls.
+ * When using RPC calls from TypeScript, parameter names must match exactly.
+ * 
  * @param {BIGINT} p_telegram_message_id - Telegram message ID
  * @param {BIGINT} p_chat_id - Telegram chat ID
- * @param {TEXT} p_message_text - Content of the text message
- * @param {JSONB} p_message_data - Complete Telegram message data
- * @param {TEXT} p_correlation_id - Correlation ID for request tracking
- * @param {TEXT} p_chat_type - Type of chat (optional)
+ * @param {TEXT} p_message_text - Text content of the message
+ * @param {JSONB} p_message_data - Complete Telegram message data JSON
+ * @param {TEXT} p_correlation_id - Correlation ID for tracking requests - CRITICAL: this is the 5th parameter
+ * @param {TEXT} p_chat_type - Type of chat (private, group, etc.) (optional)
  * @param {TEXT} p_chat_title - Title of the chat (optional)
- * @param {JSONB} p_forward_info - Forwarded message information (optional)
- * @param {TEXT} p_processing_state - Current processing state (optional, default: 'pending_analysis')
- * @param {TEXT} p_processing_error - Error message if processing failed (optional)
+ * @param {JSONB} p_forward_info - Forward information (optional)
+ * @param {TEXT} p_processing_state - Processing state (default: 'pending_analysis')
+ * @param {TEXT} p_processing_error - Processing error message (optional)
  * @returns {UUID} - The ID of the created or updated message record
  * 
  * @example

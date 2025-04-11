@@ -69,9 +69,7 @@ export async function upsertMediaMessageRecord({
       p_media_group_id: mediaGroupId,
       p_forward_info: forwardInfo,
       p_processing_error: processingError,
-      p_caption_data: captionData || analyzedContent,
-      p_old_analyzed_content: additionalUpdates.old_analyzed_content,
-      p_analyzed_content: additionalUpdates.analyzed_content || captionData || analyzedContent
+      p_caption_data: captionData || analyzedContent // Use this for analyzed content storage
     });
     
     if (error) {
@@ -541,12 +539,12 @@ export async function upsertTextMessageRecord({
       p_chat_id: chatId,
       p_message_text: messageText,
       p_message_data: messageData,
+      p_correlation_id: correlationId,  // Moved to 5th position to match DB function signature
       p_chat_type: chatType,
       p_chat_title: chatTitle,
       p_forward_info: forwardInfo,
       p_processing_state: processingState,
-      p_processing_error: processingError,
-      p_correlation_id: correlationId
+      p_processing_error: processingError
     });
     
     if (error) {

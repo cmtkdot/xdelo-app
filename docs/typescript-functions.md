@@ -249,44 +249,84 @@
  * Upserts a media message record in the database using the PostgreSQL function
  * 
  * This handles the duplicate file_unique_id constraint by updating the existing record
- * if a message with the same file_unique_id already exists.
+ * if a message with the same file_unique_id already exists. Special handling is implemented
+ * for caption changes in duplicate messages to preserve analysis history.
  * 
- * @param {Object} params - The input parameters
+ * IMPORTANT: This function has been aligned with the PostgreSQL upsert_media_message function's
+ * parameter order and naming. When using RPC calls, parameter names must match exactly.
+ * 
+ * @param {Object} params - Function parameters
  * @param {SupabaseClient<Database>} params.supabaseClient - Initialized Supabase client
  * @param {number} params.messageId - Telegram message ID
- * @param {number} params.chatId - Telegram chat ID
- * @param {string} [params.caption] - Optional caption text
- * @param {string} [params.mediaType] - Type of media (photo, video, etc)
- * @param {string} [params.fileId] - Telegram file ID
- * @param {string} [params.fileUniqueId] - Telegram unique file ID (for deduplication)
- * @param {string} [params.storagePath] - Storage path of the downloaded file
- * @param {string} [params.publicUrl] - Public URL to access the file
- * @param {string} [params.mimeType] - MIME type of the file
- * @param {string} [params.extension] - File extension
- * @param {Json} params.messageData - Complete Telegram message object
- * @param {ProcessingState} params.processingState - Current processing state
+ * @param {number} params.chatId - Chat ID
+ * @param {string} params.fileUniqueId - Unique file ID from Telegram (critical for duplicate detection)
+ * @param {string} params.fileId - File ID from Telegram
+ * @param {string} params.storagePath - Storage path where the file is saved
+ * @param {string} params.publicUrl - Public URL to access the file
+ * @param {string} params.mimeType - MIME type of the media
+ * @param {string} params.extension - File extension
+ * @param {string} params.mediaType - Type of media (photo, video, document, etc.)
+ * @param {Json} params.messageData - Complete Telegram message data
+ * @param {string} [params.caption] - Media caption text
+ * @param {string} [params.processingState] - Processing state
  * @param {string} [params.processingError] - Error message if processing failed
- * @param {ForwardInfo} [params.forwardInfo] - Information about forwarded messages
+ * @param {ForwardInfo} [params.forwardInfo] - Information about forwarded messages (standardized format)
  * @param {string} [params.mediaGroupId] - Group ID for media groups
- * @param {Json} [params.captionData] - Analyzed caption data
+ * @param {Json} [params.captionData] - Analyzed caption data from caption parsing
+ * @param {Json} [params.analyzedContent] - Same as captionData, stored in analyzed_content field
+ * @param {Record<string, any>} [params.additionalUpdates] - Additional fields to update (e.g., for old_analyzed_content)
  * @param {string} params.correlationId - Request correlation ID for tracing
+ * 
+ * @behavior
+ * When a duplicate media message arrives with a different caption:
+ * 1. The function detects caption changes by comparing with existing records
+ * 2. Current analyzed_content is preserved by moving it to old_analyzed_content array
+ * 3. Processing state is reset to trigger reanalysis with the new caption
+ * 4. For media groups, all related messages are synchronized with the new caption
+ * 
+ * @implementation
+ * In the TypeScript implementation, analyzedContent is passed to the p_caption_data parameter
+ * in the database function. The PostgreSQL function handles moving current content to history.
  * 
  * @returns {Promise<DbOperationResult<{ id: string }>>} Operation result with the created or updated message ID
  * 
  * @example
+ * // Basic media message upsert
  * const result = await upsertMediaMessageRecord({
  *   supabaseClient,
  *   messageId: 12345,
  *   chatId: 67890,
- *   caption: "Sample photo",
- *   mediaType: "photo",
+ *   fileUniqueId: "AQADkK4xG_cN6EZ-", // Critical for duplicate detection
  *   fileId: "AgADBAADv6kxG-1fAUgQ8P4AAQNLrOVKiwAEgQ",
- *   fileUniqueId: "AQADkK4xG_cN6EZ-",
- *   storagePath: "AQADkK4xG_cN6EZ-.jpeg",
- *   publicUrl: "https://example.com/storage/AQADkK4xG_cN6EZ-.jpeg",
+ *   storagePath: "media/photos/AQADkK4xG_cN6EZ-.jpeg",
+ *   publicUrl: "https://example.com/storage/media/photos/AQADkK4xG_cN6EZ-.jpeg",
  *   mimeType: "image/jpeg",
  *   extension: "jpeg",
+ *   mediaType: "photo",
+ *   caption: "Beautiful sunset! #vacation",
  *   messageData: { /* Telegram message object */ },
+ *   processingState: "initialized",
+ *   correlationId: "abc-123"
+ * });
+ * 
+ * // Media message with analyzed content
+ * const resultWithAnalysis = await upsertMediaMessageRecord({
+ *   supabaseClient,
+ *   messageId: 12345,
+ *   chatId: 67890,
+ *   fileUniqueId: "AQADkK4xG_cN6EZ-",
+ *   // [Other required fields...]
+ *   caption: "Beautiful sunset! #vacation",
+ *   captionData: {
+ *     parsed_entities: [
+ *       { type: "hashtag", text: "#vacation" }
+ *     ]
+ *   },
+ *   analyzedContent: {
+ *     parsed_entities: [
+ *       { type: "hashtag", text: "#vacation" }
+ *     ]
+ *   },
  *   processingState: "processed",
  *   correlationId: "abc-123"
  * });
