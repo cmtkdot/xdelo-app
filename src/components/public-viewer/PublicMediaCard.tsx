@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Message } from '@/types/entities/Message'
-import { Video, Play, Eye, Pencil, Trash } from 'lucide-react'
+import { Play, Eye, Pencil, Trash } from 'lucide-react'
 import { useVideoThumbnail } from '@/hooks/useVideoThumbnail'
 import { isVideoMessage } from '@/utils/mediaUtils'
 import { ExpandableTabs } from '@/components/ui/expandable-tabs'
@@ -58,34 +58,40 @@ export function PublicMediaCard({ message, onClick }: PublicMediaCardProps) {
     return () => clearTimeout(timeoutId);
   }, [isVideo, message.id, thumbnailUrl, isLoading, generateThumbnail])
   
-  // Handle video playback on hover with better error handling
+  // Handle video hover playback with better error handling
   useEffect(() => {
-    const video = videoRef.current
-    if (video && isVideo) {
-      if (isHovering) {
-        // Start playing when hovering with proper error handling
-        const playPromise = video.play()
-        
-        // Only handle the promise if it exists (some browsers don't return a promise)
-        if (playPromise !== undefined) {
-          playPromise.catch(err => {
-            // Convert to warning and provide context
-            console.warn('Browser blocked video autoplay, this is normal behavior:', err)
-            // No need to handle this error since it's expected in some browsers
-            // Just keep showing the thumbnail
-          })
+    if (!videoRef.current || !isVideo) return;
+    
+    if (isHovering) {
+      // Add a small delay to ensure UI updates first
+      const timeoutId = setTimeout(() => {
+        if (videoRef.current) {
+          // Reset to beginning for consistent preview
+          videoRef.current.currentTime = 0;
+          
+          // Try to play with proper error handling
+          try {
+            const playPromise = videoRef.current.play();
+            
+            if (playPromise !== undefined) {
+              playPromise.catch(err => {
+                // Just log the error, the static thumbnail will still be visible
+                console.warn('Video autoplay blocked (this is normal):', err);
+              });
+            }
+          } catch (err) {
+            console.warn('Video playback error:', err);
+          }
         }
-      } else {
-        // Pause and reset to beginning when not hovering
-        // We need to check if the video is actually playing to avoid errors
-        if (!video.paused) {
-          video.pause()
-        }
-        video.currentTime = 0
-      }
+      }, 50);
+      
+      return () => clearTimeout(timeoutId);
+    } else if (videoRef.current) {
+      // Pause when not hovering
+      videoRef.current.pause();
     }
-  }, [isHovering, isVideo])
-  
+  }, [isHovering, isVideo]);
+
   const handleClick = (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
@@ -201,10 +207,10 @@ export function PublicMediaCard({ message, onClick }: PublicMediaCardProps) {
 
   return (
     <div 
-      className="group relative overflow-hidden rounded-lg bg-background border shadow-sm hover:shadow-md transition-all duration-300 cursor-pointer"
-      onClick={handleClick}
+      className="group relative overflow-hidden rounded-lg bg-background border shadow-sm hover:shadow-lg transition-all duration-300 cursor-pointer hover:scale-[1.02]"
       onMouseEnter={() => setIsHovering(true)}
       onMouseLeave={() => setIsHovering(false)}
+      onClick={handleClick}
       role="button"
       tabIndex={0}
       aria-label={`View details for ${message.product_name || 'media item'}`}
@@ -236,25 +242,16 @@ export function PublicMediaCard({ message, onClick }: PublicMediaCardProps) {
           <div className="relative w-full h-full bg-black">
             {/* Thumbnail image (shown while not hovering) */}
             {!isHovering && (
-              <div className="w-full h-full bg-muted flex items-center justify-center relative">
-                <img
-                  src={thumbnailUrl || message.public_url}
-                  alt={message.product_name || "Video thumbnail"}
-                  className="w-full h-full object-cover"
-                  loading="lazy"
-                  onError={(e) => {
-                    // Replace with a fallback thumbnail instead of showing error in console
-                    e.currentTarget.onerror = null; // Prevent infinite error loop
-                    e.currentTarget.src = '/images/video-placeholder.png'; // Use fallback image
-                    // If fallback doesn't exist, use a solid background with a video icon
-                    e.currentTarget.style.display = 'none';
-                  }}
-                />
-                {/* Fallback content when thumbnail fails to load */}
-                <div className="absolute inset-0 flex items-center justify-center bg-gray-800 z-0">
-                  <Video className="h-10 w-10 text-gray-400" />
-                </div>
-              </div>
+              <img
+                src={thumbnailUrl || message.public_url}
+                alt={message.product_name || "Video thumbnail"}
+                className="w-full h-full object-cover"
+                loading="lazy"
+                onError={(e) => {
+                  console.warn(`Error loading thumbnail for message: ${message.id}`);
+                  e.currentTarget.onerror = null; // Prevent infinite error loop
+                }}
+              />
             )}
             
             {/* Autoplay video (plays on hover) */}
@@ -273,8 +270,8 @@ export function PublicMediaCard({ message, onClick }: PublicMediaCardProps) {
                   generateThumbnail();
                 }
               }}
-              onError={(e) => {
-                console.warn(`Video playback error for message: ${message.id}`, e);
+              onError={() => {
+                console.warn(`Video playback error for message: ${message.id}`);
                 // Show the thumbnail with a play icon instead
                 setIsHovering(false);
               }}
@@ -282,12 +279,14 @@ export function PublicMediaCard({ message, onClick }: PublicMediaCardProps) {
             
             {/* Video Play Overlay - only show when not hovering */}
             {!isHovering && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-t from-black/60 to-transparent pointer-events-none">
+              <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-t from-black/60 to-transparent pointer-events-none">
                 <div className="rounded-full bg-black/40 p-3 backdrop-blur-sm border border-white/20 transform group-hover:scale-110 transition-transform duration-300 shadow-xl">
                   <Play className="h-8 w-8 text-white" fill="white" />
                 </div>
               </div>
             )}
+            
+
             
             {/* Duration badge if available */}
             {message.duration && (
@@ -302,6 +301,10 @@ export function PublicMediaCard({ message, onClick }: PublicMediaCardProps) {
             alt={message.product_name || "Image"}
             className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
             loading="lazy"
+            onError={(e) => {
+              console.warn(`Error loading image for message: ${message.id}`);
+              e.currentTarget.onerror = null; // Prevent infinite error loop
+            }}
           />
         )}
       </div>
@@ -379,13 +382,13 @@ export function PublicMediaCard({ message, onClick }: PublicMediaCardProps) {
         media={{ id: message.id, caption: message.caption, media_group_id: message.media_group_id }}
         open={isEditDialogOpen}
         onOpenChange={setIsEditDialogOpen}
-        onSuccess={() => console.log("Caption updated successfully")}
+        onSuccess={() => setIsEditDialogOpen(false)}
       />
       
       <DeleteConfirmationDialog
         isOpen={isDeleteDialogOpen}
         onOpenChange={setIsDeleteDialogOpen}
-        messageToDelete={message as any}
+        messageToDelete={message}
         onConfirm={handleDeleteConfirm}
         isProcessing={false}
       />
