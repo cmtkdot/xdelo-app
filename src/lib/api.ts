@@ -73,15 +73,6 @@ export async function setTelegramWebhook(token: string) {
   return invokeFunctionWrapper('xdelo_set-telegram-webhook', { token });
 }
 
-/**
- * Redownload a file from its media group
- */
-export async function redownloadMediaFile(messageId: string, mediaGroupId?: string) {
-  return invokeFunctionWrapper('redownload-from-media-group', { 
-    messageId,
-    mediaGroupId
-  });
-}
 
 /**
  * Log an operation to the unified audit system

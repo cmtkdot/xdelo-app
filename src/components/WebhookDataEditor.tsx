@@ -7,7 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { MakeEventType } from '@/types/make';
+// Define event type locally since we're removing Make automation references
+type WebhookEventType = string;
 import { Textarea } from '@/components/ui/textarea';
 import { PlusCircleIcon, TrashIcon, RefreshCwIcon } from 'lucide-react';
 import CodeEditor from '@/components/CodeEditor';
@@ -18,7 +19,7 @@ interface FieldSelectionConfig {
 }
 
 interface WebhookDataEditorProps {
-  eventTypes: MakeEventType[];
+  eventTypes: WebhookEventType[];
   fieldSelection: Record<string, FieldSelectionConfig> | null;
   payloadTemplate: Record<string, any> | null;
   transformationCode: string | null;

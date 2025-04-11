@@ -6,7 +6,6 @@ import {
   Settings,
   Music,
   GalleryHorizontal,
-  GitCompare,
   Users,
   GitPullRequest,
   PanelLeft,
@@ -85,12 +84,7 @@ export const NavItems: React.FC<NavItemsProps> = ({
       icon: <Table size={20} />,
       isActive: currentPath === "/table-demo",
     },
-    {
-      title: "Product Matching",
-      href: "/product-matching",
-      icon: <GitCompare size={20} />,
-      isActive: currentPath === "/product-matching",
-    },
+
     {
       title: "AI Chat",
       href: "/ai-chat",

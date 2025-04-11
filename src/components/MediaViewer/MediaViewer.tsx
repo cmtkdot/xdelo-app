@@ -4,7 +4,8 @@ import { Message } from '@/types';
 import { MediaDisplay } from './MediaDisplay';
 import { MediaToolbar } from './MediaToolbar';
 import { cn } from '@/lib/utils';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import { X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -120,6 +121,9 @@ export function MediaViewer({
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
+        <DialogTitle>
+          <VisuallyHidden>Media Viewer</VisuallyHidden>
+        </DialogTitle>
         {/* Close button */}
         <div className="absolute top-2 right-2 z-50">
           <Button 

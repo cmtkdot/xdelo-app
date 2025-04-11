@@ -1,26 +1,10 @@
 
-import type { AnalyzedContent } from '../utils/AnalyzedContent';
+import type { MediaItemProps } from '../entities/MediaItem';
 
 /**
- * Standard MediaItem type for use across the application
+ * Re-export MediaItem from entities to maintain backwards compatibility
  */
-export interface MediaItem {
-  id: string;
-  public_url: string;
-  mime_type?: string;
-  file_unique_id: string;
-  created_at: string;
-  caption?: string;
-  width?: number;
-  height?: number;
-  file_size?: number;
-  duration?: number;
-  content_disposition?: 'inline' | 'attachment';
-  storage_path?: string;
-  processing_state?: string;
-  analyzed_content?: AnalyzedContent;
-  type?: 'image' | 'video' | 'document' | 'audio' | 'unknown';
-}
+export type MediaItem = MediaItemProps;
 
 /**
  * Utility function to determine media type from MIME type

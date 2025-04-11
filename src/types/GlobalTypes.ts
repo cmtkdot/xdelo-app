@@ -33,9 +33,12 @@ export interface AnalyzedContent {
   sync_metadata?: SyncMetadata;
 }
 
-// Message type that includes all required fields
-export interface Message extends DbMessage {
-  user_id: string; // Make this required
+// Import Message type from entities and extend it
+import { Message as EntityMessage } from './entities/Message';
+
+// Extended Message type that includes all required fields and computed properties
+export interface Message extends EntityMessage {
+  user_id: string; // Required field
   _computed?: {
     isProcessing?: boolean;
     displayName?: string;

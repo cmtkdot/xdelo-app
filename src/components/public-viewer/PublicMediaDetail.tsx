@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect } from 'react'
 import { Message } from '@/types/entities/Message'
-import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
+import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
 import { Button } from '@/components/ui/button'
 import { 
   ChevronLeft, 
@@ -186,6 +187,9 @@ export function PublicMediaDetail({
     <>
       <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
         <DialogContent className="sm:max-w-6xl p-0 gap-0 max-h-[90vh] overflow-hidden">
+          <DialogTitle>
+            <VisuallyHidden>Media Details</VisuallyHidden>
+          </DialogTitle>
           {/* Desktop: Two-column layout with details on left, media on right */}
           <div className="grid grid-cols-1 md:grid-cols-2 h-full">
             {/* Left column - Details Panel */}

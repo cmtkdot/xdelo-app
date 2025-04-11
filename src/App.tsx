@@ -22,7 +22,6 @@ const AIChat = lazy(() => import("./pages/AIChat"));
 const Settings = lazy(() => import("./pages/Settings"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const PublicGallery = lazy(() => import("./pages/PublicGallery"));
-const ProductMatching = lazy(() => import('./pages/ProductMatching'));
 const Database = lazy(() => import('./pages/Database'));
 
 import { AppSidebar } from "@/components/Layout/Sidebar";
@@ -170,11 +169,6 @@ function App() {
                     <Route path="/settings" element={
                       <Suspense fallback={<PageLoader />}>
                         <Settings />
-                      </Suspense>
-                    } />
-                    <Route path="/product-matching" element={
-                      <Suspense fallback={<PageLoader />}>
-                        <ProductMatching />
                       </Suspense>
                     } />
                     <Route path="/database" element={

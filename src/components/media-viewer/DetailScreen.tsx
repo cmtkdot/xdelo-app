@@ -5,9 +5,10 @@ import { AnalyzedContent } from '@/types/utils/AnalyzedContent'
 import { 
   Dialog, 
   DialogContent, 
-  DialogHeader, 
-  DialogTitle 
+  DialogTitle,
+  DialogHeader 
 } from '@/components/ui/dialog'
+import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
 import { 
   Tabs, 
   TabsContent, 
@@ -190,6 +191,9 @@ export function MediaViewerDetail({
     <>
       <Dialog open={isOpen} onOpenChange={open => !open && onClose()}>
         <DialogContent className="max-w-6xl w-full h-[90vh] p-0 gap-0 overflow-hidden">
+          <DialogTitle>
+            <VisuallyHidden>Media Viewer</VisuallyHidden>
+          </DialogTitle>
           {/* Main content with two columns */}
           <div className="grid grid-cols-1 md:grid-cols-5 h-full overflow-hidden">
             {/* Media container - Left column (3/5 width on desktop) */}

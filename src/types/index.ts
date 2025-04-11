@@ -1,8 +1,19 @@
 
-// Export all types from individual type files
+// Export core types
 export * from './GlobalTypes';
-export * from './MessagesTypes';
-export * from './ProductMatching';
-export * from './api/SupabaseTypes';
+
+// Export entity types
 export * from './entities/Message';
 export * from './entities/Product';
+export * from './entities/MediaItem';
+
+// Export API types
+export * from './api/SupabaseTypes';
+export * from './api/ProcessingState';
+
+// Export additional types
+
+export * from './utils/AnalyzedContent';
+
+// Note: MessagesTypes is deprecated as its exports are now consolidated
+// in the appropriate entity files

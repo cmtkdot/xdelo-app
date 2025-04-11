@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import { MediaDisplay } from '../shared/MediaDisplay';
 import { Message } from '@/types/entities/Message';
 import { ChevronLeft, ChevronRight, X, ExternalLink } from 'lucide-react';
@@ -124,6 +125,9 @@ export function GalleryMediaViewer({
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
+        <DialogTitle>
+          <VisuallyHidden>Gallery Media Viewer</VisuallyHidden>
+        </DialogTitle>
         <div className="relative h-[80vh] flex flex-col">
           {/* Controls */}
           <div className="absolute top-2 right-2 z-20 flex gap-2">
