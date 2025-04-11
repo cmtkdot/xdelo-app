@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { MediaDisplay } from '../shared/MediaDisplay';
 import { Message } from '@/types/entities/Message';
@@ -36,17 +36,17 @@ export function GalleryMediaViewer({
     setCurrentIndex(0);
   }, [sortedGroup]);
 
-  const handlePrevItem = () => {
+  const handlePrevItem = useCallback(() => {
     if (currentIndex > 0) {
-      setCurrentIndex(currentIndex - 1);
+      setCurrentIndex(prevIndex => prevIndex - 1);
     }
-  };
+  }, [currentIndex]);
 
-  const handleNextItem = () => {
+  const handleNextItem = useCallback(() => {
     if (currentIndex < sortedGroup.length - 1) {
-      setCurrentIndex(currentIndex + 1);
+      setCurrentIndex(prevIndex => prevIndex + 1);
     }
-  };
+  }, [currentIndex, sortedGroup.length]);
 
   const currentItem = sortedGroup[currentIndex];
   const telegramUrl = currentItem ? getTelegramMessageUrl(currentItem) : null;
@@ -75,7 +75,7 @@ export function GalleryMediaViewer({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, currentIndex, sortedGroup.length, hasPrevious, hasNext]);
+  }, [isOpen, currentIndex, sortedGroup.length, hasPrevious, hasNext, handlePrevItem, handleNextItem, onPrevious, onNext, onClose]);
 
   // Handle swipe navigation
   const [touchStart, setTouchStart] = useState(0);
@@ -133,6 +133,8 @@ export function GalleryMediaViewer({
                 target="_blank" 
                 rel="noopener noreferrer"
                 className="p-2 bg-background/80 rounded-full hover:bg-background"
+                title="Open in Telegram"
+                aria-label="Open in Telegram"
               >
                 <ExternalLink className="h-5 w-5" />
               </a>
@@ -140,6 +142,8 @@ export function GalleryMediaViewer({
             <button 
               onClick={onClose}
               className="p-2 bg-background/80 rounded-full hover:bg-background"
+              title="Close viewer"
+              aria-label="Close viewer"
             >
               <X className="h-5 w-5" />
             </button>
@@ -152,6 +156,8 @@ export function GalleryMediaViewer({
               size="icon" 
               className="absolute left-2 top-1/2 transform -translate-y-1/2 z-20 rounded-full bg-background/50"
               onClick={onPrevious}
+              title="Previous group"
+              aria-label="Previous group"
             >
               <ChevronLeft className="h-8 w-8" />
             </Button>
@@ -163,6 +169,8 @@ export function GalleryMediaViewer({
               size="icon"
               className="absolute right-2 top-1/2 transform -translate-y-1/2 z-20 rounded-full bg-background/50"
               onClick={onNext}
+              title="Next group"
+              aria-label="Next group"
             >
               <ChevronRight className="h-8 w-8" />
             </Button>
@@ -175,6 +183,8 @@ export function GalleryMediaViewer({
               size="icon" 
               className="absolute left-16 top-1/2 transform -translate-y-1/2 z-20 rounded-full bg-background/50"
               onClick={handlePrevItem}
+              title="Previous item"
+              aria-label="Previous item"
             >
               <ChevronLeft className="h-6 w-6" />
             </Button>
@@ -186,6 +196,8 @@ export function GalleryMediaViewer({
               size="icon"
               className="absolute right-16 top-1/2 transform -translate-y-1/2 z-20 rounded-full bg-background/50"
               onClick={handleNextItem}
+              title="Next item"
+              aria-label="Next item"
             >
               <ChevronRight className="h-6 w-6" />
             </Button>
@@ -209,6 +221,9 @@ export function GalleryMediaViewer({
                     idx === currentIndex ? "bg-primary w-4" : "bg-muted-foreground/50"
                   )}
                   onClick={() => setCurrentIndex(idx)}
+                  title={`Go to item ${idx + 1}`}
+                  aria-label={`Go to item ${idx + 1}`}
+                  aria-current={idx === currentIndex ? "true" : "false"}
                 />
               ))}
             </div>

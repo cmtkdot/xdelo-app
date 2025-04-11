@@ -5,11 +5,12 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Separator } from "@/components/ui/separator";
 import { RotateCw, Database, AlertTriangle, Wrench } from 'lucide-react';
 import { useSystemRepair } from '@/hooks/useSystemRepair';
-import { useMediaUtils } from '@/hooks/useMediaUtils';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 export function SystemRepairPanel() {
   const { repairSystem, isRepairing: isSystemRepairing } = useSystemRepair();
-  const { repairMediaBatch, isProcessing: isMediaRepairing } = useMediaUtils();
+  const [isMediaRepairing, setIsMediaRepairing] = useState(false);
   const [repairResults, setRepairResults] = useState<any>(null);
 
   const handleRepairSystem = async () => {
@@ -18,8 +19,22 @@ export function SystemRepairPanel() {
   };
 
   const handleRepairFiles = async () => {
-    const results = await repairMediaBatch([]);
-    setRepairResults(results);
+    try {
+      setIsMediaRepairing(true);
+      const { data, error } = await supabase.functions.invoke("repair-media-batch", {
+        body: { messageIds: [] }
+      });
+      
+      if (error) throw error;
+      
+      setRepairResults(data);
+      toast.success("File repair operation completed");
+    } catch (error: any) {
+      toast.error(`Error repairing files: ${error.message}`);
+      setRepairResults({ success: false, error: error.message });
+    } finally {
+      setIsMediaRepairing(false);
+    }
   };
 
   return (

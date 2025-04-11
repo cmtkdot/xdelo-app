@@ -1,5 +1,12 @@
 
-export interface MediaItem {
+// Define the analyzed content structure based on the actual schema
+export interface AnalyzedContent {
+  product_name?: string;
+  [key: string]: unknown;
+}
+
+// Base interface for media item properties
+export interface MediaItemProps {
   id: string;
   public_url: string;
   type: 'image' | 'video' | 'document' | 'audio' | 'unknown';
@@ -15,7 +22,7 @@ export interface MediaItem {
   // Also include legacy fields for compatibility
   mime_type?: string;
   file_unique_id?: string;
-  analyzed_content?: any;
+  analyzed_content?: AnalyzedContent;
   created_at?: string;
   caption?: string;
   file_size?: number;
@@ -24,12 +31,12 @@ export interface MediaItem {
   processing_state?: string;
 }
 
-export class MediaItem implements MediaItem {
+export class MediaItem implements MediaItemProps {
   constructor(
     id: string,
     public_url: string,
     type: 'image' | 'video' | 'document' | 'audio' | 'unknown',
-    options: Omit<MediaItem, 'id' | 'public_url' | 'type'> = {}
+    options: Omit<MediaItemProps, 'id' | 'public_url' | 'type'> = {}
   ) {
     this.id = id;
     this.public_url = public_url;
@@ -37,45 +44,48 @@ export class MediaItem implements MediaItem {
     Object.assign(this, options);
   }
 
-  static fromMessage(message: any): MediaItem {
+  static fromMessage(message: Record<string, unknown>): MediaItem {
     let type: 'image' | 'video' | 'document' | 'audio' | 'unknown' = 'unknown';
     
-    if (message.mime_type) {
-      if (message.mime_type.startsWith('image/')) {
+    const mimeType = message.mime_type as string | undefined;
+    if (mimeType) {
+      if (mimeType.startsWith('image/')) {
         type = 'image';
-      } else if (message.mime_type.startsWith('video/')) {
+      } else if (mimeType.startsWith('video/')) {
         type = 'video';
-      } else if (message.mime_type.startsWith('audio/')) {
+      } else if (mimeType.startsWith('audio/')) {
         type = 'audio';
-      } else if (message.mime_type.startsWith('application/')) {
+      } else if (mimeType.startsWith('application/')) {
         type = 'document';
       }
     }
     
     return new MediaItem(
-      message.id,
-      message.public_url,
+      message.id as string,
+      message.public_url as string,
       type,
       {
-        thumbnail: type === 'image' ? message.public_url : undefined,
-        width: message.width,
-        height: message.height,
-        title: message.analyzed_content?.product_name || message.caption,
-        description: message.caption,
-        mimeType: message.mime_type,
-        fileSize: message.file_size,
-        duration: message.duration,
-        uploadedAt: message.created_at,
+        thumbnail: type === 'image' ? message.public_url as string : undefined,
+        width: message.width as number | undefined,
+        height: message.height as number | undefined,
+        title: message.analyzed_content ? 
+          (message.analyzed_content as AnalyzedContent).product_name || (message.caption as string | undefined) : 
+          (message.caption as string | undefined),
+        description: message.caption as string | undefined,
+        mimeType: mimeType,
+        fileSize: message.file_size as number | undefined,
+        duration: message.duration as number | undefined,
+        uploadedAt: message.created_at as string | undefined,
         // Include legacy fields
-        mime_type: message.mime_type,
-        file_unique_id: message.file_unique_id,
-        analyzed_content: message.analyzed_content,
-        created_at: message.created_at,
-        caption: message.caption,
-        file_size: message.file_size,
-        content_disposition: message.content_disposition,
-        storage_path: message.storage_path,
-        processing_state: message.processing_state
+        mime_type: mimeType,
+        file_unique_id: message.file_unique_id as string | undefined,
+        analyzed_content: message.analyzed_content as AnalyzedContent | undefined,
+        created_at: message.created_at as string | undefined,
+        caption: message.caption as string | undefined,
+        file_size: message.file_size as number | undefined,
+        content_disposition: message.content_disposition as 'inline' | 'attachment' | undefined,
+        storage_path: message.storage_path as string | undefined,
+        processing_state: message.processing_state as string | undefined
       }
     );
   }

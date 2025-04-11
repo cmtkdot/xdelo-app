@@ -1,6 +1,23 @@
 
 import { Message } from '@/types/entities/Message';
 
+// Define types for Telegram data structure
+interface TelegramVideo {
+  duration?: number;
+  width?: number;
+  height?: number;
+  [key: string]: unknown;
+}
+
+interface TelegramMessageData {
+  video?: TelegramVideo;
+  message?: {
+    video?: TelegramVideo;
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+}
+
 /**
  * Checks if a message is a video based on its MIME type or Telegram data
  */
@@ -12,7 +29,7 @@ export function isVideoMessage(message: Message): boolean {
   
   // Secondary check: Telegram data
   if (message.telegram_data) {
-    const messageData = message.telegram_data as any;
+    const messageData = message.telegram_data as TelegramMessageData;
     
     // Check for video field in message object
     if (messageData.video) {
@@ -36,7 +53,7 @@ export function getVideoDuration(message: Message): string | null {
   
   // Try to get duration from telegram_data if not available directly
   if (!durationSecs && message.telegram_data) {
-    const td = message.telegram_data as any;
+    const td = message.telegram_data as TelegramMessageData;
     durationSecs = td.video?.duration || td.message?.video?.duration;
   }
   
@@ -105,10 +122,10 @@ export function getProcessingStateColor(state: string): string {
 /**
  * Get video metadata from message
  */
-export function getVideoMetadata(message: Message): any {
+export function getVideoMetadata(message: Message): TelegramVideo | null {
   if (!message.telegram_data) return null;
   
-  const td = message.telegram_data as any;
+  const td = message.telegram_data as TelegramMessageData;
   return td.video || (td.message?.video) || null;
 }
 

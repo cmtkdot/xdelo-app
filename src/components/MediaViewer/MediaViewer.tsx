@@ -32,10 +32,8 @@ export function MediaViewer({
   className
 }: MediaViewerProps) {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
-  const [showTools, setShowTools] = useState(false);
   
   const currentMedia = currentGroup[currentIndex];
-  const messageIds = currentGroup.map(message => message.id);
   
   // Reset current index when group changes
   useEffect(() => {
@@ -72,9 +70,6 @@ export function MediaViewer({
           break;
         case 'Escape':
           onClose();
-          break;
-        case 't':
-          setShowTools(prev => !prev);
           break;
         default:
           break;
@@ -172,9 +167,6 @@ export function MediaViewer({
         {/* Toolbar */}
         <MediaToolbar 
           currentMedia={currentMedia}
-          showTools={showTools}
-          onToggleTools={() => setShowTools(prev => !prev)}
-          messageIds={messageIds}
         />
       </DialogContent>
     </Dialog>

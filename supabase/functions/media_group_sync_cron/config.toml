@@ -1,2 +1,0 @@
-# Media Group Sync Cron Configuration
-schedule = "0 3 * * *"  # Run daily at 3am
