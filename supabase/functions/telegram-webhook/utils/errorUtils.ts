@@ -14,6 +14,7 @@ import {
 } from "../../_shared/ErrorHandler.ts";
 import { TelegramMessage } from "../types.ts";
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
+import { RetryHandler, createRetryHandler, RetryOptions, RetryExecuteOptions, RetryResult } from "../../_shared/retryHandler.ts";
 
 /**
  * Context for Telegram message error handling
@@ -181,16 +182,28 @@ export function createTelegramErrorResponse(
 /**
  * Retry a function with exponential backoff
  * 
+ * @deprecated Use the centralized RetryHandler from _shared/retryHandler.ts instead
  * @param operation - The function to retry
  * @param options - Retry options
  * @returns The result of the operation
  * @example
+ * // Old way (deprecated):
  * const result = await retryWithBackoff(
  *   async () => await processCaption(message.caption),
  *   {
  *     maxRetries: 3,
  *     initialDelayMs: 100,
  *     functionName: 'processCaption',
+ *     correlationId
+ *   }
+ * );
+ * 
+ * // New way (preferred):
+ * const retryHandler = createRetryHandler({ maxRetries: 3, initialDelayMs: 100 });
+ * const result = await retryHandler.execute(
+ *   async () => await processCaption(message.caption),
+ *   {
+ *     operationName: 'processCaption',
  *     correlationId
  *   }
  * );
@@ -205,36 +218,37 @@ export async function retryWithBackoff<T>(
     correlationId: string;
   }
 ): Promise<T> {
-  const {
-    maxRetries = 3,
-    initialDelayMs = 100,
-    backoffFactor = 2,
-    functionName,
-    correlationId
-  } = options;
+  console.warn(
+    `[${options.correlationId}][${options.functionName}] WARNING: Using deprecated retryWithBackoff. ` +
+    'Please migrate to the centralized RetryHandler from _shared/retryHandler.ts'
+  );
   
-  let lastError: Error | null = null;
+  // Use the shared RetryHandler under the hood to maintain consistency
+  const retryHandler = createRetryHandler({
+    maxRetries: options.maxRetries || 3,
+    initialDelayMs: options.initialDelayMs || 100,
+    backoffFactor: options.backoffFactor || 2,
+    useJitter: true
+  });
   
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    try {
-      if (attempt > 0) {
-        const delayMs = initialDelayMs * Math.pow(backoffFactor, attempt - 1);
-        console.log(`[${correlationId}][${functionName}] Retrying (attempt ${attempt + 1}/${maxRetries}) after ${delayMs}ms delay...`);
-        await new Promise(resolve => setTimeout(resolve, delayMs));
-      }
-      
-      return await operation();
-    } catch (error) {
-      lastError = error instanceof Error ? error : new Error(String(error));
-      console.warn(
-        `[${correlationId}][${functionName}] Attempt ${attempt + 1}/${maxRetries} failed:`,
-        lastError.message
-      );
+  const result = await retryHandler.execute(
+    operation,
+    {
+      operationName: options.functionName,
+      correlationId: options.correlationId,
+      contextData: { source: 'legacy_retryWithBackoff' }
     }
-  }
+  );
   
-  throw lastError || new Error(`All ${maxRetries} retry attempts failed without specific error`);
+  if (result.success) {
+    return result.result;
+  } else {
+    throw result.error;
+  }
 }
+
+// Re-export RetryHandler and related types for convenience
+export { RetryHandler, createRetryHandler };
 
 /**
  * Wrap a function with error handling for Telegram webhook handlers

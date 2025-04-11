@@ -9,7 +9,7 @@
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { TelegramMessage, ForwardInfo } from "../types.ts";
 import { MediaProcessor, MediaContent, ProcessingResult } from "../../_shared/MediaProcessor.ts";
-import { retryWithBackoff } from "./errorUtils.ts";
+import { RetryHandler, createRetryHandler } from "../../_shared/retryHandler.ts";
 import { processCaptionText } from "../../_shared/captionParser.ts";
 
 /**
@@ -116,15 +116,29 @@ export async function processCaptionWithRetry(
 ): Promise<any> {
   if (!captionText) return null;
   
-  return await retryWithBackoff(
+  // Use the centralized RetryHandler instead of the duplicate retryWithBackoff function
+  const retryHandler = createRetryHandler({
+    maxRetries: 3,
+    initialDelayMs: 100,
+    backoffFactor: 2.0,
+    useJitter: true
+  });
+  
+  const result = await retryHandler.execute(
     async () => await processCaptionText(captionText),
     {
-      maxRetries: 3,
-      initialDelayMs: 100,
-      functionName: 'processCaptionText',
-      correlationId
+      operationName: 'processCaptionText',
+      correlationId,
+      supabaseClient: null, // We don't need supabaseClient for this simple retry
+      contextData: { captionLength: captionText.length }
     }
   );
+  
+  if (result.success) {
+    return result.result;
+  } else {
+    throw result.error;
+  }
 }
 
 /**
@@ -234,20 +248,40 @@ export async function processMessageMedia(
       return {
         success: false,
         isDuplicate: false,
-        error: 'No media content found in message'
+        error: "Could not extract media content from message"
       };
     }
     
-    // Process the media with retry logic
-    return await retryWithBackoff(
+    // Log media type and details for debugging
+    console.log(`[${correlationId}][${functionName}] Found ${mediaContent.mediaType} with ID ${mediaContent.fileUniqueId}`);
+    
+    // Process the media with retry logic using the centralized RetryHandler
+    const retryHandler = createRetryHandler({
+      maxRetries: 2,
+      initialDelayMs: 500,
+      backoffFactor: 2.0,
+      useJitter: true
+    });
+    
+    const result = await retryHandler.execute(
       async () => await mediaProcessor.processMedia(mediaContent, correlationId),
       {
-        maxRetries: 2,
-        initialDelayMs: 500,
-        functionName: 'processMedia',
-        correlationId
+        operationName: 'processMedia',
+        correlationId,
+        supabaseClient: null, // We don't need supabaseClient for this operation
+        contextData: { mediaType: mediaContent.mediaType, fileUniqueId: mediaContent.fileUniqueId }
       }
     );
+    
+    if (result.success) {
+      return result.result;
+    } else {
+      return {
+        success: false,
+        isDuplicate: false,
+        error: result.error?.message || 'Unknown error processing media'
+      };
+    }
   } catch (error) {
     console.error(`[${correlationId}][${functionName}] Exception processing media:`, error);
     return {
