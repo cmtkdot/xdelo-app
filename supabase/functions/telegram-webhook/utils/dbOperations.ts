@@ -503,3 +503,79 @@ export function extractForwardInfo(message: any): any {
     return null;
   }
 }
+
+/**
+ * Upsert a text message record in the database
+ */
+export async function upsertTextMessageRecord({
+  supabaseClient,
+  messageId,
+  chatId,
+  messageText,
+  messageData,
+  chatType,
+  chatTitle,
+  forwardInfo,
+  processingState,
+  processingError,
+  correlationId
+}: {
+  supabaseClient: SupabaseClient;
+  messageId: number;
+  chatId: number;
+  messageText: string | null;
+  messageData: any;
+  chatType: string | null;
+  chatTitle: string | null;
+  forwardInfo?: any;
+  processingState: string;
+  processingError: string | null;
+  correlationId: string;
+}): Promise<{ success: boolean; data?: any; error?: any }> {
+  try {
+    logWithCorrelation(correlationId, `Upserting text message record for ${messageId} in chat ${chatId}`, 'INFO', 'upsertTextMessageRecord');
+    
+    // Call the RPC function to upsert the text message - parameters must match the database function signature
+    const { data, error } = await supabaseClient.rpc('upsert_text_message', {
+      p_telegram_message_id: messageId,
+      p_chat_id: chatId,
+      p_message_text: messageText,
+      p_message_data: messageData,
+      p_chat_type: chatType,
+      p_chat_title: chatTitle,
+      p_forward_info: forwardInfo,
+      p_processing_state: processingState,
+      p_processing_error: processingError,
+      p_correlation_id: correlationId
+    });
+    
+    if (error) {
+      logWithCorrelation(correlationId, `Error upserting text message: ${error.message}`, 'ERROR', 'upsertTextMessageRecord');
+      console.error("DB error upserting text message:", error);
+      return { success: false, error };
+    }
+    
+    // Fetch the complete record
+    if (data) {
+      const { data: completeRecord, error: fetchError } = await supabaseClient
+        .from('other_messages')
+        .select('*')
+        .eq('id', data)
+        .single();
+        
+      if (fetchError) {
+        logWithCorrelation(correlationId, `Warning: Successfully upserted text message with ID ${data}, but failed to fetch complete record: ${fetchError.message}`, 'WARN', 'upsertTextMessageRecord');
+        return { success: true, data };
+      }
+      
+      return { success: true, data: completeRecord };
+    }
+    
+    return { success: true, data };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logWithCorrelation(correlationId, `Exception upserting text message: ${errorMessage}`, 'ERROR', 'upsertTextMessageRecord');
+    console.error("Exception upserting text message:", error);
+    return { success: false, error: errorMessage };
+  }
+}
