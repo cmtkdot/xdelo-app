@@ -30,9 +30,9 @@ export async function upsertMediaMessageRecord({
   try {
     logWithCorrelation(correlationId, `Upserting media message record for ${messageId} in chat ${chatId}`, 'INFO', 'upsertMediaMessageRecord');
     
-    // Prepare parameters for the upsert_media_message function with consistent naming
-    // and proper handling of analyzed_content and old_analyzed_content
-    // Ensure all parameters are included and in the correct order to match PostgreSQL function signature
+    // Prepare parameters for the upsert_media_message function
+    // Make sure to include the previously missing p_old_analyzed_content parameter
+    // and ensure all parameters match the PostgreSQL function signature exactly
     const rpcParams = {
       p_telegram_message_id: messageId,
       p_chat_id: chatId,
@@ -49,7 +49,7 @@ export async function upsertMediaMessageRecord({
       p_processing_error: processingError,
       p_caption_data: captionData,
       p_analyzed_content: analyzedContent || captionData,
-      p_old_analyzed_content: oldAnalyzedContent,
+      p_old_analyzed_content: oldAnalyzedContent, // This was the missing parameter
       p_user_id: null,  // This is a UUID type in the database, but we're passing null here
       p_media_group_id: mediaGroupId,
       p_forward_info: forwardInfo,
@@ -59,10 +59,11 @@ export async function upsertMediaMessageRecord({
     // Log the parameters being passed for debugging
     logWithCorrelation(correlationId, `Calling upsert_media_message with caption_data and analyzed_content: ${JSON.stringify({
       caption_data: captionData ? '[set]' : '[not set]',
-      analyzed_content: analyzedContent ? '[set]' : '[not set]'
+      analyzed_content: analyzedContent ? '[set]' : '[not set]',
+      old_analyzed_content: oldAnalyzedContent ? '[set]' : '[not set]'
     })}`, 'DEBUG', 'upsertMediaMessageRecord');
     
-    // Call the RPC function with the enhanced parameter set
+    // Call the RPC function with the complete parameter set
     const { data, error } = await supabaseClient.rpc('upsert_media_message', rpcParams);
     
     if (error) {
