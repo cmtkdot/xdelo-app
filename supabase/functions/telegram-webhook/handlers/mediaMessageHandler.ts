@@ -45,6 +45,41 @@ if (!TELEGRAM_BOT_TOKEN) {
 }
 
 /**
+ * Map a processing status to a database processing state
+ */
+function mapStatusToProcessingState(status: string): string {
+  switch (status) {
+    case 'success':
+      return 'completed';
+    case 'duplicate':
+      return 'completed';
+    case 'error':
+      return 'error';
+    default:
+      return 'pending_analysis';
+  }
+}
+
+/**
+ * Create a standardized error response
+ */
+function createErrorResponse(
+  error: string,
+  functionName: string,
+  status = 500,
+  correlationId?: string,
+  metadata?: Record<string, any>
+): Response {
+  return createTelegramErrorResponse(
+    error,
+    functionName,
+    status,
+    correlationId,
+    metadata
+  );
+}
+
+/**
  * Unified handler for both new and edited media messages.
  * This handler consolidates the logic for processing media messages,
  * reducing code duplication and improving maintainability.
@@ -185,6 +220,8 @@ async function handleNewMessage(
       correlationId
     );
 
+    // Change from const to let for processingState so it can be reassigned
+    let processingState = mapStatusToProcessingState(processingResult.status);
     let processingState = mapStatusToProcessingState(processingResult.status);
     logWithCorrelation(correlationId, `Media processing status for message ${message.message_id}: ${processingResult.status} -> DB state: ${processingState}`, 'INFO', functionName);
 
@@ -541,7 +578,7 @@ async function handleEditedMessage(
       hasNewMedia ? { 
         fileUniqueId: updates.file_unique_id,
         storagePath: updates.storage_path,
-        publicUrl: updates.public_url,
+        publicUrl: updates.publicUrl,
         mimeType: updates.mime_type,
         extension: updates.extension
       } : null,
@@ -631,33 +668,5 @@ async function handleEditedMessage(
       correlationId,
       { messageId: message.message_id, chatId: message.chat.id }
     );
-  }
-}
-
-/**
- * Maps a processing status from MediaProcessor to a database processing_state
- * using the values defined in the PostgreSQL processing_state_type enum.
- * 
- * @param status - The processing status from MediaProcessor
- * @returns The corresponding database processing state value
- */
-function mapStatusToProcessingState(status: string): string {
-  // Map media processor status to database processing state enum values
-  // The enum in PostgreSQL is: {initialized, pending, processing, completed, error, processed}
-  switch (status.toLowerCase()) {
-    case 'success':
-      return 'completed';
-    case 'error':
-      return 'error';
-    case 'processing':
-      return 'processing';
-    case 'pending':
-      return 'pending';
-    case 'initialized':
-      return 'initialized';
-    case 'processed':
-      return 'processed';
-    default:
-      return 'pending'; // Default to pending for unknown statuses
   }
 }
