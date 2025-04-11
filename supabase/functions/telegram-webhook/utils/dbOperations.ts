@@ -74,7 +74,8 @@ export async function upsertMediaMessageRecord({
       p_processing_error: processingError,
       p_caption_data: captionData,
       p_analyzed_content: analyzedContent || captionData, // Directly use the analyzed_content parameter
-      p_old_analyzed_content: oldAnalyzedContent // Use old_analyzed_content for history tracking
+      // Ensure empty arrays are properly cast to PostgreSQL arrays
+      p_old_analyzed_content: Array.isArray(oldAnalyzedContent) && oldAnalyzedContent.length === 0 ? '{}' : oldAnalyzedContent // Use empty array literal {} for PostgreSQL
     };
     
     // Log the parameters being passed for debugging
