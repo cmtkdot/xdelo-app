@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -5,6 +6,7 @@ import { useToast } from "@/hooks/useToast";
 import { CheckCircle, Loader2, XCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { BatchResults, ProcessingMessage, GlProduct } from "@/types/ProductMatching";
+import { Message as EntityMessage } from "@/types/entities/Message";
 
 export const BatchMatchingPanel = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -16,7 +18,7 @@ export const BatchMatchingPanel = () => {
   const [errorMessage, setErrorMessage] = useState<string>('');
   const { toast } = useToast();
 
-  const mapMessagesToProcessingItems = (messages: Message[]): ProcessingMessage[] => {
+  const mapMessagesToProcessingItems = (messages: EntityMessage[]): ProcessingMessage[] => {
     return messages.map(message => {
       let analyzedContent = message.analyzed_content;
       
@@ -137,7 +139,7 @@ export const BatchMatchingPanel = () => {
 
   const fetchProductsForMatching = async () => {
     try {
-      const { data, error } = await supabase
+      const { data: productsData, error } = await supabase
         .from('gl_products')
         .select('*')
         .order('created_at', { ascending: false });
@@ -148,10 +150,12 @@ export const BatchMatchingPanel = () => {
         return;
       }
       
-      setProducts(data as unknown as GlProduct[]);
+      setProducts(productsData as unknown as GlProduct[]);
+      return productsData;
     } catch (err) {
       console.error('Exception fetching products:', err);
       setErrorMessage(`An error occurred: ${err instanceof Error ? err.message : String(err)}`);
+      return [];
     }
   };
 
@@ -265,10 +269,18 @@ export const BatchMatchingPanel = () => {
                   size="sm"
                   variant="outline"
                   onClick={async () => {
-                    const products = await fetchProductsForMatching();
+                    const productsData = await fetchProductsForMatching();
+                    if (!productsData || productsData.length === 0) {
+                      toast({
+                        title: "No products available",
+                        description: "Please add products first before matching.",
+                        variant: "destructive",
+                      });
+                      return;
+                    }
                     const productId = prompt(
                       "Select a product ID to match:\n" +
-                      products.map(p => `${p.id}: ${p.new_product_name}`).join("\n")
+                      (productsData as any[]).map((p: any) => `${p.id}: ${p.new_product_name}`).join("\n")
                     );
                     if (productId) {
                       handleManualMatch(message.id, productId);

@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
@@ -121,11 +122,16 @@ const ProductMatchingCard = () => {
       
       if (matchResult.bestMatch) {
         // Get product details from gl_products
-        const { data: productData } = await supabase
+        const { data: productData, error: productError } = await supabase
           .from('gl_products')
           .select('new_product_name')
           .eq('id', matchResult.bestMatch.product_id)
           .single();
+          
+        if (productError) {
+          console.error("Error fetching product details:", productError);
+          throw productError;
+        }
           
         const product = productData as GlProduct;
         
