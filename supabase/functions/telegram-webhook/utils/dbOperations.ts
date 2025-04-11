@@ -127,31 +127,38 @@ export async function upsertMediaMessageRecord({
       'upsertMediaMessageRecord'
     );
     
+    // Helper function to handle empty objects 
+    const handleEmptyObject = (obj: any): any => {
+      if (obj === null || obj === undefined) return null;
+      if (typeof obj === 'object' && !Array.isArray(obj) && Object.keys(obj).length === 0) return null;
+      return obj;
+    };
+    
     // Create an array of parameters in the exact order defined in the PostgreSQL function
     // This avoids issues with named parameters being sent alphabetically
     const params = [
-      analyzedContent,               // p_analyzed_content
-      caption,                       // p_caption
-      formattedCaptionData,          // p_caption_data
-      chatId,                        // p_chat_id
-      correlationId,                 // p_correlation_id
-      extension,                     // p_extension
-      fileId,                        // p_file_id
-      fileUniqueId,                  // p_file_unique_id
-      forwardInfo,                   // p_forward_info
-      mediaGroupId,                  // p_media_group_id
-      mediaType,                     // p_media_type
-      messageData,                   // p_message_data
-      mimeType,                      // p_mime_type
-      formattedOldAnalyzedContent,   // p_old_analyzed_content
-      processingError,               // p_processing_error
-      processingState,               // p_processing_state
-      publicUrl,                     // p_public_url
-      storagePath,                   // p_storage_path
-      messageId,                     // p_telegram_message_id
-      null,                          // p_user_id
-      false,                         // p_is_edited
-      Object.keys(additionalUpdates || {}).length > 0 ? additionalUpdates : null      // p_additional_updates
+      handleEmptyObject(analyzedContent),               // p_analyzed_content
+      caption,                                          // p_caption
+      handleEmptyObject(formattedCaptionData),          // p_caption_data
+      chatId,                                           // p_chat_id
+      correlationId,                                    // p_correlation_id
+      extension,                                        // p_extension
+      fileId,                                           // p_file_id
+      fileUniqueId,                                     // p_file_unique_id
+      handleEmptyObject(forwardInfo),                   // p_forward_info
+      mediaGroupId,                                     // p_media_group_id
+      mediaType,                                        // p_media_type
+      handleEmptyObject(messageData),                   // p_message_data
+      mimeType,                                         // p_mime_type
+      handleEmptyObject(formattedOldAnalyzedContent),   // p_old_analyzed_content
+      processingError,                                  // p_processing_error
+      processingState,                                  // p_processing_state
+      publicUrl,                                        // p_public_url
+      storagePath,                                      // p_storage_path
+      messageId,                                        // p_telegram_message_id
+      null,                                             // p_user_id
+      false,                                            // p_is_edited
+      handleEmptyObject(additionalUpdates)              // p_additional_updates
     ];
 
     // Call function with positional parameters
