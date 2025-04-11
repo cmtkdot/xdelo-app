@@ -63,7 +63,7 @@ This function handles inserting or updating media messages in the database. It p
 | p_forward_info | JSONB | Information about forwarded messages in standardized format (default: NULL) |
 | p_processing_error | TEXT | Error message if processing failed (default: NULL) |
 | p_caption_data | JSONB | Structured data extracted from caption (default: NULL) |
-| p_old_analyzed_content | JSONB[] | Array of previous analyzed_content values for history tracking (default: NULL) |
+| p_old_analyzed_content | JSONB[] | Array of previous analyzed_content values for history tracking (default: NULL). Must be formatted as a valid PostgreSQL array (`'{}'` for empty, `'{"json":"obj1", "json":"obj2"}'` for populated) |
 | p_analyzed_content | JSONB | Current analyzed content from the caption (default: NULL) |
 
 ### Returns
@@ -80,6 +80,7 @@ UUID of the inserted or updated message record.
    - Detects when a message with the same `file_unique_id` has a different caption
    - Moves current `analyzed_content` to `old_analyzed_content` array
    - Resets processing state to trigger reanalysis of the new caption
+   - Creates a history of all previous caption analyses in the `old_analyzed_content` JSONB array
 
 3. **Forward Message Handling**:
    - Standardized processing of forwarded messages
@@ -88,6 +89,23 @@ UUID of the inserted or updated message record.
 4. **Audit Logging**:
    - Records all operations to `unified_audit_logs` table
    - Includes detailed metadata about the operation
+
+### JSONB Array Handling
+
+The `p_old_analyzed_content` parameter requires special handling when passed from TypeScript/JavaScript:
+
+1. **Empty Arrays**:
+   - PostgreSQL expects `'{}'` (not `'[]'`) for empty arrays
+   - JavaScript's `[]` must be converted to PostgreSQL's `'{}'`
+
+2. **Populated Arrays**:
+   - Each element must be a valid JSONB object
+   - Format: `'{"json_obj1", "json_obj2"}'`
+   - Double quotes inside array elements must be properly escaped
+
+3. **Type Conversion**:
+   - TypeScript arrays must be properly formatted before being passed to the database
+   - Use the `formatPostgresArray` utility function in TypeScript for proper conversion
 
 ### Example
 
