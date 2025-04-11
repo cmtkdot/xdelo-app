@@ -70,7 +70,7 @@ export async function handleNewMessage(message, telegram_token, correlationId, f
       mediaGroupId: message.media_group_id,
       captionData,
       analyzedContent: captionData,
-      oldAnalyzedContent: null, // Explicitly passing null for new messages
+      oldAnalyzedContent: null, // Pass null for new messages
       correlationId
     });
 
@@ -303,5 +303,57 @@ export async function handleMediaMessage(telegramToken, message, context) {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }
     );
+  }
+}
+
+// Add missing functions
+
+async function checkFileExistsInStorage(fileUniqueId, extension, correlationId) {
+  try {
+    logWithCorrelation(correlationId, `Checking if file ${fileUniqueId}.${extension} exists in storage`, 'INFO', 'checkFileExistsInStorage');
+    
+    // First check if the file exists in the database
+    const existingFileResult = await findMessageByFileUniqueId(supabaseClient, fileUniqueId, correlationId);
+    
+    if (existingFileResult.success && existingFileResult.data) {
+      logWithCorrelation(correlationId, `Found existing file record in database with file_unique_id ${fileUniqueId}`, 'INFO', 'checkFileExistsInStorage');
+      
+      // Check if the file exists in storage
+      const { data, error } = await supabaseClient
+        .storage
+        .from('media')
+        .getPublicUrl(`${fileUniqueId}.${extension}`);
+      
+      if (error) {
+        logWithCorrelation(correlationId, `Error checking file in storage: ${error.message}`, 'ERROR', 'checkFileExistsInStorage');
+        return { exists: false };
+      }
+      
+      logWithCorrelation(correlationId, `Verified file exists in storage at path ${fileUniqueId}.${extension}`, 'INFO', 'checkFileExistsInStorage');
+      
+      return {
+        exists: true,
+        path: `${fileUniqueId}.${extension}`,
+        publicUrl: data.publicUrl,
+        mimeType: existingFileResult.data.mime_type,
+        storagePath: `${fileUniqueId}.${extension}`
+      };
+    }
+    
+    return { exists: false };
+  } catch (error) {
+    logWithCorrelation(correlationId, `Error checking file existence: ${error.message}`, 'ERROR', 'checkFileExistsInStorage');
+    return { exists: false, error: error.message };
+  }
+}
+
+async function checkMessageExists(telegramMessageId, chatId, correlationId) {
+  try {
+    logWithCorrelation(correlationId, `Checking for message ${telegramMessageId} in chat ${chatId}`, 'INFO', 'checkMessageExists');
+    const result = await findMessageByTelegramId(supabaseClient, telegramMessageId, chatId, correlationId);
+    return result;
+  } catch (error) {
+    logWithCorrelation(correlationId, `Error checking message existence: ${error.message}`, 'ERROR', 'checkMessageExists');
+    return { success: false, error: error.message };
   }
 }

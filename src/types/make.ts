@@ -45,3 +45,46 @@ export interface TestPayload {
   created_at: string;
   updated_at: string;
 }
+
+// Additional types needed by the application
+
+export interface MakeWebhookLog {
+  id: string;
+  webhook_id: string;
+  event_type: string;
+  request_payload: any;
+  response_status: number;
+  response_body: string;
+  success: boolean;
+  error_message?: string;
+  created_at: string;
+}
+
+export interface MakeAutomationRule {
+  id: string;
+  name: string;
+  description?: string;
+  event_type: string;
+  conditions: MakeCondition[];
+  actions: MakeAction[];
+  is_active: boolean;
+  execution_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MakeCondition {
+  id: string;
+  field: string;
+  operator: 'equals' | 'not_equals' | 'contains' | 'not_contains' | 'starts_with' | 'ends_with' | 'greater_than' | 'less_than' | 'exists' | 'not_exists';
+  value: any;
+  group?: string;
+  logic_operator?: 'and' | 'or';
+}
+
+export interface MakeAction {
+  id: string;
+  type: 'webhook' | 'email' | 'database' | 'custom';
+  config: Record<string, any>;
+  order: number;
+}

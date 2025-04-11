@@ -46,28 +46,54 @@ export async function upsertMediaMessageRecord({
   mediaGroupId?: string | null;
   captionData?: any;
   analyzedContent?: any;
-  oldAnalyzedContent?: any[];
+  oldAnalyzedContent?: any;
   correlationId: string;
   additionalUpdates?: Record<string, any>;
 }): Promise<{ success: boolean; data?: any; error?: any }> {
   try {
-    logWithCorrelation(correlationId, `Upserting media message ${messageId} in chat ${chatId}`, 'INFO', 'upsertMediaMessageRecord');
+    logWithCorrelation(correlationId, `Upserting media message record for ${messageId} in chat ${chatId}`, 'INFO', 'upsertMediaMessageRecord');
     
     // Ensure captionData is properly formatted as JSONB
-    // If it's a string that looks like JSON, parse it
-    // If it's already an object, use it as is
-    // If it's null or undefined, pass null
-    const formattedCaptionData = captionData ? 
-      (typeof captionData === 'string' ? 
-        (captionData.trim().startsWith('{') || captionData.trim().startsWith('[') ? 
-          JSON.parse(captionData) : { text: captionData }) : 
-        captionData) : 
-      null;
+    let formattedCaptionData = captionData;
+    if (captionData) {
+      if (typeof captionData === 'string') {
+        // If it's a string that looks like JSON, parse it
+        if (captionData.trim().startsWith('{') || captionData.trim().startsWith('[')) {
+          try {
+            formattedCaptionData = JSON.parse(captionData);
+          } catch (e) {
+            formattedCaptionData = { text: captionData };
+          }
+        } else {
+          formattedCaptionData = { text: captionData };
+        }
+      }
+      // Otherwise leave as is (assuming it's already an object)
+    }
     
-    // Format old analyzed content as an array if it's not already
-    const formattedOldAnalyzedContent = oldAnalyzedContent ? 
-      (Array.isArray(oldAnalyzedContent) ? oldAnalyzedContent : [oldAnalyzedContent]) : 
-      null;
+    // Handle oldAnalyzedContent properly as JSONB or null
+    let formattedOldAnalyzedContent = null;
+    
+    // Only pass oldAnalyzedContent if it has content
+    if (oldAnalyzedContent) {
+      // Convert to array if it's not already one
+      if (!Array.isArray(oldAnalyzedContent)) {
+        formattedOldAnalyzedContent = JSON.stringify([oldAnalyzedContent]);
+      } else if (oldAnalyzedContent.length > 0) {
+        formattedOldAnalyzedContent = JSON.stringify(oldAnalyzedContent);
+      }
+    }
+    
+    logWithCorrelation(
+      correlationId, 
+      `Calling upsert_media_message with caption_data and analyzed_content: ${JSON.stringify({
+        caption_data: captionData ? '[set]' : '[not set]',
+        analyzed_content: analyzedContent ? '[set]' : '[not set]',
+        old_analyzed_content: formattedOldAnalyzedContent ? '[set]' : '[not set]'
+      })}`, 
+      'INFO', 
+      'upsertMediaMessageRecord'
+    );
     
     // Call database function with parameters in the correct order
     const { data, error } = await supabaseClient.rpc('upsert_media_message', {
@@ -89,14 +115,14 @@ export async function upsertMediaMessageRecord({
       p_forward_info: forwardInfo,
       p_processing_error: processingError,
       p_caption_data: formattedCaptionData, // Now properly sent as JSONB
-      p_old_analyzed_content: formattedOldAnalyzedContent,
+      p_old_analyzed_content: formattedOldAnalyzedContent, // Properly formatted as JSONB
       p_analyzed_content: analyzedContent
     });
 
     if (error) {
       logWithCorrelation(
         correlationId, 
-        `Error upserting media message: ${JSON.stringify(error)}`, 
+        `Error upserting media message: ${error.message}`, 
         'ERROR', 
         'upsertMediaMessageRecord'
       );
@@ -481,34 +507,29 @@ export async function syncMediaGroupCaptions({
 export function extractForwardInfo(message: any): any {
   if (!message) return null;
   
-  // Check if this is a forwarded message
-  if (message.forward_date) {
-    const forwardInfo: Record<string, any> = {
-      forward_date: new Date(message.forward_date * 1000).toISOString()
-    };
-    
-    // Forwarded from a user
-    if (message.forward_from) {
-      forwardInfo.forwarded_from_type = 'user';
-      forwardInfo.forwarded_from_id = message.forward_from.id;
-      forwardInfo.forwarded_from_name = [
-        message.forward_from.first_name,
-        message.forward_from.last_name
-      ].filter(Boolean).join(' ');
-      forwardInfo.forwarded_from_username = message.forward_from.username;
-    } 
-    // Forwarded from a channel
-    else if (message.forward_from_chat) {
-      forwardInfo.forwarded_from_type = message.forward_from_chat.type;
-      forwardInfo.forwarded_from_id = message.forward_from_chat.id;
-      forwardInfo.forwarded_from_title = message.forward_from_chat.title;
-      forwardInfo.forwarded_from_username = message.forward_from_chat.username;
-    }
-    
-    return forwardInfo;
+  const forwardInfo = {};
+  
+  // Check for forwarded message attributes
+  if (message.forward_from) {
+    Object.assign(forwardInfo, {
+      is_forwarded: true,
+      forward_from: message.forward_from,
+      forward_date: message.forward_date ? new Date(message.forward_date * 1000).toISOString() : null
+    });
   }
   
-  return null;
+  if (message.forward_from_chat) {
+    Object.assign(forwardInfo, {
+      is_forwarded: true,
+      forward_from_chat: message.forward_from_chat,
+      forward_from_message_id: message.forward_from_message_id,
+      forward_signature: message.forward_signature,
+      forward_date: message.forward_date ? new Date(message.forward_date * 1000).toISOString() : null
+    });
+  }
+  
+  // Return null if no forwarding info was found
+  return Object.keys(forwardInfo).length > 0 ? forwardInfo : null;
 }
 
 /**
