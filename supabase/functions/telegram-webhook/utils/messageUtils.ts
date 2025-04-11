@@ -295,7 +295,7 @@ export async function createMessageRecord(
       telegram_message_id: message.message_id,
       chat_id: message.chat.id,
       chat_type: message.chat.type,
-      user_id: message.from?.id,
+      // user_id field removed as it's no longer used in the database schema
       message_date: new Date(message.date * 1000).toISOString(),
       caption: message.caption,
       caption_data: captionData,

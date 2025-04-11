@@ -199,18 +199,14 @@ export class RetryHandler {
             retry_attempt: attempts,
             retry_next_attempt: attempts + 1,
             retry_delay_ms: delay,
+            operationName,
+            contextData
+          }
+        );
       }
       
       // Wait for the calculated delay
       await new Promise(resolve => setTimeout(resolve, delay));
-      
-          operationName,
-          attempts,
-          this.config.maxRetries,
-          undefined,
-          contextData
-        );
-      }
       
       // Also log to unified_audit_logs
       await this.logToUnifiedAuditLogs(

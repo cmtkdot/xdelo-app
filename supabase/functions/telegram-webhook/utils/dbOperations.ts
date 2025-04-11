@@ -51,7 +51,7 @@ export async function upsertMediaMessageRecord({
   try {
     logWithCorrelation(correlationId, `Upserting media message record for ${messageId} in chat ${chatId}`, 'INFO', 'upsertMediaMessageRecord');
     
-    // Call the RPC function to upsert the media message
+    // Call the RPC function to upsert the media message - ensure parameters match the exact database function signature
     const { data, error } = await supabaseClient.rpc('upsert_media_message', {
       p_telegram_message_id: messageId,
       p_chat_id: chatId,

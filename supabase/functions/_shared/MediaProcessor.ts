@@ -592,29 +592,46 @@ export class MediaProcessor {
   }
   
   /**
-   * Generate a standardized storage path for a file
-   * 
-   * This method creates a consistent storage path for a file based on its unique ID and MIME type.
-   * The path follows the format: `{fileUniqueId}.{extension}` where the extension is derived
-   * from the MIME type. This ensures files are stored with consistent naming conventions.
-   * 
-   * @param fileUniqueId - Unique identifier for the file from Telegram
-   * @param mimeType - MIME type of the file used to determine the extension
-   * @returns The standardized storage path for the file
-   * @example
-   * ```typescript
-   * // Generate a storage path for a file
-   * const fileUniqueId = 'AgADcAUAAj-vwFc';
-   * const mimeType = 'image/jpeg';
-   * const storagePath = mediaProcessor.generateStoragePath(fileUniqueId, mimeType);
-   * console.log(`Storage path: ${storagePath}`);
-   * // Output: "Storage path: AgADcAUAAj-vwFc.jpeg"
-   * ```
-   */
-  public generateStoragePath(fileUniqueId: string, mimeType: string): string {
-    const extension = this.getExtensionFromMimeType(mimeType);
-    return this.getStandardizedPath(fileUniqueId, extension);
-  }
+ * Create a standardized path for a file combining the fileUniqueId and extension
+ * 
+ * This method standardizes how file paths are constructed to ensure consistency
+ * throughout the application. The format is `{fileUniqueId}.{extension}`.
+ * 
+ * @param fileUniqueId - Unique identifier for the file from Telegram
+ * @param extension - The file extension (without the leading dot)
+ * @returns The standardized path string
+ */
+public getStandardizedPath(fileUniqueId: string, extension: string): string {
+  // Ensure extension doesn't start with a dot
+  const cleanExtension = extension.startsWith('.') ? extension.substring(1) : extension;
+  // Combine fileUniqueId and extension with a dot in between
+  return `${fileUniqueId}.${cleanExtension}`;
+}
+
+/**
+ * Generate a standardized storage path for a file
+ * 
+ * This method creates a consistent storage path for a file based on its unique ID and MIME type.
+ * The path follows the format: `{fileUniqueId}.{extension}` where the extension is derived
+ * from the MIME type. This ensures files are stored with consistent naming conventions.
+ * 
+ * @param fileUniqueId - Unique identifier for the file from Telegram
+ * @param mimeType - MIME type of the file used to determine the extension
+ * @returns The standardized storage path for the file
+ * @example
+ * ```typescript
+ * // Generate a storage path for a file
+ * const fileUniqueId = 'AgADcAUAAj-vwFc';
+ * const mimeType = 'image/jpeg';
+ * const storagePath = mediaProcessor.generateStoragePath(fileUniqueId, mimeType);
+ * console.log(`Storage path: ${storagePath}`);
+ * // Output: "Storage path: AgADcAUAAj-vwFc.jpeg"
+ * ```
+ */
+public generateStoragePath(fileUniqueId: string, mimeType: string): string {
+  const extension = this.getExtensionFromMimeType(mimeType);
+  return this.getStandardizedPath(fileUniqueId, extension);
+}
 
   /**
    * Get standardized path for a file
