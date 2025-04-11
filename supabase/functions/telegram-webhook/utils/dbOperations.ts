@@ -3,101 +3,7 @@ import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { logWithCorrelation } from './logger.ts';
 
 /**
- * Helper function to prepare JSON fields for PostgreSQL JSONB columns
- * Ensures consistent handling of null, string, and object values
- */
-function prepareJsonField(value: any): any {
-  if (value === null || value === undefined) {
-    return null;
-  }
-  
-  // If it's a string that might be JSON, parse it
-  if (typeof value === 'string') {
-    try {
-      return JSON.parse(value);
-    } catch {
-      // If it's not valid JSON, return as is
-      return value;
-    }
-  }
-  
-  // Return objects as-is for proper JSONB handling
-  return value;
-}
-
-/**
- * Simple, reliable formatter for PostgreSQL JSONB array type
- * 
- * This function handles the conversion between JavaScript arrays and PostgreSQL JSONB arrays
- * to prevent the "malformed array literal" error and ensure compatibility with database operations.
- * 
- * @param value - Array to format, or null/undefined
- * @returns PostgreSQL-compatible array string or null
- */
-function formatPostgresArray(value: any): string | null {
-  // Handle null case consistently
-  if (value === null || value === undefined) {
-    return null;
-  }
-  
-  // Handle empty arrays - the most common cause of errors
-  if (value === '[]' || (Array.isArray(value) && value.length === 0)) {
-    return '{}';  // PostgreSQL empty array syntax
-  }
-  
-  try {
-    if (Array.isArray(value)) {
-      // For non-empty arrays, create PostgreSQL array format directly
-      // This is the most reliable approach without complex regex
-      const formattedElements = value.map(item => {
-        const jsonString = typeof item === 'string' ? item : JSON.stringify(item);
-        // Escape quotes for PostgreSQL format
-        return `"${jsonString.replace(/"/g, '\\"')}"`;
-      });
-      
-      return `{${formattedElements.join(',')}}`;  // PostgreSQL array syntax
-    }
-    
-    // Handle string that might be a JSON array
-    if (typeof value === 'string') {
-      try {
-        const parsed = JSON.parse(value);
-        if (Array.isArray(parsed)) {
-          return formatPostgresArray(parsed);
-        }
-      } catch {
-        // Not a valid JSON array string
-        return null;
-      }
-    }
-  } catch (error) {
-    // Always fail safely - empty array is better than a database error
-    console.error("Error formatting PostgreSQL array:", error);
-    return '{}';
-  }
-  
-  // For any other case, return null
-  return null;
-}
-
-/**
- * Smart Dispatcher for media message database operations
- * 
- * This function intelligently routes message processing to specialized PostgreSQL functions
- * based on message context. It implements a TypeScript dispatcher pattern that mirrors the
- * PostgreSQL smart_media_message_dispatcher, routing to one of three specialized functions:
- * 
- * 1. insert_new_media_message: For completely new messages
- * 2. update_duplicate_media_message: For duplicate media with potentially new captions
- * 3. update_edited_media_message: For explicit message edits with edit_date from Telegram
- * 
- * Benefits of this approach:
- * - Single responsibility: Each specialized function handles one scenario
- * - Improved error handling: More precise error messages
- * - Better array handling: Properly formats old_analyzed_content to prevent malformed array errors
- * - Audit logging: Enhanced logging of dispatch decisions for traceability
- * 
- * @returns Promise with success status, data (record ID), and any error details
+ * Upsert a media message record in the database
  */
 export async function upsertMediaMessageRecord({
   supabaseClient,
@@ -123,189 +29,126 @@ export async function upsertMediaMessageRecord({
   additionalUpdates = {}
 }: {
   supabaseClient: SupabaseClient;
-  messageId: number;                  // p_telegram_message_id (bigint)
-  chatId: number;                     // p_chat_id (bigint)
-  caption: string | null;             // p_caption (text)
-  mediaType: string;                  // p_media_type (text) 
-  fileId: string;                     // p_file_id (text)
-  fileUniqueId: string;               // p_file_unique_id (text)
-  storagePath: string;                // p_storage_path (text)
-  publicUrl: string;                  // p_public_url (text)
-  mimeType: string;                   // p_mime_type (text)
-  extension: string;                  // p_extension (text)
-  mediaType: string;                  // p_media_type (text) 
-  caption: string | null;             // p_caption (text)
-  processingState: string;            // p_processing_state (text -> processing_state_type)
-  messageData: Record<string, any>;    // p_message_data (jsonb)
-  correlationId: string;              // p_correlation_id (text)
-  mediaGroupId?: string | null;       // p_media_group_id (text)
-  forwardInfo?: Record<string, any>;  // p_forward_info (jsonb)
-  processingError: string | null;     // p_processing_error (text)
-  captionData?: Record<string, any>;  // p_caption_data (jsonb)
-  analyzedContent?: Record<string, any>; // p_analyzed_content (jsonb)
-  oldAnalyzedContent?: Record<string, any>[] | Record<string, any>; // p_old_analyzed_content (jsonb)
-  additionalUpdates?: Record<string, any>; // Not a direct PostgreSQL parameter, used for additional fields
+  messageId: number;
+  chatId: number;
+  caption: string | null;
+  mediaType: string;
+  fileId: string;
+  fileUniqueId: string;
+  storagePath: string;
+  publicUrl: string;
+  mimeType: string;
+  extension: string;
+  messageData: any;
+  processingState: string;
+  processingError: string | null;
+  forwardInfo?: any;
+  mediaGroupId?: string | null;
+  captionData?: any;
+  analyzedContent?: any;
+  oldAnalyzedContent?: any[];
+  correlationId: string;
+  additionalUpdates?: Record<string, any>;
 }): Promise<{ success: boolean; data?: any; error?: any }> {
   try {
-    // Detect if this is an edited message (has edit_date)
-    const isEditedMessage = messageData && 'edit_date' in messageData;
-    if (isEditedMessage) {
-      logWithCorrelation(correlationId, `Handling edited message with edit_date: ${messageData.edit_date}`, 'INFO', 'upsertMediaMessageRecord');
-    }
+    logWithCorrelation(correlationId, `Upserting media message record for ${messageId} in chat ${chatId}`, 'INFO', 'upsertMediaMessageRecord');
     
-    // Handle old_analyzed_content for jsonb type (now that the column is jsonb, not _jsonb array)
-    // For jsonb columns, we simply need to pass the array as JSON - PostgreSQL will store it as a jsonb array
-    let formattedOldAnalyzedContent;
-    
-    if (oldAnalyzedContent === null || oldAnalyzedContent === undefined) {
-      // Default to empty array when null/undefined
-      formattedOldAnalyzedContent = [];
-      logWithCorrelation(correlationId, `No old_analyzed_content provided, using empty array`, 'DEBUG', 'upsertMediaMessageRecord');
-    } else if (Array.isArray(oldAnalyzedContent)) {
-      // Always pass arrays directly - PostgreSQL jsonb can store arrays directly
-      formattedOldAnalyzedContent = oldAnalyzedContent;
-      logWithCorrelation(correlationId, `Using provided old_analyzed_content with ${oldAnalyzedContent.length} items`, 'DEBUG', 'upsertMediaMessageRecord');
-    } else {
-      // If somehow not an array, try to handle it gracefully
-      try {
-        // If it's an object, wrap it in an array
-        formattedOldAnalyzedContent = [oldAnalyzedContent];
-        logWithCorrelation(correlationId, `Converted non-array old_analyzed_content to array format for jsonb compatibility`, 'WARN', 'upsertMediaMessageRecord');
-      } catch (e) {
-        // Default to empty array if all else fails
-        formattedOldAnalyzedContent = [];
-        logWithCorrelation(correlationId, `Failed to handle old_analyzed_content, using empty array`, 'ERROR', 'upsertMediaMessageRecord');
-      }
-    }
-    
-    // Log the operation start
-    logWithCorrelation(
-      correlationId, 
-      `Smart dispatching media message: messageId=${messageId}, chatId=${chatId}, fileUniqueId=${fileUniqueId}`, 
-      'INFO', 
-      'upsertMediaMessageRecord'
-    );
-    
-    // Prepare parameters - use explicit empty string for TEXT fields
-    // and null for JSONB fields when they're missing
-    const params = {
+    // Prepare parameters for the upsert_media_message function with consistent naming
+    // and proper handling of analyzed_content and old_analyzed_content
+    const rpcParams: Record<string, any> = {
       p_telegram_message_id: messageId,
       p_chat_id: chatId,
       p_file_unique_id: fileUniqueId,
       p_file_id: fileId,
-      p_storage_path: storagePath || '',
-      p_public_url: publicUrl || '',
-      p_mime_type: mimeType || '',
-      p_extension: extension || '',
-      p_media_type: mediaType || '',
-      p_caption: caption || '',
-      p_processing_state: processingState || 'pending',
-      p_message_data: messageData || {},
+      p_storage_path: storagePath,
+      p_public_url: publicUrl,
+      p_mime_type: mimeType,
+      p_extension: extension,
+      p_media_type: mediaType,
+      p_caption: caption,
+      p_processing_state: processingState,
+      p_message_data: messageData,
       p_correlation_id: correlationId,
-      p_user_id: messageData?.from?.id || null,
-      p_media_group_id: mediaGroupId || null,
-      p_forward_info: forwardInfo || null,
-      p_processing_error: processingError || '',  // TEXT type needs empty string, not null
-      p_caption_data: captionData || null,        // JSONB can be null
-      p_analyzed_content: analyzedContent || null, // JSONB can be null
-      p_old_analyzed_content: formattedOldAnalyzedContent
+      p_media_group_id: mediaGroupId,
+      p_forward_info: forwardInfo,
+      p_processing_error: processingError,
+      p_caption_data: captionData,
+      p_analyzed_content: analyzedContent || captionData, // Directly use the analyzed_content parameter
+      p_old_analyzed_content: oldAnalyzedContent // Use old_analyzed_content for history tracking
     };
     
-    // Call the smart dispatcher stored procedure
-    const result = await supabaseClient.rpc('smart_media_message_dispatcher', params);
+    // Log the parameters being passed for debugging
+    logWithCorrelation(
+      correlationId, 
+      `Calling upsert_media_message with caption_data and analyzed_content: ${JSON.stringify({ 
+        caption_data: captionData ? '[set]' : '[not set]', 
+        analyzed_content: analyzedContent ? '[set]' : '[not set]' 
+      })}`, 
+      'DEBUG', 
+      'upsertMediaMessageRecord'
+    );
     
-    if (result.error) {
-      throw new Error(`Smart dispatcher failed: ${result.error.message}`);
+    // Call the RPC function with the enhanced parameter set
+    const { data, error } = await supabaseClient.rpc('upsert_media_message', rpcParams);
+    
+    if (error) {
+      logWithCorrelation(correlationId, `Error upserting media message: ${error.message}`, 'ERROR', 'upsertMediaMessageRecord');
+      console.error("DB error upserting media message:", error);
+      return { success: false, error };
     }
     
-    // Apply any additional updates if needed
-    if (additionalUpdates && Object.keys(additionalUpdates).length > 0 && result.data) {
-      await applyAdditionalUpdates(supabaseClient, result.data, additionalUpdates, correlationId);
-    }
-    
-    // Return the complete record
-    return await fetchCompleteRecord(supabaseClient, result.data, correlationId);
-  } catch (error) {
-    // Log the error and return a consistent error response
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    logWithCorrelation(correlationId, `Database error: ${errorMessage}`, 'ERROR', 'upsertMediaMessageRecord');
-    return { success: false, error: errorMessage };
-  }
-}
-
-/**
- * Helper function to apply additional updates to a message record
- */
-async function applyAdditionalUpdates(
-  supabaseClient: SupabaseClient, 
-  messageId: string, 
-  additionalUpdates: Record<string, any>,
-  correlationId: string
-): Promise<void> {
-  try {
-    // These fields are handled directly in the database function, don't duplicate them
-    const filteredUpdates = { ...additionalUpdates };
-    delete filteredUpdates.old_analyzed_content;
-    delete filteredUpdates.analyzed_content;
-    delete filteredUpdates.caption_data;
-    
-    if (Object.keys(filteredUpdates).length > 0) {
-      logWithCorrelation(
-        correlationId, 
-        `Applying additional updates: ${JSON.stringify(Object.keys(filteredUpdates))}`, 
-        'DEBUG', 
-        'applyAdditionalUpdates'
-      );
-      
-      const { error: updateError } = await supabaseClient
-        .from('messages')
-        .update(filteredUpdates)
-        .eq('id', messageId);
+    // Apply any additional updates if needed that weren't handled by the RPC call
+    if (Object.keys(additionalUpdates).length > 0 && data) {
+      try {
+        // These fields are now handled directly in the RPC call, don't duplicate them in additionalUpdates
+        const filteredUpdates = { ...additionalUpdates };
+        delete filteredUpdates.old_analyzed_content;
+        delete filteredUpdates.analyzed_content;
+        delete filteredUpdates.caption_data;
         
-      if (updateError) {
-        logWithCorrelation(correlationId, `Error applying additional updates: ${updateError.message}`, 'WARN', 'applyAdditionalUpdates');
+        if (Object.keys(filteredUpdates).length > 0) {
+          logWithCorrelation(
+            correlationId, 
+            `Applying additional updates: ${JSON.stringify(Object.keys(filteredUpdates))}`, 
+            'DEBUG', 
+            'upsertMediaMessageRecord'
+          );
+          
+          const { error: updateError } = await supabaseClient
+            .from('messages')
+            .update(filteredUpdates)
+            .eq('id', data);
+            
+          if (updateError) {
+            logWithCorrelation(correlationId, `Error applying additional updates: ${updateError.message}`, 'WARN', 'upsertMediaMessageRecord');
+          }
+        }
+      } catch (updateError) {
+        logWithCorrelation(correlationId, `Exception applying additional updates: ${updateError.message}`, 'WARN', 'upsertMediaMessageRecord');
       }
     }
-  } catch (updateError) {
-    logWithCorrelation(
-      correlationId, 
-      `Exception applying additional updates: ${updateError instanceof Error ? updateError.message : String(updateError)}`, 
-      'WARN', 
-      'applyAdditionalUpdates'
-    );
-  }
-}
-
-/**
- * Helper function to fetch a complete record by ID
- */
-async function fetchCompleteRecord(
-  supabaseClient: SupabaseClient, 
-  messageId: string, 
-  correlationId: string
-): Promise<{ success: boolean; data?: any; error?: any }> {
-  try {
-    const { data: completeRecord, error: fetchError } = await supabaseClient
-      .from('messages')
-      .select('*')
-      .eq('id', messageId)
-      .single();
+    
+    // Fetch the complete record to return the full state
+    if (data) {
+      const { data: completeRecord, error: fetchError } = await supabaseClient
+        .from('messages')
+        .select('*')
+        .eq('id', data)
+        .single();
+        
+      if (fetchError) {
+        logWithCorrelation(correlationId, `Error fetching complete record: ${fetchError.message}`, 'WARN', 'upsertMediaMessageRecord');
+        return { success: true, data };
+      }
       
-    if (fetchError) {
-      logWithCorrelation(correlationId, `Error fetching complete record: ${fetchError.message}`, 'WARN', 'fetchCompleteRecord');
-      return { success: true, data: messageId };
+      return { success: true, data: completeRecord };
     }
     
-    return { success: true, data: completeRecord };
-  } catch (fetchError) {
-    // If fetching fails, still return success with the ID
-    logWithCorrelation(
-      correlationId, 
-      `Exception fetching complete record: ${fetchError instanceof Error ? fetchError.message : String(fetchError)}`, 
-      'WARN', 
-      'fetchCompleteRecord'
-    );
-    return { success: true, data: messageId };
+    return { success: true, data };
+  } catch (error) {
+    logWithCorrelation(correlationId, `Exception upserting media message: ${error.message}`, 'ERROR', 'upsertMediaMessageRecord');
+    console.error("Exception upserting media message:", error);
+    return { success: false, error: error.message || String(error) };
   }
 }
 

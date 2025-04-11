@@ -47,7 +47,7 @@ CREATE OR REPLACE FUNCTION public.upsert_media_message(
     p_forward_info JSONB DEFAULT NULL,
     p_processing_error TEXT DEFAULT NULL,
     p_caption_data JSONB DEFAULT NULL,
-    p_old_analyzed_content JSONB DEFAULT NULL,
+    p_old_analyzed_content JSONB[] DEFAULT NULL,
     p_analyzed_content JSONB DEFAULT NULL
 ) RETURNS UUID
 LANGUAGE plpgsql
@@ -60,7 +60,7 @@ DECLARE
     v_is_caption_change BOOLEAN := FALSE;
     v_processing_state processing_state_type;
     v_current_analyzed_content JSONB := NULL;
-    v_old_analyzed_content JSONB := COALESCE(p_old_analyzed_content, ARRAY[]::JSONB);
+    v_old_analyzed_content JSONB[] := COALESCE(p_old_analyzed_content, ARRAY[]::JSONB[]);
     v_analyzed_content JSONB := p_analyzed_content;
     v_caption_data JSONB := p_caption_data;
     v_event_type TEXT;
@@ -287,7 +287,7 @@ Parameters:
   p_forward_info (jsonb) - Information about forwarded messages
   p_processing_error (text) - Error message if processing failed
   p_caption_data (jsonb) - Structured data extracted from caption
-  p_old_analyzed_content (JSONB) - Array of previous analyzed_content values
+  p_old_analyzed_content (jsonb[]) - Array of previous analyzed_content values
   p_analyzed_content (jsonb) - Current analyzed content from the caption
 
 Returns: UUID of the inserted or updated message record.

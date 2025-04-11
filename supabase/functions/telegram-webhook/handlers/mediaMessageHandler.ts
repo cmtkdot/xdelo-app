@@ -2,32 +2,40 @@
 
 // Shared Imports
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
-import { supabaseClient } from "../../_shared/cors.ts";
-import { handleError } from "../../_shared/ErrorHandler.ts";
-import { MediaProcessor } from "../../_shared/MediaProcessor.ts";
+import { createCorsResponse, supabaseClient } from "../../_shared/cors.ts";
+import { corsHeaders } from "../../_shared/cors.ts";
+import { MediaProcessor, ProcessingResult } from "../../_shared/MediaProcessor.ts";
 import { createMediaProcessor } from "../../_shared/mediaUtils.ts";
+import { handleError } from "../../_shared/ErrorHandler.ts";
 
 // Error handling
 import { createTelegramErrorResponse } from "../utils/errorUtils.ts";
 
 // Local Imports
 import {
-  MessageContext,
-  TelegramMessage,
+    MessageContext,
+    TelegramMessage,
 } from '../types.ts';
-import {
-  extractForwardInfo,
-  logProcessingEvent,
-  syncMediaGroupCaptions,
-  triggerCaptionParsing,
-  upsertMediaMessageRecord
+import { 
+    createMessageRecord, 
+    updateMessageRecord, 
+    findMessageByTelegramId,
+    findMessageByFileUniqueId,
+    updateMessageWithError,
+    logProcessingEvent,
+    upsertMediaMessageRecord,
+    triggerCaptionParsing,
+    findMessagesByMediaGroupId,
+    syncMediaGroupCaptions,
+    extractForwardInfo
 } from '../utils/dbOperations.ts';
-import { logWithCorrelation } from '../utils/logger.ts';
-import {
-  checkMessageExists,
-  extractMediaContent,
-  processCaptionWithRetry
+import { 
+    extractMediaContent, 
+    checkMessageExists, 
+    processCaptionWithRetry, 
+    processMessageMedia 
 } from '../utils/messageUtils.ts';
+import { logWithCorrelation } from '../utils/logger.ts';
 
 // Get Telegram bot token from environment
 const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN');
@@ -72,50 +80,34 @@ function createErrorResponse(
 }
 
 /**
- * Unified smart dispatcher handler for media messages
+ * Unified handler for both new and edited media messages.
+ * This handler consolidates the logic for processing media messages,
+ * reducing code duplication and improving maintainability.
  * 
- * This handler consolidates the logic for processing all types of media messages:
- * 1. New media messages (first-time processing)
- * 2. Edited media messages (with edit_date from Telegram)
- * 3. Duplicate media messages with potentially new captions
- * 
- * The handler intelligently routes requests to the appropriate specialized functions
- * based on message context, mirroring our PostgreSQL smart_media_message_dispatcher.
- * 
- * @param telegramBotToken - The Telegram bot token for API access
  * @param message - The Telegram message to process
- * @param context - Context information including correlationId
+ * @param supabaseClient - The Supabase client for database operations
+ * @param correlationId - The correlation ID for request tracking
  * @returns A Response object with the processing result
+ * @example
+ * const response = await handleMediaMessage(
+ *   message,
+ *   supabaseClient,
+ *   correlationId
+ * );
  */
 export async function handleMediaMessage(
-  telegramBotToken: string | null,
+  telegramBotToken: string,
   message: TelegramMessage,
   context: MessageContext
 ): Promise<Response> {
   const { correlationId } = context;
   const functionName = 'handleMediaMessage';
-  
-  // Check if this is an edited message (critical for proper routing)
-  const isEditedMessage = !!message.edit_date;
-  
-  // Log with edit status for better tracing
-  logWithCorrelation(
-    correlationId, 
-    `Processing ${isEditedMessage ? 'edited' : 'new'} message ${message.message_id} in chat ${message.chat.id}`,
-    'INFO', 
-    functionName
-  );
+  logWithCorrelation(correlationId, `Processing message ${message.message_id} in chat ${message.chat.id}`, 'INFO', functionName);
   
   try {
-    // Validate required token parameter
+    // Validate required environment variables
     if (!telegramBotToken) {
-      // Try as fallback to get directly from environment if parameter was not passed correctly
-      const fallbackToken = Deno.env.get('TELEGRAM_BOT_TOKEN');
-      if (!fallbackToken) {
-        throw new Error("TELEGRAM_BOT_TOKEN is not available");
-      }
-      // Use the fallback token instead
-      telegramBotToken = fallbackToken;
+      throw new Error("TELEGRAM_BOT_TOKEN environment variable is not set");
     }
     
     // Create media processor
@@ -133,6 +125,9 @@ export async function handleMediaMessage(
       );
     }
     
+    // Check if this is an edited message
+    const isEditedMessage = !!message.edit_date;
+    
     // Check if message already exists in database
     const { exists: messageExists, message: existingMessage } = await checkMessageExists(
       supabaseClient,
@@ -141,51 +136,25 @@ export async function handleMediaMessage(
       correlationId
     );
     
-    // Process caption if present - this is needed for all message types
+    // Process caption if present
     const captionData = await processCaptionWithRetry(message.caption, correlationId);
     
-    // Enhanced logging for dispatcher routing decisions
-    logWithCorrelation(
-      correlationId,
-      `Message context: isEdited=${isEditedMessage}, existsInDB=${messageExists}, ` +
-      `mediaGroupId=${message.media_group_id || 'none'}, hasCaption=${!!message.caption}`,
-      'DEBUG',
-      functionName
-    );
-    
-    // Smart routing based on message context - mirrors our PostgreSQL dispatcher logic
+    // Handle based on message existence and edit status
     if (isEditedMessage) {
-      // This is an explicit edit from Telegram (has edit_date)
+      // This is an edited message
       if (!messageExists) {
-        // Edited message not found in database, treat as new but pass edit flag
-        logWithCorrelation(
-          correlationId, 
-          `Edited message ${message.message_id} not found in database, treating as new but preserving edit flag`,
-          'INFO', 
-          functionName
-        );
-        return await handleNewMessage(message, mediaContent, mediaProcessor, supabaseClient, captionData, correlationId, true);
+        // Edited message not found in database, treat as new
+        logWithCorrelation(correlationId, `Edited message ${message.message_id} not found in database, treating as new`, 'INFO', functionName);
+        return await handleNewMessage(message, mediaContent, mediaProcessor, supabaseClient, captionData, correlationId);
       } else {
         // Edited message found in database, update it
         return await handleEditedMessage(message, existingMessage, mediaContent, mediaProcessor, supabaseClient, captionData, correlationId);
       }
     } else {
-      // This is a new message (no edit_date)
+      // This is a new message
       if (messageExists) {
-        // Check if this might be a duplicate with changed caption that warrants processing
-        if (message.caption !== existingMessage.caption) {
-          logWithCorrelation(
-            correlationId, 
-            `Duplicate message ${message.message_id} has different caption. Old: "${existingMessage.caption}", New: "${message.caption}"`, 
-            'INFO', 
-            functionName
-          );
-          // Use handleNewMessage with existing data to properly handle caption update
-          return await handleNewMessage(message, mediaContent, mediaProcessor, supabaseClient, captionData, correlationId);
-        }
-        
-        // Message already exists in database with same caption, return existing record
-        logWithCorrelation(correlationId, `Message ${message.message_id} already exists in database with same caption`, 'INFO', functionName);
+        // Message already exists in database, return existing record
+        logWithCorrelation(correlationId, `Message ${message.message_id} already exists in database`, 'INFO', functionName);
         return new Response(
           JSON.stringify({
             success: true,
@@ -206,27 +175,10 @@ export async function handleMediaMessage(
       context: {
         message,
         correlationId,
-        functionName,
-        isEditedMessage  // Include edit status for better error tracking
+        functionName
       },
       supabaseClient
     });
-    
-    // Log the dispatching error to unified audit log
-    await logProcessingEvent(
-      supabaseClient,
-      'media_message_dispatch_error',
-      crypto.randomUUID(), 
-      correlationId,
-      {
-        message_id: message.message_id,
-        chat_id: message.chat.id,
-        is_edited: isEditedMessage,
-        media_group_id: message.media_group_id || null,
-        error_type: error instanceof Error ? error.name : 'Unknown',
-        error_details: error instanceof Error ? error.message : String(error)
-      }
-    );
     
     // Return standardized error response
     return createErrorResponse(
@@ -234,25 +186,20 @@ export async function handleMediaMessage(
       functionName,
       500,
       correlationId,
-      { 
-        messageId: message.message_id, 
-        chatId: message.chat.id,
-        isEdited: isEditedMessage
-      }
+      { messageId: message.message_id, chatId: message.chat.id }
     );
   }
 }
 
 /**
- * Handles new media messages from Telegram
+ * Process a new media message
  * 
- * @param message - The Telegram message object
+ * @param message - The Telegram message to process
  * @param mediaContent - The extracted media content
  * @param mediaProcessor - The MediaProcessor instance
  * @param supabaseClient - The Supabase client for database operations
  * @param captionData - The processed caption data
  * @param correlationId - The correlation ID for request tracking
- * @param isExplicitEdit - Whether this is an explicit edit (has edit_date) but wasn't found in DB
  * @returns A Response object with the processing result
  */
 async function handleNewMessage(
@@ -261,54 +208,206 @@ async function handleNewMessage(
   mediaProcessor: MediaProcessor,
   supabaseClient: SupabaseClient,
   captionData: any,
-  correlationId: string,
-  isExplicitEdit: boolean = false
+  correlationId: string
 ): Promise<Response> {
   const functionName = 'handleNewMessage';
-  logWithCorrelation(correlationId, `Processing ${isExplicitEdit ? 'explicit edit (new to DB)' : 'new'} media message: ${message.message_id} in chat ${message.chat.id}`, 'INFO', functionName);
-
+  logWithCorrelation(correlationId, `Processing new message ${message.message_id}`, 'INFO', functionName);
+  
   try {
-    // Get media type directly from mediaContent object
-    const mediaType = mediaContent.mediaType;
-    if (!mediaType) {
-      throw new Error("Unsupported or missing media type");
-    }
-    
-    // Process the media content and get storage information
+    // Process media
     const processingResult = await mediaProcessor.processMedia(
       mediaContent,
       correlationId
     );
-    
-    // Map processing status to database state
+
+    // Variable can be reassigned later if caption changes
     let processingState = mapStatusToProcessingState(processingResult.status);
-    logWithCorrelation(
-      correlationId, 
-      `Media processing status: ${processingResult.status} -> DB state: ${processingState}`, 
-      'INFO', 
-      functionName
+    logWithCorrelation(correlationId, `Media processing status for message ${message.message_id}: ${processingResult.status} -> DB state: ${processingState}`, 'INFO', functionName);
+
+    // Check if this message already exists in the database
+    const existingMessage = await findMessageByFileUniqueId(
+      supabaseClient,
+      processingResult.fileUniqueId,
+      correlationId
     );
+
+    // Flag to track if caption has changed
+    let captionChanged = false;
     
-    // Handle processing errors
-    if (processingResult.status !== 'success' && processingResult.error) {
-      logWithCorrelation(correlationId, `Media processing error: ${processingResult.error}`, 'ERROR', functionName);
+    if (existingMessage.success && existingMessage.data) {
+      // Check if caption has changed
+      if (existingMessage.data.caption !== message.caption) {
+        captionChanged = true;
+        logWithCorrelation(correlationId, `Caption changed for message ${message.message_id}. Old: "${existingMessage.data.caption}", New: "${message.caption}"`, 'INFO', functionName);
+        
+        // When caption changes, we need to:
+        // 1. Move current analyzed_content to old_analyzed_content array
+        // 2. Reset processing_state to trigger reprocessing
+        // 3. Set analyzed_content to new captionData
+        // We'll handle this by preparing additional updates for the upsert operation
+      }
+    }
+
+    // Define dbResult outside the inner try block to fix the variable scope issue
+    let dbResult: any = { success: false, error: 'Not initialized' };
+
+    // Use the upsert function to handle duplicate file_unique_id
+    // PostgreSQL function extracts message_date, chat_type, chat_title from message data
+    try {
+      // Use extractForwardInfo for consistent handling of forward data
+      const forwardInfo = message.forward_date ? extractForwardInfo(message) : null;
+      const isForwarded = !!message.forward_date;
       
-      // Log the media processing error to audit log
+      // Prepare additional updates for caption changes in existing messages
+      let additionalUpdates = {};
+      
+      if (captionChanged && existingMessage.success && existingMessage.data) {
+        // Reset processing state to trigger reprocessing
+        processingState = 'initialized';
+        
+        // If the message has analyzed content, prepare the old_analyzed_content update
+        // But construct it in a way that avoids SQL reassignment issues
+        if (existingMessage.data.analyzed_content) {
+          // Create a properly formatted old_analyzed_content array manually
+          // avoiding the problematic SQL reassignment
+          let oldContent;
+          
+          if (existingMessage.data.old_analyzed_content) {
+            // If old_analyzed_content already exists as an array, copy it and append
+            try {
+              // Make a deep copy to avoid mutation issues
+              oldContent = JSON.parse(JSON.stringify(existingMessage.data.old_analyzed_content));
+              // Add the current analyzed_content as a new item
+              oldContent.push(existingMessage.data.analyzed_content);
+            } catch (error) {
+              // Fallback if there's any parsing issue
+              logWithCorrelation(correlationId, `Error processing old_analyzed_content: ${error instanceof Error ? error.message : String(error)}`, 'WARN', functionName);
+              // Create a new array with existing content to ensure we don't lose data
+              if (Array.isArray(existingMessage.data.old_analyzed_content)) {
+                // If it's an array but JSON.parse failed, try to use it directly
+                oldContent = [...existingMessage.data.old_analyzed_content, existingMessage.data.analyzed_content];
+              } else {
+                // Complete fallback - start fresh with just the current analyzed content
+                oldContent = [existingMessage.data.analyzed_content];
+              }
+            }
+          } else {
+            // If old_analyzed_content doesn't exist, create a new array
+            oldContent = [existingMessage.data.analyzed_content];
+          }
+          
+          additionalUpdates = {
+            old_analyzed_content: oldContent,
+            // Set the new analyzed content
+            analyzed_content: captionData
+          };
+        }
+      }
+
+      dbResult = await upsertMediaMessageRecord({
+        supabaseClient,
+        messageId: message.message_id,
+        chatId: message.chat.id,
+        caption: message.caption || null,
+        mediaType: mediaContent.mediaType,
+        fileId: processingResult.fileId,
+        fileUniqueId: processingResult.fileUniqueId,
+        storagePath: processingResult.storagePath,
+        publicUrl: processingResult.publicUrl,
+        mimeType: processingResult.mimeType,
+        extension: processingResult.extension,
+        messageData: message as unknown as Json,  // Use messageData to match PostgreSQL parameter
+        processingState: processingState,         // Ensure this matches the enum in PostgreSQL
+        processingError: processingResult.error || null,
+        forwardInfo: forwardInfo,                 // Use standardized forward info
+        mediaGroupId: message.media_group_id || null,
+        captionData: captionData,                 // Processed caption data structure
+        analyzedContent: captionData,             // Keep in sync with captionData
+        correlationId,
+        additionalUpdates: additionalUpdates      // Include our additional updates for caption changes
+      });
+      
+      if (!dbResult.success) {
+        logWithCorrelation(correlationId, `Failed to create message: ${dbResult.error}`, 'ERROR', functionName);
+        
+        // Log the error
+        await logProcessingEvent(
+          supabaseClient,
+          'media_message_creation_failed',
+          crypto.randomUUID(), 
+          correlationId,
+          {
+            message_id: message.message_id,
+            chat_id: message.chat.id,
+            media_group_id: message.media_group_id,
+            error_type: typeof dbResult.error,
+            error_keys: Object.keys(dbResult.error || {})
+          },
+          dbResult.error
+        );
+        
+        return createTelegramErrorResponse(
+          `Failed to create message: ${dbResult.error}`,
+          functionName,
+          500,
+          correlationId,
+          { messageId: message.message_id, chatId: message.chat.id }
+        );
+      }
+
+      // If caption has changed, trigger the caption parser
+      if (captionChanged && message.caption) {
+        logWithCorrelation(correlationId, `Caption changed, triggering parser for message ${dbResult.data.id}`, 'INFO', functionName);
+        
+        // Trigger caption parsing asynchronously
+        triggerCaptionParsing({
+          supabaseClient,
+          messageId: dbResult.data.id,
+          correlationId
+        }).catch(error => {
+          logWithCorrelation(correlationId, `Error triggering caption parser: ${error instanceof Error ? error.message : String(error)}`, 'ERROR', functionName);
+        });
+        
+        // If this message is part of a media group, sync the caption changes to other messages in the group
+        if (message.media_group_id) {
+          logWithCorrelation(correlationId, `Caption changed for message in media group ${message.media_group_id}, syncing to other messages`, 'INFO', functionName);
+          
+          // Sync caption changes to other messages in the group
+          syncMediaGroupCaptions({
+            supabaseClient,
+            mediaGroupId: message.media_group_id,
+            sourceMessageId: dbResult.data.id,
+            newCaption: message.caption,
+            captionData,
+            processingState: 'initialized', // Reset processing state for other messages
+            correlationId
+          }).catch(error => {
+            logWithCorrelation(correlationId, `Error syncing media group captions: ${error instanceof Error ? error.message : String(error)}`, 'ERROR', functionName);
+          });
+        }
+      }
+
+    } catch (dbError) {
+      // Handle schema mismatch errors gracefully
+      const errorMsg = dbError instanceof Error ? dbError.message : String(dbError);
+      logWithCorrelation(correlationId, `Database schema error: ${errorMsg}`, 'ERROR', functionName);
+      
+      // Log the error
       await logProcessingEvent(
         supabaseClient,
-        'media_processing_error',
+        'media_message_db_schema_error',
         crypto.randomUUID(),
         correlationId,
         {
           message_id: message.message_id,
           chat_id: message.chat.id,
-          media_type: mediaType,
-          error_details: processingResult.error
+          error_type: dbError instanceof Error ? dbError.name : 'Unknown',
+          error_details: errorMsg
         }
       );
       
       return createTelegramErrorResponse(
-        `Media processing error: ${processingResult.error}`,
+        `Database schema error: ${errorMsg}`,
         functionName,
         500,
         correlationId,
@@ -316,137 +415,229 @@ async function handleNewMessage(
       );
     }
     
-    // Handle forward info if present
-    const forwardInfo = message.forward_date ? extractForwardInfo(message) : null;
-
-    // Use the smart dispatcher pattern via upsertMediaMessageRecord
-    const dbResult = await upsertMediaMessageRecord({
-      supabaseClient,
-      messageId: message.message_id,
-      chatId: message.chat.id,
-      caption: message.caption || null,
-      mediaType,
-      fileId: processingResult.fileId,
-      fileUniqueId: processingResult.fileUniqueId,
-      storagePath: processingResult.storagePath,
-      publicUrl: processingResult.publicUrl,
-      mimeType: processingResult.mimeType,
-      extension: processingResult.extension,
-      messageData: message as unknown as Json,
-      processingState,
-      processingError: processingResult.error,
-      forwardInfo,
-      mediaGroupId: message.media_group_id || null,
-      captionData,                        // Processed caption data
-      analyzedContent: captionData,       // Initialize analyzed_content with caption data
-      oldAnalyzedContent: [],             // Explicitly initialize old_analyzed_content with empty array
-      correlationId
-    });
+    // Log success
+    logWithCorrelation(correlationId, `Successfully processed message ${message.message_id}`, 'INFO', functionName);
     
-    if (!dbResult.success) {
-      logWithCorrelation(correlationId, `Failed to create message record: ${dbResult.error}`, 'ERROR', functionName);
-      return createTelegramErrorResponse(
-        `Failed to create message record: ${dbResult.error}`,
-        functionName,
-        500,
-        correlationId,
-        { messageId: message.message_id, chatId: message.chat.id }
-      );
-    }
-    
-    // Get the DB message ID from the result
-    const messageDbId = dbResult.data?.id;
-    if (!messageDbId) {
-      logWithCorrelation(correlationId, "Message ID not returned from database", 'ERROR', functionName);
-      return createTelegramErrorResponse(
-        "Message ID not returned from database",
-        functionName,
-        500,
-        correlationId,
-        { messageId: message.message_id, chatId: message.chat.id }
-      );
-    }
-    
-    // Trigger caption parsing if a caption is present
-    if (message.caption) {
-      logWithCorrelation(correlationId, `Triggering caption parser for message ${messageDbId}`, 'INFO', functionName);
-      
-      try {
-        // Process caption asynchronously
-        const captionResult = await triggerCaptionParsing({
-          supabaseClient,
-          messageId: messageDbId,
-          correlationId
-        });
-        
-        if (!captionResult.success) {
-          logWithCorrelation(
-            correlationId, 
-            `Warning: Caption parser trigger failed: ${captionResult.error}`, 
-            'WARN', 
-            functionName
-          );
-        }
-      } catch (error) {
-        // Log but don't fail the whole process
-        logWithCorrelation(
-          correlationId, 
-          `Error triggering caption parser: ${error instanceof Error ? error.message : String(error)}`, 
-          'ERROR', 
-          functionName
-        );
-      }
-    }
-    
-    // Trigger synchronization for media groups
-    if (message.media_group_id) {
-      logWithCorrelation(correlationId, `Message is part of media group ${message.media_group_id}, triggering sync`, 'INFO', functionName);
-      
-      try {
-        // Synchronize media group messages - use syncMediaGroupCaptions from dbOperations
-        const syncResult = await syncMediaGroupCaptions({
-          supabaseClient,
-          mediaGroupId: message.media_group_id,
-          correlationId
-        });
-        
-        if (!syncResult.success) {
-          logWithCorrelation(
-            correlationId, 
-            `Warning: Media group sync trigger failed: ${syncResult.error}`, 
-            'WARN', 
-            functionName
-          );
-        }
-      } catch (error) {
-        // Log but don't fail the whole process
-        logWithCorrelation(
-          correlationId, 
-          `Error triggering media group sync: ${error instanceof Error ? error.message : String(error)}`, 
-          'ERROR', 
-          functionName
-        );
-      }
-    }
-    
-    // Log success with smart dispatcher context
-    logWithCorrelation(
-      correlationId, 
-      `Successfully processed ${isExplicitEdit ? 'edited' : 'new'} media message ${message.message_id} via smart dispatcher`, 
-      'INFO', 
-      functionName
-    );
-
-    // Return comprehensive success response
+    // Return success response with proper null/undefined checking
     return new Response(
       JSON.stringify({
         success: true,
-        message: "Media message processed successfully",
-        messageId: messageDbId,
-        mediaType,
-        mediaGroupId: message.media_group_id || null,
-        hasCaption: !!message.caption,
-        isExplicitEdit,
+        message: "Message processed successfully",
+        messageId: dbResult?.data?.id || 'unknown',
+        processingTime: Date.now() - new Date(message.date * 1000).getTime(),
+        captionChanged,
+        correlationId
+      }),
+      { status: 200 }
+    );
+  } catch (error) {
+    // Handle error with comprehensive logging
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logWithCorrelation(correlationId, `Error processing media message: ${errorMessage}`, 'ERROR', functionName);
+    
+    // Log the error
+    await logProcessingEvent(
+      supabaseClient,
+      'media_message_processing_error',
+      crypto.randomUUID(), // Generate a valid UUID instead of using 'N/A'
+      correlationId,
+      {
+        message_id: message.message_id,
+        chat_id: message.chat.id
+      },
+      errorMessage
+    );
+    
+    return createErrorResponse(
+      `Error processing media message: ${errorMessage}`,
+      functionName,
+      500,
+      correlationId,
+      { messageId: message.message_id, chatId: message.chat.id }
+    );
+  }
+}
+
+/**
+ * Process an edited media message
+ * 
+ * @param message - The updated Telegram message
+ * @param existingMessage - The existing message record from the database
+ * @param mediaContent - The extracted media content
+ * @param mediaProcessor - The MediaProcessor instance
+ * @param supabaseClient - The Supabase client for database operations
+ * @param captionData - The processed caption data
+ * @param correlationId - The correlation ID for request tracking
+ * @returns A Response object with the processing result
+ */
+async function handleEditedMessage(
+  message: TelegramMessage,
+  existingMessage: any,
+  mediaContent: any,
+  mediaProcessor: MediaProcessor,
+  supabaseClient: SupabaseClient,
+  captionData: any,
+  correlationId: string
+): Promise<Response> {
+  const functionName = 'handleEditedMessage';
+  logWithCorrelation(correlationId, `Processing edited message ${message.message_id}`, 'INFO', functionName);
+  
+  try {
+    // Check if media has changed by comparing file_unique_id
+    const currentFileUniqueId = mediaContent.fileUniqueId;
+    const hasNewMedia = currentFileUniqueId !== existingMessage.file_unique_id;
+    
+    // Check if caption has changed
+    const captionChanged = message.caption !== existingMessage.caption;
+    
+    // If neither media nor caption changed, return early
+    if (!hasNewMedia && !captionChanged) {
+      logWithCorrelation(correlationId, `No changes detected in edited message ${message.message_id}`, 'INFO', functionName);
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: "No changes detected in edited message",
+          messageId: existingMessage.id,
+          correlationId
+        }),
+        { status: 200 }
+      );
+    }
+    
+    // Create edit history entry
+    const editHistory = existingMessage.edit_history || [];
+    editHistory.push({
+      edited_at: message.edit_date,
+      previous_caption: existingMessage.caption,
+      previous_caption_data: existingMessage.caption_data,
+      previous_file_unique_id: existingMessage.file_unique_id,
+      previous_storage_path: existingMessage.storage_path,
+      previous_public_url: existingMessage.public_url
+    });
+    
+    // Prepare updates for the message record
+    const updates: any = {
+      caption: message.caption,
+      caption_data: captionData,
+      edit_history: editHistory,
+      last_edited_at: new Date(message.edit_date * 1000).toISOString(),
+      correlation_id: correlationId,
+      message_data: message, // Update the complete message data
+      is_edit: true          // Flag as edited message
+    };
+    
+    // Update forward info if this is a forwarded message
+    const forwardInfo = message.forward_date ? extractForwardInfo(message) : null;
+    if (forwardInfo) {
+      updates.forward_info = forwardInfo;
+      updates.is_forward = true;
+    }
+    
+    // If media has changed, process the new media
+    if (hasNewMedia) {
+      logWithCorrelation(correlationId, `Media changed in edited message ${message.message_id}`, 'INFO', functionName);
+      
+      // Process new media
+      const processingResult = await mediaProcessor.processMedia(
+        mediaContent,
+        correlationId
+      );
+      
+      let processingState = mapStatusToProcessingState(processingResult.status);
+      logWithCorrelation(correlationId, `Media processing status for edited message ${message.message_id}: ${processingResult.status} -> DB state: ${processingState}`, 'INFO', functionName);
+      
+      // Update media fields
+      if (processingResult.fileUniqueId) {
+        updates.file_unique_id = processingResult.fileUniqueId;
+        updates.storage_path = processingResult.storagePath;
+        updates.public_url = processingResult.publicUrl;
+        updates.mime_type = processingResult.mimeType;
+        updates.extension = processingResult.extension;
+        updates.processing_state = processingState;
+        updates.processing_error = processingResult.error || null;
+      }
+    } else if (captionChanged) {
+      // If only caption changed, reset processing state to trigger reprocessing
+      updates.processing_state = 'initialized';
+      
+      // If the message has analyzed content, move it to old_analyzed_content
+      if (existingMessage.analyzed_content) {
+        updates.old_analyzed_content = existingMessage.old_analyzed_content 
+          ? [...existingMessage.old_analyzed_content, existingMessage.analyzed_content]
+          : [existingMessage.analyzed_content];
+        updates.analyzed_content = captionData; // Set to captionData for consistency with media group sync
+      }
+    }
+    
+    // Update the message record
+    const updateResult = await updateMessageRecord(
+      supabaseClient,
+      existingMessage,
+      message,
+      hasNewMedia ? { 
+        fileUniqueId: updates.file_unique_id,
+        storagePath: updates.storage_path,
+        publicUrl: updates.publicUrl,
+        mimeType: updates.mime_type,
+        extension: updates.extension
+      } : null,
+      captionData,
+      correlationId,
+      updates // Pass all updates to ensure forward_info and other fields are properly updated
+    );
+    
+    if (!updateResult) {
+      logWithCorrelation(correlationId, `Failed to update message ${existingMessage.id}`, 'ERROR', functionName);
+      return createTelegramErrorResponse(
+        `Failed to update message`,
+        functionName,
+        500,
+        correlationId,
+        { messageId: message.message_id, chatId: message.chat.id }
+      );
+    }
+    
+    // If caption has changed and this is part of a media group, sync the caption to other messages in the group
+    if (captionChanged && message.media_group_id) {
+      logWithCorrelation(correlationId, `Caption changed for message in media group ${message.media_group_id}, syncing to other messages`, 'INFO', functionName);
+      
+      // Sync caption changes to other messages in the group
+      await syncMediaGroupCaptions({
+        supabaseClient,
+        mediaGroupId: message.media_group_id,
+        sourceMessageId: existingMessage.id,
+        newCaption: message.caption,
+        captionData,
+        processingState: 'initialized', // Reset processing state for other messages
+        correlationId
+      });
+    }
+    
+    // If caption has changed, trigger the caption parser
+    if (captionChanged && message.caption) {
+      logWithCorrelation(correlationId, `Caption changed, triggering parser for message ${existingMessage.id}`, 'INFO', functionName);
+      
+      // Trigger caption parsing asynchronously
+      triggerCaptionParsing({
+        supabaseClient,
+        messageId: existingMessage.id,
+        correlationId
+      }).catch(error => {
+        logWithCorrelation(correlationId, `Error triggering caption parser: ${error instanceof Error ? error.message : String(error)}`, 'ERROR', functionName);
+      });
+    }
+    
+    // Log success
+    logWithCorrelation(correlationId, `Successfully processed edited message ${message.message_id}`, 'INFO', functionName);
+    
+    // Return success response
+    return new Response(
+      JSON.stringify({
+        success: true,
+        message: "Edited message processed successfully",
+        messageId: existingMessage.id,
+        mediaChanged: hasNewMedia,
+        captionChanged,
         correlationId
       }),
       { status: 200 }
@@ -456,18 +647,15 @@ async function handleNewMessage(
     const errorMessage = error instanceof Error ? error.message : String(error);
     logWithCorrelation(correlationId, `Error processing edited media message: ${errorMessage}`, 'ERROR', functionName);
     
-    // Log the error with detailed context for the smart dispatcher
+    // Log the error
     await logProcessingEvent(
       supabaseClient,
       'edited_media_message_processing_error',
-      crypto.randomUUID(),
+      crypto.randomUUID(), // Generate a valid UUID instead of using 'N/A'
       correlationId,
       {
         message_id: message.message_id,
-        chat_id: message.chat.id,
-        media_group_id: message.media_group_id || null,
-        error_type: error instanceof Error ? error.name : 'Unknown',
-        has_edit_date: !!message.edit_date
+        chat_id: message.chat.id
       },
       errorMessage
     );
@@ -477,11 +665,7 @@ async function handleNewMessage(
       functionName,
       500,
       correlationId,
-      { 
-        messageId: message.message_id, 
-        chatId: message.chat.id,
-        mediaGroupId: message.media_group_id || null 
-      }
+      { messageId: message.message_id, chatId: message.chat.id }
     );
   }
 }

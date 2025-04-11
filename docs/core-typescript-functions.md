@@ -4,12 +4,11 @@ This document describes the key TypeScript functions used in the Telegram webhoo
 
 ## Table of Contents
 
-1. [formatPostgresArray](#formatpostgresarray)
-2. [upsertMediaMessageRecord](#upsertmediamessagerecord)
-3. [upsertTextMessageRecord](#upserttextmessagerecord)
-4. [extractForwardInfo](#extractforwardinfo)
-5. [syncMediaGroupCaptions](#syncmediagroupcaptions)
-6. [findMessageByFileUniqueId](#findemessagebyfileuniqueid)
+1. [upsertMediaMessageRecord](#upsertmediamessagerecord)
+2. [upsertTextMessageRecord](#upserttextmessagerecord)
+3. [extractForwardInfo](#extractforwardinfo)
+4. [syncMediaGroupCaptions](#syncmediagroupcaptions)
+5. [findMessageByFileUniqueId](#findemessagebyfileuniqueid)
 
 ## upsertMediaMessageRecord
 

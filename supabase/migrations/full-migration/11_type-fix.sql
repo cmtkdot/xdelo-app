@@ -1,5 +1,5 @@
 -- Migration to fix JSONB type inconsistency in the upsert_media_message function
--- Addresses the error: "COALESCE types JSONB and jsonb cannot be matched"
+-- Addresses the error: "COALESCE types jsonb[] and jsonb cannot be matched"
 
 CREATE OR REPLACE FUNCTION upsert_media_message(
     p_telegram_message_id BIGINT,
@@ -32,7 +32,7 @@ DECLARE
     v_processing_state processing_state_type := 'initialized';
     v_old_analyzed_content JSONB;
     v_updates JSONB := '{}'::JSONB;
-    v_content_array JSONB; -- Changed to JSONB type
+    v_content_array JSONB[]; -- Changed to JSONB[] type
 BEGIN
     -- Check if record with this file_unique_id already exists
     SELECT id, caption, analyzed_content

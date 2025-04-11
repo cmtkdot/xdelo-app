@@ -5,14 +5,12 @@ import { isMessageForwarded } from '../_shared/consolidatedMessageUtils.ts';
 import { corsHeaders } from '../_shared/cors.ts';
 import { supabaseClient } from '../_shared/supabaseClient.ts';
 import { RetryHandler, createRetryHandler } from '../_shared/retryHandler.ts';
+import { handleEditedMessage } from './handlers/editedMessageHandler.ts';
 import { handleMediaMessage } from './handlers/mediaMessageHandler.ts';
 import { handleOtherMessage } from './handlers/textMessageHandler.ts';
 import { MessageContext, TelegramMessage } from './types.ts';
 import { logProcessingEvent } from './utils/dbOperations.ts';
 import { logWithCorrelation } from './utils/logger.ts';
-
-// Get environment variables
-const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN');
 
 // Helper to manually create CORS response
 function createManualCorsResponse(body: object | string | null, options: ResponseInit = {}): Response {
@@ -46,16 +44,6 @@ serve(async (req: Request) => {
   });
   
   try {
-    // Validate bot token early
-    if (!TELEGRAM_BOT_TOKEN) {
-      logWithCorrelation(correlationId, 'TELEGRAM_BOT_TOKEN environment variable is not set', 'ERROR', functionName);
-      return createManualCorsResponse({ 
-        success: false, 
-        error: 'Configuration error: Bot token is not configured', 
-        correlationId 
-      }, { status: 500 });
-    }
-    
     logWithCorrelation(correlationId, 'Webhook received', 'INFO', functionName, { method: req.method, url: req.url });
     
     let update;
@@ -118,27 +106,55 @@ serve(async (req: Request) => {
     let response: Promise<Response>;
     const telegramToken = Deno.env.get("TELEGRAM_BOT_TOKEN");
     if (!telegramToken) {
+        logWithCorrelation(correlationId, "TELEGRAM_BOT_TOKEN environment variable not set.", 'ERROR', functionName);
+        await logProcessingEvent(
+          supabaseClient,
+          "config_error", 
+          null, 
+          correlationId, 
+          { variable: "TELEGRAM_BOT_TOKEN" }, 
+          "Bot token not configured"
+        );
+        throw new Error("TELEGRAM_BOT_TOKEN environment variable not set.");
     }
 
-    // Start routing message based on type
-    logWithCorrelation(
-      correlationId, 
-      `Message context: isEdit=${isEdit}, isChannel=${context.isChannelPost}, hasMedia=${!!(message.photo || message.video || message.document)}`, 
-      'DEBUG', 
-      functionName
-    );
-
-    // Handle all media messages (new, edited, duplicates) using the smart dispatcher pattern
-    if (message.photo || message.video || message.document) {
-      logWithCorrelation(correlationId, `Routing to unified handleMediaMessage with retry support`, 'INFO', functionName, { 
-        message_id: message.message_id,
-        is_edit: isEdit,
-        media_type: message.photo ? 'photo' : message.video ? 'video' : 'document'
-      });
+    if (context.isEdit) {
+      logWithCorrelation(correlationId, `Routing to handleEditedMessage with retry support`, 'INFO', functionName, { message_id: message.message_id });
+      
+      // Use retry handler for edited message processing
+      const retryResult = await retryHandler.execute(
+        async () => handleEditedMessage(message, context),
+        {
+          operationName: 'handleEditedMessage',
+          correlationId,
+          supabaseClient,
+          errorCategory: 'webhook_error',
+          contextData: { message_id: message.message_id, chat_id: message.chat?.id }
+        }
+      );
+      
+      if (retryResult.success) {
+        response = Promise.resolve(retryResult.result);
+      } else {
+        // All retries failed, create error response
+        response = Promise.resolve(createManualCorsResponse({ 
+          success: false, 
+          error: `Failed to process edited message after ${retryResult.attempts} attempts: ${retryResult.error?.message}`,
+          correlationId,
+          retryInfo: {
+            attempts: retryResult.attempts,
+            maxRetriesReached: retryResult.maxRetriesReached,
+            totalTimeMs: retryResult.totalTimeMs
+          }
+        }, { status: 500 }));
+      }
+    }
+    else if (message.photo || message.video || message.document) {
+      logWithCorrelation(correlationId, `Routing to handleMediaMessage with retry support`, 'INFO', functionName, { message_id: message.message_id });
       
       // Use retry handler for media message processing
       const retryResult = await retryHandler.execute(
-        async () => handleMediaMessage(TELEGRAM_BOT_TOKEN, message, context),
+        async () => handleMediaMessage(telegramToken, message, context),
         {
           operationName: 'handleMediaMessage',
           correlationId,
@@ -147,8 +163,7 @@ serve(async (req: Request) => {
           contextData: { 
             message_id: message.message_id, 
             chat_id: message.chat?.id,
-            is_edit: isEdit,
-            media_group_id: message.media_group_id || null
+            media_type: message.photo ? 'photo' : (message.video ? 'video' : 'document')
           }
         }
       );
@@ -168,7 +183,8 @@ serve(async (req: Request) => {
           }
         }, { status: 500 }));
       }
-    } else if (message.text) {
+    }
+    else if (message.text) {
       logWithCorrelation(correlationId, `Routing to handleOtherMessage with retry support`, 'INFO', functionName, { message_id: message.message_id });
       
       // Use retry handler for text message processing
