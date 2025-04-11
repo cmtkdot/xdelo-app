@@ -1,84 +1,85 @@
 
 import { supabase } from "@/integrations/supabase/client";
-import { ProductMatchingConfig } from "@/types/entities/ProductMatching";
+import { DEFAULT_CONFIG } from "@/lib/product-matching/types";
 
-/**
- * Default configuration for product matching algorithm
- */
-export const DEFAULT_CONFIG: ProductMatchingConfig = {
-  similarityThreshold: 0.7,
-  partialMatch: {
-    enabled: true,
-    minLength: 2,
-    dateFormat: "YYYY-MM-DD"
-  },
-  weightedScoring: {
-    name: 0.4,
-    vendor: 0.3,
-    purchaseDate: 0.3
-  }
-};
-
-// Export CONFIG for compatibility with existing components
-export const CONFIG = DEFAULT_CONFIG;
-
-/**
- * Fetch configuration from database
- */
-export const fetchMatchingConfig = async (): Promise<ProductMatchingConfig> => {
+export const fetchMatchingConfig = async () => {
   try {
-    // Use the new RPC function to get configuration
     const { data, error } = await supabase
-      .rpc('xdelo_get_product_matching_config');
-    
-    if (error) {
-      console.warn("Could not fetch matching configuration, using defaults", error);
+      .from('product_matching_config')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    if (error || !data || data.length === 0) {
+      console.error("Error fetching product matching config:", error);
       return DEFAULT_CONFIG;
     }
-    
-    return data as ProductMatchingConfig;
-  } catch (err) {
-    console.error("Error fetching product matching configuration:", err);
+
+    // Convert database format to app format
+    const config = data[0];
+    return {
+      similarityThreshold: config.similarity_threshold || DEFAULT_CONFIG.similarityThreshold,
+      minConfidence: config.min_confidence || DEFAULT_CONFIG.minConfidence,
+      weights: {
+        productName: config.weight_name || DEFAULT_CONFIG.weights.productName,
+        vendorUid: config.weight_vendor || DEFAULT_CONFIG.weights.vendorUid,
+        purchaseDate: config.weight_purchase_date || DEFAULT_CONFIG.weights.purchaseDate
+      },
+      partialMatch: {
+        enabled: config.partial_match_enabled !== undefined ? config.partial_match_enabled : DEFAULT_CONFIG.partialMatch.enabled,
+        vendorMinLength: config.partial_match_min_length || DEFAULT_CONFIG.partialMatch.vendorMinLength,
+        dateFormat: config.partial_match_date_format || DEFAULT_CONFIG.partialMatch.dateFormat
+      },
+      algorithm: DEFAULT_CONFIG.algorithm
+    };
+  } catch (error) {
+    console.error("Error in fetchMatchingConfig:", error);
     return DEFAULT_CONFIG;
   }
 };
 
-/**
- * Update configuration in the database
- */
-export const updateMatchingConfig = async (config: Partial<ProductMatchingConfig>): Promise<ProductMatchingConfig> => {
+export const updateMatchingConfig = async (config: any) => {
   try {
-    // Get current config to merge with updates
-    const currentConfig = await fetchMatchingConfig();
-    
-    // Merge with current config
-    const updatedConfig = {
-      ...currentConfig,
-      ...config,
-      partialMatch: {
-        ...currentConfig.partialMatch,
-        ...(config.partialMatch || {})
-      },
-      weightedScoring: {
-        ...currentConfig.weightedScoring,
-        ...(config.weightedScoring || {})
-      }
+    // Convert app format to database format
+    const dbConfig = {
+      similarity_threshold: config.similarityThreshold,
+      min_confidence: config.minConfidence,
+      weight_name: config.weights.productName,
+      weight_vendor: config.weights.vendorUid,
+      weight_purchase_date: config.weights.purchaseDate,
+      partial_match_enabled: config.partialMatch.enabled,
+      partial_match_min_length: config.partialMatch.vendorMinLength,
+      partial_match_date_format: config.partialMatch.dateFormat,
+      updated_at: new Date().toISOString()
     };
-    
-    // Use the new RPC function to update configuration
-    const { data, error } = await supabase
-      .rpc('xdelo_update_product_matching_config', {
-        p_config: updatedConfig
-      });
-    
-    if (error) {
-      console.error("Failed to update matching configuration:", error);
-      return updatedConfig;
+
+    // Get existing config if any
+    const { data: existingConfig } = await supabase
+      .from('product_matching_config')
+      .select('id')
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    if (existingConfig && existingConfig.length > 0) {
+      // Update existing record
+      const { error } = await supabase
+        .from('product_matching_config')
+        .update(dbConfig)
+        .eq('id', existingConfig[0].id);
+
+      if (error) throw error;
+    } else {
+      // Insert new record
+      const { error } = await supabase
+        .from('product_matching_config')
+        .insert([dbConfig]);
+
+      if (error) throw error;
     }
-    
-    return data as ProductMatchingConfig;
-  } catch (err) {
-    console.error("Error updating product matching configuration:", err);
-    return { ...DEFAULT_CONFIG, ...config };
+
+    return true;
+  } catch (error) {
+    console.error("Error in updateMatchingConfig:", error);
+    throw error;
   }
 };

@@ -121,11 +121,16 @@ export const TestMatchingPanel = () => {
       // If we have a match
       if (matchingResult?.bestMatch) {
         // Get product details from the gl_products table
-        const { data: productData } = await supabase
+        const { data: productData, error: productError } = await supabase
           .from('gl_products')
           .select('new_product_name, id')
           .eq('id', matchingResult.bestMatch.product_id)
           .single();
+          
+        if (productError) {
+          console.error("Error fetching product details:", productError);
+          throw productError;
+        }
           
         const product = productData as GlProduct;
         
