@@ -1,313 +1,343 @@
-# Core PostgreSQL Functions
-
-This document describes the most important PostgreSQL functions used in the Telegram webhook processing flow. These functions are critical for message handling, media processing, and data consistency.
-
-## Table of Contents
-
-1. [upsert_media_message](#upsert_media_message)
-2. [upsert_text_message](#upsert_text_message)
-3. [sync_media_group_captions](#sync_media_group_captions)
-4. [align_caption_and_analyzed_content](#align_caption_and_analyzed_content)
-5. [trigger_sync_media_group_captions](#trigger_sync_media_group_captions)
-
-## upsert_media_message
-
-```sql
-upsert_media_message(
-  p_telegram_message_id BIGINT,
-  p_chat_id BIGINT,
-  p_file_unique_id TEXT,
-  p_file_id TEXT,
-  p_storage_path TEXT,
-  p_public_url TEXT,
-  p_mime_type TEXT,
-  p_extension TEXT,
-  p_media_type TEXT,
-  p_caption TEXT,
-  p_processing_state TEXT,
-  p_message_data JSONB,
-  p_correlation_id TEXT,
-  p_user_id BIGINT DEFAULT NULL,
-  p_media_group_id TEXT DEFAULT NULL,
-  p_forward_info JSONB DEFAULT NULL,
-  p_processing_error TEXT DEFAULT NULL,
-  p_caption_data JSONB DEFAULT NULL,
-  p_old_analyzed_content JSONB DEFAULT NULL,
-  p_analyzed_content JSONB DEFAULT NULL
-) RETURNS UUID
-```
-
-### Description
-
-This function handles inserting or updating media messages in the database. It provides sophisticated handling for duplicate media messages, caption changes, and media group synchronization.
-
-### Parameters
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| p_telegram_message_id | BIGINT | Telegram's message ID |
-| p_chat_id | BIGINT | Telegram's chat ID |
-| p_file_unique_id | TEXT | **Critical**: Unique identifier for the file from Telegram (NOT derived from storage path) |
-| p_file_id | TEXT | File ID from Telegram (used for downloading) |
-| p_storage_path | TEXT | Path where the file is stored locally |
-| p_public_url | TEXT | Public URL for accessing the file |
-| p_mime_type | TEXT | MIME type of the media file |
-| p_extension | TEXT | File extension |
-| p_media_type | TEXT | Type of media (photo, video, document, etc.) |
-| p_caption | TEXT | Caption text for the media |
-| p_processing_state | TEXT | Current processing state (initialized, pending, processing, etc.) |
-| p_message_data | JSONB | Complete Telegram message object |
-| p_correlation_id | TEXT | Unique ID for tracking the request through the system |
-| p_user_id | BIGINT | Optional user ID (default: NULL) |
-| p_media_group_id | TEXT | Group ID for grouped media messages (default: NULL) |
-| p_forward_info | JSONB | Information about forwarded messages in standardized format (default: NULL) |
-| p_processing_error | TEXT | Error message if processing failed (default: NULL) |
-| p_caption_data | JSONB | Structured data extracted from caption (default: NULL) |
-| p_old_analyzed_content | JSONB | Array of previous analyzed_content values for history tracking (default: NULL) |
-| p_analyzed_content | JSONB | Current analyzed content from the caption (default: NULL) |
-
-### Returns
-
-UUID of the inserted or updated message record.
-
-### Key Behaviors
-
-1. **Duplicate Detection**:
-   - Identifies duplicates by `file_unique_id` and handles them appropriately
-   - Preserves message history when captions change on duplicates
-
-2. **Caption Change Handling**:
-   - Detects when a message with the same `file_unique_id` has a different caption
-   - Moves current `analyzed_content` to `old_analyzed_content` array
-   - Resets processing state to trigger reanalysis of the new caption
-
-3. **Forward Message Handling**:
-   - Standardized processing of forwarded messages
-   - Properly extracts metadata from the `forward_info` JSONB
-
-4. **Audit Logging**:
-   - Records all operations to `unified_audit_logs` table
-   - Includes detailed metadata about the operation
-
-### Example
-
-```sql
-SELECT * FROM public.upsert_media_message(
-  123456789, -- p_telegram_message_id
-  -100123456789, -- p_chat_id
-  'ABCdef123', -- p_file_unique_id
-  'BAaz-qwerty123456', -- p_file_id
-  'media/ABCdef123.jpg', -- p_storage_path
-  'https://example.com/media/ABCdef123.jpg', -- p_public_url
-  'image/jpeg', -- p_mime_type
-  'jpg', -- p_extension
-  'photo', -- p_media_type
-  'Sample media caption #tag', -- p_caption
-  'initialized', -- p_processing_state
-  '{"message_id": 123456789, "chat": {"id": -100123456789, "type": "supergroup"}}', -- p_message_data
-  'corr-123456789', -- p_correlation_id
-  NULL, -- p_user_id
-  'media_group_123456789', -- p_media_group_id
-  NULL, -- p_forward_info
-  NULL, -- p_processing_error
-  '{"text": "Sample media caption #tag", "tags": ["tag"]}', -- p_caption_data
-  NULL, -- p_old_analyzed_content
-  '{"text": "Sample media caption #tag", "tags": ["tag"], "processed": true}' -- p_analyzed_content
-);
-```
-
-## upsert_text_message
-
-```sql
-upsert_text_message(
-  p_telegram_message_id BIGINT,
-  p_chat_id BIGINT,
-  p_message_text TEXT,
-  p_message_data JSONB,
-  p_correlation_id TEXT,
-  p_chat_type TEXT DEFAULT NULL,
-  p_chat_title TEXT DEFAULT NULL,
-  p_forward_info JSONB DEFAULT NULL,
-  p_processing_state TEXT DEFAULT 'pending_analysis',
-  p_processing_error TEXT DEFAULT NULL
-) RETURNS UUID
-```
-
-### Description
-
-This function handles inserting or updating text messages in the database. It provides consistent handling with media messages, including forward handling and edit history.
-
-### Parameters
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| p_telegram_message_id | BIGINT | Telegram's message ID |
-| p_chat_id | BIGINT | Telegram's chat ID |
-| p_message_text | TEXT | Text content of the message |
-| p_message_data | JSONB | Complete Telegram message object |
-| p_correlation_id | TEXT | Unique ID for tracking the request through the system |
-| p_chat_type | TEXT | Type of chat (private, group, supergroup, channel) (default: NULL) |
-| p_chat_title | TEXT | Title of chat (name or group name) (default: NULL) |
-| p_forward_info | JSONB | Information about forwarded messages in standardized format (default: NULL) |
-| p_processing_state | TEXT | Current processing state (default: 'pending_analysis') |
-| p_processing_error | TEXT | Error message if processing failed (default: NULL) |
-
-### Returns
-
-UUID of the inserted or updated message record.
-
-### Key Behaviors
-
-1. **Message Update Detection**:
-   - Identifies existing messages by `telegram_message_id` and `chat_id`
-   - Updates message content while preserving history
-
-2. **Forward Message Handling**:
-   - Uses the same standardized format as media messages
-   - Properly extracts and stores forward metadata
-
-3. **Enum Validation**:
-   - Validates chat_type against the telegram_chat_type enum
-   - Validates processing_state against the processing_state_type enum
-
-4. **Audit Logging**:
-   - Records all operations to `unified_audit_logs` table
-   - Includes detailed metadata about the operation
-
-### Example
-
-```sql
-SELECT * FROM public.upsert_text_message(
-  123456789, -- p_telegram_message_id
-  -100123456789, -- p_chat_id
-  'This is a text message', -- p_message_text
-  '{"message_id": 123456789, "chat": {"id": -100123456789, "type": "supergroup"}}', -- p_message_data
-  'corr-123456789', -- p_correlation_id
-  'supergroup', -- p_chat_type
-  'My Super Group', -- p_chat_title
-  '{"date": 1618047123, "from_chat_id": -100987654321, "from_message_id": 12345}', -- p_forward_info
-  'initialized', -- p_processing_state
-  NULL -- p_processing_error
-);
-```
-
-## sync_media_group_captions
-
-```sql
-sync_media_group_captions(
-  p_media_group_id TEXT,
-  p_exclude_message_id TEXT DEFAULT NULL::text,
-  p_caption TEXT DEFAULT NULL::text,
-  p_caption_data JSONB DEFAULT NULL::jsonb,
-  p_processing_state processing_state_type DEFAULT 'pending_analysis'::processing_state_type
-) RETURNS text[]
-```
-
-### Description
-
-This function synchronizes captions across all messages in a media group. When a caption is updated on one message in a group, this function ensures all other messages in the same group have consistent captions. It is designed to be resilient to null parameters.
-
-### Parameters
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| p_media_group_id | TEXT | The media group ID to synchronize (only required non-null parameter) |
-| p_exclude_message_id | TEXT | Message ID to exclude from synchronization (typically the source message, can be null) |
-| p_caption | TEXT | Caption text to apply to all messages in the group (defaults to empty string if null) |
-| p_caption_data | JSONB | Structured caption data to apply to all messages (defaults to empty JSON if null) |
-| p_processing_state | processing_state_type | Processing state to set for updated messages (default: 'pending_analysis') |
-
-### Returns
-
-An array of text IDs for all messages that were updated during synchronization.
-
-### Null Parameter Handling
-
-The function has been designed to be permissive with null parameters:
-- Only `p_media_group_id` is required; the function will exit early if this is null
-- All other parameters have sensible defaults if null is provided
-- Uses COALESCE to provide defaults for null parameters
-
-### Error Handling
-
-The function includes enhanced error handling:
-- Individual message update failures are caught and logged
-- Processing continues even if some message updates fail
-- A status variable tracks overall success/partial failure
-
-### Security
-
-This function uses SECURITY DEFINER to ensure it has the necessary permissions to update messages regardless of the calling user's permissions.
-
-### Example
-
-```sql
-SELECT * FROM public.sync_media_group_captions(
-  'media_group_123456789', -- p_media_group_id
-  'a1b2c3d4-e5f6-...', -- p_exclude_message_id (can be null)
-  'Updated caption for all media in group', -- p_caption (can be null)
-  '{"text": "Updated caption for all media in group"}', -- p_caption_data (can be null)
-  'pending_analysis' -- p_processing_state (has default value)
-);
-```
-
-## align_caption_and_analyzed_content
-
-```sql
-align_caption_and_analyzed_content() RETURNS INTEGER
-```
-
-### Description
-
-This utility function ensures consistency between the `caption_data` and `analyzed_content` fields in the messages table. It's useful for maintaining data integrity and fixing misaligned records.
-
-### Behavior
-
-1. Updates records where `caption_data` exists but `analyzed_content` is NULL
-2. Updates records where `analyzed_content` exists but `caption_data` is NULL
-3. Intelligently converts between text and JSONB formats
-4. Logs all operations to the `unified_audit_logs` table
-
-### Returns
-
-The total number of records that were updated.
-
-### Example
-
-```sql
-SELECT * FROM public.align_caption_and_analyzed_content();
-```
-
-## trigger_sync_media_group_captions
-
-```sql
-trigger_sync_media_group_captions() RETURNS TRIGGER
-```
-
-### Description
-
-This trigger function automatically synchronizes captions across all messages in a media group when a caption is changed. It implements safeguards to prevent infinite recursion and handles errors gracefully.
-
-### Trigger Definition
-
-```sql
-CREATE TRIGGER trigger_sync_media_group_captions
-AFTER INSERT OR UPDATE OF analyzed_content, caption ON public.messages
-FOR EACH ROW
-WHEN (NEW.media_group_id IS NOT NULL)
-EXECUTE FUNCTION public.trigger_sync_media_group_captions();
-```
-
-### Key Behaviors
-
-1. **Recursion Prevention**:
-   - Uses transaction-level variables to prevent infinite loops
-
-2. **Change Detection**:
-   - Determines if synchronization is needed based on changes to caption or analyzed_content
-
-3. **Synchronization**:
-   - Calls the `sync_media_group_captions` function to update all messages in the group
-
-4. **Audit Logging**:
-   - Records all operations and errors to the `unified_audit_logs` table
+ore PostgreSQL Functions Documentation
+1. upsert_media_message
+Purpose
+Central function for handling all media message operations (photos, videos, documents) in a single atomic transaction.
+
+Features
+Handles duplicate detection via file_unique_id
+Preserves caption history by moving existing analyzed_content to old_analyzed_content as a single JSONB object
+Synchronizes captions across all messages in a media group
+Manages processing states automatically
+Parameters
+| Parameter | Type | Default | Description | |-----------|------|---------|-------------| | p_telegram_message_id | bigint | NULL | Telegram message ID | | p_chat_id | bigint | NULL | Chat ID where message was sent | | p_file_unique_id | text | NULL | Unique file ID from Telegram (key for duplicate detection) | | p_file_id | text | NULL | File ID from Telegram | | p_storage_path | text | NULL | Path where file is stored | | p_public_url | text | NULL | Public URL to access the file | | p_mime_type | text | NULL | MIME type of the file | | p_extension | text | NULL | File extension | | p_media_type | text | NULL | Type of media (photo, video, document, etc.) | | p_caption | text | NULL | Caption text | | p_message_data | jsonb | NULL | Complete Telegram message data | | p_media_group_id | text | NULL | Group ID for messages in an album | | p_forward_info | jsonb | NULL | Information about forwarded messages | | p_processing_state | text | 'initialized' | Processing state for the message | | p_processing_error | text | NULL | Error message if processing failed | | p_caption_data | jsonb | NULL | Structured data from caption | | p_analyzed_content | jsonb | NULL | Structured data from caption (mirror of caption_data) | | p_old_analyzed_content | jsonb | NULL | Previous version of analyzed_content | | p_correlation_id | text | NULL | Request correlation ID for tracing | | p_user_id | bigint | NULL | User ID who sent the message | | p_is_edited | boolean | false | Whether the message is edited | | p_additional_updates | jsonb | NULL | Additional fields to update |
+
+Return Value
+UUID of the created or updated message
+
+Key Logic
+Checks for existing records with same file_unique_id
+If found, updates the record and preserves history
+If caption changes in a media group, synchronizes across all messages
+Properly handles edit history and processing states
+2. upsert_text_message
+Purpose
+Handles text and other non-media messages (text, commands, polls, etc.).
+
+Features
+Simplified text message handling
+Consistent processing state management
+Automatic logging of operations
+Parameters
+| Parameter | Type | Default | Description | |-----------|------|---------|-------------| | p_telegram_message_id | bigint | (required) | Telegram message ID | | p_chat_id | bigint | (required) | Chat ID where message was sent | | p_telegram_data | jsonb | (required) | Complete Telegram message data | | p_message_text | text | NULL | Message text content | | p_message_type | text | 'text' | Type of message (text, command, etc.) | | p_chat_type | text | NULL | Type of chat (private, group, etc.) | | p_chat_title | text | NULL | Title of the chat if available | | p_forward_info | jsonb | NULL | Information about forwarded messages | | p_processing_state | text | 'initialized' | Processing state for the message | | p_correlation_id | text | NULL | Request correlation ID for tracing |
+
+Return Value
+UUID of the created or updated message
+
+Key Logic
+Uses ON CONFLICT to handle duplicate message IDs
+Extracts message date from Telegram data
+Logs operations if correlation_id is provided
+SQL Recreation Scripts
+Here are the scripts to recreate both functions:
+
+1. upsert_media_message
+sql
+CopyInsert
+DROP FUNCTION IF EXISTS upsert_media_message(jsonb, text, jsonb, bigint, text, text, text, text, jsonb, text, text, jsonb, text, jsonb, text, text, text, text, bigint, bigint, boolean, jsonb) CASCADE;
+
+CREATE OR REPLACE FUNCTION public.upsert_media_message(
+  p_analyzed_content jsonb DEFAULT NULL::jsonb,
+  p_caption text DEFAULT NULL::text,
+  p_caption_data jsonb DEFAULT NULL::jsonb,
+  p_chat_id bigint DEFAULT NULL::bigint,
+  p_correlation_id text DEFAULT NULL::text,
+  p_extension text DEFAULT NULL::text,
+  p_file_id text DEFAULT NULL::text,
+  p_file_unique_id text DEFAULT NULL::text,
+  p_forward_info jsonb DEFAULT NULL::jsonb,
+  p_media_group_id text DEFAULT NULL::text,
+  p_media_type text DEFAULT NULL::text,
+  p_message_data jsonb DEFAULT NULL::jsonb,
+  p_mime_type text DEFAULT NULL::text,
+  p_old_analyzed_content jsonb DEFAULT NULL::jsonb,
+  p_processing_error text DEFAULT NULL::text,
+  p_processing_state text DEFAULT 'initialized'::text,
+  p_public_url text DEFAULT NULL::text,
+  p_storage_path text DEFAULT NULL::text,
+  p_telegram_message_id bigint DEFAULT NULL::bigint,
+  p_user_id bigint DEFAULT NULL::bigint,
+  p_is_edited boolean DEFAULT false,
+  p_additional_updates jsonb DEFAULT NULL::jsonb
+)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $function$
+DECLARE
+  v_message_id UUID;
+  v_message_date TIMESTAMPTZ;
+  v_raw_chat_type TEXT;
+  v_chat_type public.telegram_chat_type;
+  v_chat_title TEXT;
+  v_existing_caption TEXT;
+  v_existing_analyzed_content JSONB;
+  v_caption_changed BOOLEAN := FALSE;
+  v_existing_message_id UUID;
+  v_processing_state_enum public.processing_state_type;
+  v_is_forward BOOLEAN;
+BEGIN
+  -- Extract message date from message_data
+  v_message_date := to_timestamp((p_message_data->>'date')::numeric);
+  v_raw_chat_type := p_message_data->'chat'->>'type';
+  v_chat_title := p_message_data->'chat'->>'title';
+  
+  -- Determine if message is forwarded using only the standardized p_forward_info
+  v_is_forward := (p_forward_info IS NOT NULL);
+  
+  -- Validate chat type - make sure it's one of the allowed enum values
+  CASE lower(v_raw_chat_type)
+    WHEN 'private' THEN v_chat_type := 'private'::public.telegram_chat_type;
+    WHEN 'group' THEN v_chat_type := 'group'::public.telegram_chat_type;
+    WHEN 'supergroup' THEN v_chat_type := 'supergroup'::public.telegram_chat_type;
+    WHEN 'channel' THEN v_chat_type := 'channel'::public.telegram_chat_type;
+    ELSE v_chat_type := 'unknown'::public.telegram_chat_type;
+  END CASE;
+  
+  -- Convert processing_state to enum
+  BEGIN
+    v_processing_state_enum := p_processing_state::public.processing_state_type;
+  EXCEPTION WHEN OTHERS THEN
+    v_processing_state_enum := 'initialized'::public.processing_state_type;
+  END;
+  
+  -- Check for existing record with same file_unique_id
+  SELECT 
+    id, 
+    caption, 
+    analyzed_content 
+  INTO 
+    v_existing_message_id, 
+    v_existing_caption, 
+    v_existing_analyzed_content
+  FROM public.messages 
+  WHERE file_unique_id = p_file_unique_id 
+  LIMIT 1;
+  
+  -- Determine if caption has changed
+  v_caption_changed := (
+    v_existing_message_id IS NOT NULL AND 
+    p_caption IS NOT NULL AND 
+    v_existing_caption IS DISTINCT FROM p_caption
+  );
+  
+  -- Update or insert
+  IF v_existing_message_id IS NOT NULL THEN
+    -- Update existing record
+    UPDATE public.messages SET
+      telegram_message_id = p_telegram_message_id,
+      chat_id = p_chat_id,
+      chat_type = v_chat_type,
+      chat_title = v_chat_title,
+      message_date = v_message_date,
+      caption = p_caption,
+      media_type = p_media_type,
+      file_id = p_file_id,
+      -- Don't update file_unique_id - it's our lookup key
+      storage_path = COALESCE(p_storage_path, storage_path),
+      public_url = COALESCE(p_public_url, public_url),
+      mime_type = COALESCE(p_mime_type, mime_type),
+      extension = COALESCE(p_extension, extension),
+      message_data = p_message_data,
+      -- If caption changed, reset processing state
+      processing_state = CASE 
+        WHEN v_caption_changed THEN 'initialized'::public.processing_state_type
+        ELSE v_processing_state_enum
+      END,
+      processing_error = p_processing_error,
+      is_forward = v_is_forward,
+      forward_info = p_forward_info,
+      media_group_id = p_media_group_id,
+      caption_data = p_caption_data,
+      -- Handle analyzed_content and old_analyzed_content
+      old_analyzed_content = CASE 
+        WHEN v_caption_changed THEN v_existing_analyzed_content
+        ELSE p_old_analyzed_content
+      END,
+      analyzed_content = CASE 
+        WHEN v_caption_changed THEN NULL
+        ELSE COALESCE(p_analyzed_content, analyzed_content)
+      END,
+      correlation_id = p_correlation_id,
+      updated_at = NOW()
+    WHERE id = v_existing_message_id;
+    
+    -- If caption changed and media_group_id exists, update all messages in the group
+    IF v_caption_changed AND p_media_group_id IS NOT NULL THEN
+      UPDATE public.messages SET
+        caption = p_caption,
+        processing_state = 'initialized'::public.processing_state_type,
+        old_analyzed_content = v_existing_analyzed_content, -- Store as single JSONB, not array
+        updated_at = NOW()
+      WHERE 
+        media_group_id = p_media_group_id 
+        AND id != v_existing_message_id;
+    END IF;
+    
+    v_message_id := v_existing_message_id;
+  ELSE
+    -- Insert new record
+    INSERT INTO public.messages (
+      telegram_message_id,
+      chat_id,
+      chat_type,
+      chat_title,
+      message_date,
+      caption,
+      media_type,
+      file_id,
+      file_unique_id,
+      storage_path,
+      public_url,
+      mime_type,
+      extension,
+      message_data,
+      processing_state,
+      processing_error,
+      is_forward,
+      forward_info,
+      media_group_id,
+      caption_data,
+      analyzed_content,
+      old_analyzed_content,
+      correlation_id
+    ) VALUES (
+      p_telegram_message_id,
+      p_chat_id,
+      v_chat_type,
+      v_chat_title,
+      v_message_date,
+      p_caption,
+      p_media_type,
+      p_file_id,
+      p_file_unique_id,
+      p_storage_path,
+      p_public_url,
+      p_mime_type,
+      p_extension,
+      p_message_data,
+      v_processing_state_enum,
+      p_processing_error,
+      v_is_forward,
+      p_forward_info,
+      p_media_group_id,
+      p_caption_data,
+      p_analyzed_content, -- Simply use p_analyzed_content directly
+      p_old_analyzed_content,
+      p_correlation_id
+    )
+    RETURNING id INTO v_message_id;
+  END IF;
+  
+  RETURN v_message_id;
+END;
+$function$;
+2. upsert_text_message
+sql
+CopyInsert
+DROP FUNCTION IF EXISTS upsert_text_message(bigint, bigint, jsonb, text, text, text, text, jsonb, text, text) CASCADE;
+
+CREATE OR REPLACE FUNCTION public.upsert_text_message(
+  p_telegram_message_id bigint,
+  p_chat_id bigint,
+  p_telegram_data jsonb,
+  p_message_text text DEFAULT NULL::text,
+  p_message_type text DEFAULT 'text'::text,
+  p_chat_type text DEFAULT NULL::text,
+  p_chat_title text DEFAULT NULL::text,
+  p_forward_info jsonb DEFAULT NULL::jsonb,
+  p_processing_state text DEFAULT 'initialized'::text,
+  p_correlation_id text DEFAULT NULL::text
+)
+RETURNS uuid
+LANGUAGE plpgsql
+AS $function$
+DECLARE
+  v_is_forward BOOLEAN;
+  v_record_id UUID;
+  v_message_date TIMESTAMPTZ;
+BEGIN
+  -- Determine if message is forwarded using only the standardized p_forward_info
+  -- This ensures consistent handling with other functions
+  v_is_forward := (p_forward_info IS NOT NULL);
+  
+  -- Extract message date from telegram data if present
+  v_message_date := CASE 
+    WHEN p_telegram_data->>'date' IS NOT NULL THEN 
+      to_timestamp((p_telegram_data->>'date')::bigint)
+    ELSE 
+      now() 
+  END;
+  
+  -- Insert or update with simplified approach
+  INSERT INTO other_messages (
+    telegram_message_id,
+    chat_id,
+    message_text,
+    telegram_data,
+    message_type,
+    chat_type,
+    chat_title,
+    message_date,
+    is_forward,
+    forward_info,
+    processing_state
+  ) VALUES (
+    p_telegram_message_id,
+    p_chat_id,
+    p_message_text,
+    p_telegram_data,
+    p_message_type,
+    p_chat_type,
+    p_chat_title,
+    v_message_date,
+    v_is_forward,
+    p_forward_info,
+    p_processing_state
+  )
+  ON CONFLICT (telegram_message_id, chat_id) 
+  DO UPDATE SET
+    message_text = EXCLUDED.message_text,
+    telegram_data = EXCLUDED.telegram_data,
+    message_type = EXCLUDED.message_type,
+    chat_type = EXCLUDED.chat_type,
+    chat_title = EXCLUDED.chat_title,
+    is_forward = EXCLUDED.is_forward,
+    forward_info = EXCLUDED.forward_info,
+    processing_state = EXCLUDED.processing_state,
+    updated_at = now()
+  RETURNING id INTO v_record_id;
+  
+  -- Log the operation if correlation_id is provided
+  IF p_correlation_id IS NOT NULL THEN
+    INSERT INTO processing_logs (
+      event_type,
+      message_id,
+      correlation_id,
+      metadata,
+      created_at
+    ) VALUES (
+      'text_message_upserted',
+      v_record_id,
+      p_correlation_id,
+      jsonb_build_object(
+        'telegram_message_id', p_telegram_message_id,
+        'chat_id', p_chat_id,
+        'is_forward', v_is_forward
+      ),
+      now()
+    );
+  END IF;
+  
+  RETURN v_record_id;
+END;
+$function$;

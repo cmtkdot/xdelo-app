@@ -2,9 +2,10 @@
 
 ## Table of Contents
 
+- [Core Database Functions](#core-database-functions)
+- [Caption Data and Analyzed Content Synchronization](#caption-data-and-analyzed-content-synchronization)
 - [Message Caption Processing Flow](#message-caption-processing-flow)
 - [Message Record Management](#message-record-management)
-- [Caption Data and Analyzed Content Synchronization](#caption-data-and-analyzed-content-synchronization)
 
 ## Caption Data and Analyzed Content Synchronization
 
@@ -125,10 +126,16 @@
 
 ```typescript
 /**
- * Syncs caption and analyzed content across all messages in a media group
+ * IMPORTANT: Media group synchronization is handled entirely by the upsert_media_message
+ * PostgreSQL function. The TypeScript Edge Functions DO NOT implement any media group
+ * synchronization logic. This ensures atomic updates and consistency.
  * 
- * This function ensures all related media files share the same caption data by:
- * 1. Finding all messages with the same media_group_id
+ * When the upsert_media_message function detects a caption change for a message in a  
+ * media group, it automatically updates all messages in that group to maintain consistency.
+ * 
+ * Edge Functions should only process individual messages and let the database
+ * handle synchronization across related messages.
+ */
  * 2. Applying the source message's caption and analyzed_content to all related messages
  * 3. Preserving edit history for each message
  * 
@@ -242,13 +249,27 @@
  */
 ```
 
-## Upsert Media Message
+## Core Database Functions
 
 ```typescript
 /**
+ * The Telegram webhook uses two primary PostgreSQL functions with TypeScript wrappers:
+ * 
+ * 1. upsert_media_message - Called via upsertMediaMessageRecord
+ * 2. upsert_text_message - Called via upsertTextMessageRecord
+ * 
+ * These functions handle all database operations in atomic transactions,
+ * including duplicate detection, media group synchronization, and edit history.
+ */
+
+/**
  * Upserts a media message record in the database using the PostgreSQL function
  * 
- * This handles the duplicate file_unique_id constraint by updating the existing record
+ * This function calls the upsert_media_message PostgreSQL function which handles:
+ * - Duplicate detection via file_unique_id
+ * - Media group caption synchronization
+ * - Moving current analyzed_content to old_analyzed_content (as single JSONB object)
+ * - Processing state management across media groups
  * if a message with the same file_unique_id already exists. Special handling is implemented
  * for caption changes in duplicate messages to preserve analysis history.
  * 

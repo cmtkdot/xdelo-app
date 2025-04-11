@@ -79,6 +79,54 @@ Manages all database interactions:
 - Synchronizes media group captions
 - Logs processing events for audit
 
+## Edited Message Handling with Recovery
+
+The system implements a robust mechanism for handling edited messages, including a fallback pathway for messages that were edited but not previously stored in our database:
+
+### Edited Message Flow
+
+1. **Message Edit Detection**:
+   - Incoming edited messages are identified by the presence of `update.edited_message` or `update.edited_channel_post`
+   - The webhook router sets `context.isEdit = true` and routes to `handleEditedMessage`
+
+2. **Original Message Lookup**:
+   - `handleEditedMessage` attempts to find the original message in the database
+   - Uses `telegram_message_id` and `chat_id` as the lookup keys
+
+3. **Recovery Mechanism**:
+   - If the original message is found, normal edit processing proceeds
+   - If the original message is not found, instead of returning an error:
+     - Returns metadata including `messageNotFound: true`, `messageType`, `detailedType`, and `isRecoveredEdit: true`
+     - This metadata is processed by the webhook router
+
+4. **Fallback Processing**:
+   - The webhook router detects the recovery metadata
+   - Based on message type (`media` or `text`), routes to the appropriate handler
+   - Passes the original context plus `isRecoveredEdit: true` flag
+
+5. **Handler Processing**:
+   - Handlers detect the `isRecoveredEdit` flag and add appropriate logging
+   - Message is processed like a new message, but marked with `recovered_edit` processing state
+   - Response includes `recoveredEdit: true` for tracking purposes
+
+### Caption Data Handling
+
+When edited message captions change, the system uses a consistent approach to maintain the history while ensuring data integrity:
+
+1. **Field Structure**:
+   - `caption_data`: JSONB field with structured data parsed from the caption
+   - `analyzed_content`: Identical to `caption_data`, serving as the source of truth
+   - `old_analyzed_content`: Single JSONB object (not array) containing only the most recent previous version
+
+2. **Update Process**:
+   - When a caption changes, current `analyzed_content` is copied to `old_analyzed_content` (overwriting any previous value)
+   - New parsed caption data is stored in both `analyzed_content` and `caption_data`
+   - `processing_state` is reset to trigger reprocessing
+
+3. **Data Consistency**:
+   - Both `caption_data` and `analyzed_content` always contain identical data
+   - Only one previous version is stored in `old_analyzed_content`
+
 ## Duplicate Media Message Handling
 
 The system employs sophisticated handling for duplicate media messages with different captions:
@@ -185,6 +233,39 @@ The system implements a comprehensive error handling strategy:
 - Extracts duration and metadata
 - Manages proper file extensions based on format
 
+## Media Group Synchronization
+
+Media group synchronization is managed entirely at the PostgreSQL level to ensure atomicity and consistency:
+
+1. **Architecture Principle**:
+   - All media group syncing logic is implemented in PostgreSQL functions
+   - No media group syncing is performed in Edge Functions
+
+2. **Implementation**:
+   - When a caption changes in one message of a group, database triggers detect this change
+   - The `upsert_media_message` function includes logic to update all messages in the same group
+   - All messages in the group receive consistent caption, analyzed_content, and processing state
+
+3. **Benefits**:
+   - Ensures atomic updates and data consistency
+   - Centralizes synchronization logic in one place
+   - Prevents race conditions between multiple webhook invocations
+   - Simplifies Edge Function code by removing complex synchronization logic
+
+## Processing States
+
+Messages move through various processing states throughout their lifecycle:
+
+| State | Description |
+|-------|-------------|
+| `initialized` | Initial state for new messages |
+| `pending` | Awaiting processing |
+| `processing` | Currently being processed |
+| `completed` | Processing completed successfully |
+| `error` | Error occurred during processing |
+| `edited` | Message has been edited |
+| `recovered_edit` | Message reconstructed from an edit when original wasn't found |
+
 ## Webhook Security
 
 The system implements several security measures:
@@ -195,26 +276,39 @@ The system implements several security measures:
 4. **Rate Limiting**: Prevents abuse through request rate limiting
 5. **Error Concealment**: Avoids leaking sensitive information in error messages
 
-## PostgreSQL Functions
+## Core Database Functions
 
-The system leverages several custom PostgreSQL functions:
+The system architecture is built around just **two primary PostgreSQL functions** that handle all database operations:
 
-1. **upsert_media_message**: Creates or updates media message records
-   - Handles duplicate detection via `file_unique_id`
-   - Manages caption changes with history preservation
-   - Coordinates with media group synchronization
+1. **upsert_media_message**: Central function for all media message operations
+   - Handles all media-related database operations in a single atomic transaction
+   - Performs duplicate detection via `file_unique_id`
+   - Manages caption changes, preserving history by moving existing `analyzed_content` to `old_analyzed_content` as a single JSONB object
+   - Handles media group synchronization entirely at the database level
+   - Resets processing states appropriately across message groups
+   - Called directly by the TypeScript `upsertMediaMessageRecord` wrapper
 
-2. **sync_media_group_captions**: Synchronizes captions across media groups
-   - Propagates caption changes to all messages in the group
-   - Maintains consistent processing state and analysis
+2. **upsert_text_message**: Handles text and other non-media messages
+   - Similar functionality but specialized for text content
+   - Manages storage and updates for text messages
+   - TypeScript wrapper has fallback to direct table operations if RPC fails
 
-3. **trigger_caption_parsing**: Initiates caption analysis processes
-   - Called when captions change or are newly added
-   - Manages the analysis workflow
+### Separation of Concerns
 
-4. **update_message_analyzed_content**: Updates analysis results
-   - Preserves history in `old_analyzed_content`
-   - Maintains proper state transitions
+This architecture achieves a clean separation between:
+
+- **Edge Functions**: Handle parsing and initial message processing
+- **PostgreSQL Functions**: Handle data persistence and cross-message synchronization
+- **Caption Parser**: Focuses purely on extraction logic with no knowledge of database structure
+
+### Caption Parsing Flow
+
+1. Caption text comes in from Telegram webhook (new message or edit)
+2. `processCaptionWithRetry` calls `processCaptionText` with retry logic
+3. The parsed result is stored in both `caption_data` and `analyzed_content` fields
+4. PostgreSQL functions handle all database operations including synchronization
+
+This streamlined approach ensures data integrity through atomic transactions, prevents race conditions, and maintains consistent handling of media groups.
 
 ## Development & Testing
 
