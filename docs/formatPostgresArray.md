@@ -6,7 +6,7 @@ function formatPostgresArray(arr: any[] | null | undefined | string): string
 
 ## Description
 
-Utility function that properly formats JavaScript arrays for PostgreSQL compatibility, specifically for use with `jsonb[]` type parameters. This function handles the conversion from JavaScript array representation to PostgreSQL array literal syntax.
+Utility function that properly formats JavaScript arrays for PostgreSQL compatibility, specifically for use with `JSONB` type parameters. This function handles the conversion from JavaScript array representation to PostgreSQL array literal syntax.
 
 ## Parameters
 
@@ -58,7 +58,7 @@ await upsertMediaMessageRecord({
 
 ## Integration with PostgreSQL Functions
 
-This function is used primarily when passing data to the PostgreSQL function `upsert_media_message`, specifically for the `p_old_analyzed_content` parameter which expects a `jsonb[]` type. Without proper formatting, you may encounter the error:
+This function is used primarily when passing data to the PostgreSQL function `upsert_media_message`, specifically for the `p_old_analyzed_content` parameter which expects a `JSONB` type. Without proper formatting, you may encounter the error:
 
 ```
 malformed array literal: "[]"

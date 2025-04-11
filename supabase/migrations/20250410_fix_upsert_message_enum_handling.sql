@@ -19,7 +19,7 @@ CREATE OR REPLACE FUNCTION public.upsert_media_message(
     p_forward_info jsonb DEFAULT NULL::jsonb, 
     p_processing_error text DEFAULT NULL::text, 
     p_caption_data jsonb DEFAULT NULL::jsonb,
-    p_old_analyzed_content jsonb[] DEFAULT NULL::jsonb[],
+    p_old_analyzed_content JSONB DEFAULT NULL::JSONB,
     p_analyzed_content jsonb DEFAULT NULL::jsonb
 ) RETURNS uuid
 LANGUAGE plpgsql

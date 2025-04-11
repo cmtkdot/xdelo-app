@@ -32,7 +32,7 @@ upsert_media_message(
   p_forward_info JSONB DEFAULT NULL,
   p_processing_error TEXT DEFAULT NULL,
   p_caption_data JSONB DEFAULT NULL,
-  p_old_analyzed_content JSONB[] DEFAULT NULL,
+  p_old_analyzed_content JSONB DEFAULT NULL,
   p_analyzed_content JSONB DEFAULT NULL
 ) RETURNS UUID
 ```
@@ -63,7 +63,7 @@ This function handles inserting or updating media messages in the database. It p
 | p_forward_info | JSONB | Information about forwarded messages in standardized format (default: NULL) |
 | p_processing_error | TEXT | Error message if processing failed (default: NULL) |
 | p_caption_data | JSONB | Structured data extracted from caption (default: NULL) |
-| p_old_analyzed_content | JSONB[] | Array of previous analyzed_content values for history tracking (default: NULL). Must be formatted as a valid PostgreSQL array (`'{}'` for empty, `'{"json":"obj1", "json":"obj2"}'` for populated) |
+| p_old_analyzed_content | JSONB | Array of previous analyzed_content values for history tracking (default: NULL). Must be formatted as a valid PostgreSQL array (`'{}'` for empty, `'{"json":"obj1", "json":"obj2"}'` for populated) |
 | p_analyzed_content | JSONB | Current analyzed content from the caption (default: NULL) |
 
 ### Returns

@@ -1,5 +1,25 @@
 /// <reference types="https://esm.sh/@supabase/functions-js/edge-runtime.d.ts" />
 
+/**
+ * ==========================================================================
+ * ⚠️ DEPRECATED: This handler is deprecated and should not be used! ⚠️
+ * ==========================================================================
+ * 
+ * This handler has been consolidated into the smart dispatcher pattern
+ * in mediaMessageHandler.ts to provide a unified approach for handling:
+ * 
+ * 1. New media messages
+ * 2. Edited media messages (with edit_date)
+ * 3. Duplicate messages with caption changes
+ * 
+ * The smart dispatcher pattern properly handles history tracking with
+ * old_analyzed_content arrays and integrates with the specialized
+ * PostgreSQL functions for each message scenario.
+ * 
+ * See mediaMessageHandler.ts for the unified implementation.
+ * ==========================================================================
+ */
+
 // Shared Imports
 import { createCorsResponse, supabaseClient } from "../../_shared/cors.ts";
 // Local Imports
@@ -16,6 +36,9 @@ import { logWithCorrelation } from '../utils/logger.ts';
  * Handles edited messages (both text and media captions) from Telegram.
  * Finds the original message record and updates the relevant content (text or caption)
  * and its edit history.
+ * 
+ * @deprecated This function is deprecated in favor of the unified smart dispatcher
+ * pattern in mediaMessageHandler.ts. It will be removed in a future release.
  */
 export async function handleEditedMessage(
   message: TelegramMessage,

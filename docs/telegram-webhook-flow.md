@@ -122,7 +122,7 @@ Stores all media messages with the following key fields:
 | `caption` | TEXT | Caption text |
 | `caption_data` | JSONB | Processed caption data |
 | `analyzed_content` | JSONB | Parsed caption content |
-| `old_analyzed_content` | JSONB[] | Array of previous analyses |
+| `old_analyzed_content` | JSONB | Array of previous analyses |
 | `processing_state` | ENUM | Current processing state |
 | `media_group_id` | TEXT | Group ID for grouped media |
 | `message_data` | JSONB | Complete Telegram message |
