@@ -46,7 +46,11 @@ export async function upsertMediaMessageRecord({
   captionData?: any;
   analyzedContent?: any;
   correlationId: string;
-  additionalUpdates?: Record<string, any>;
+  additionalUpdates?: {
+    old_analyzed_content?: any; // Single JSONB object, not an array
+    analyzed_content?: any;
+    [key: string]: any;
+  };
 }): Promise<{ success: boolean; data?: any; error?: any }> {
   try {
     logWithCorrelation(correlationId, `Upserting media message record for ${messageId} in chat ${chatId}`, 'INFO', 'upsertMediaMessageRecord');
@@ -200,7 +204,12 @@ export async function updateMessageRecord(
   } | null,
   captionData: any,
   correlationId: string,
-  updates: any = {}
+  updates: {
+    old_analyzed_content?: object; // Single JSONB object, not an array
+    analyzed_content?: any;
+    processing_state?: string;
+    [key: string]: any;
+  } = {}
 ): Promise<boolean> {
   try {
     const updateData: any = {

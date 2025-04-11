@@ -2,34 +2,33 @@
 
 // Shared Imports
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
-import { supabaseClient } from "../../_shared/supabaseClient.ts";
+import { handleError } from "../../_shared/ErrorHandler.ts";
 import { MediaProcessor } from "../../_shared/MediaProcessor.ts";
 import { createMediaProcessor } from "../../_shared/mediaUtils.ts";
-import { handleError } from "../../_shared/ErrorHandler.ts";
+import { supabaseClient } from "../../_shared/supabaseClient.ts";
 
 // Error handling
 import { createTelegramErrorResponse } from "../utils/errorUtils.ts";
 
 // Local Imports
 import {
-    MessageContext,
-    TelegramMessage,
+  MessageContext,
+  TelegramMessage,
 } from '../types.ts';
-import { 
-    updateMessageRecord, 
-    findMessageByFileUniqueId,
-    logProcessingEvent,
-    upsertMediaMessageRecord,
-    triggerCaptionParsing,
-    syncMediaGroupCaptions,
-    extractForwardInfo
+import {
+  extractForwardInfo,
+  findMessageByFileUniqueId,
+  logProcessingEvent,
+  triggerCaptionParsing,
+  updateMessageRecord,
+  upsertMediaMessageRecord
 } from '../utils/dbOperations.ts';
-import { 
-    extractMediaContent, 
-    checkMessageExists, 
-    processCaptionWithRetry, 
-} from '../utils/messageUtils.ts';
 import { logWithCorrelation } from '../utils/logger.ts';
+import {
+  checkMessageExists,
+  extractMediaContent,
+  processCaptionWithRetry,
+} from '../utils/messageUtils.ts';
 
 // Get Telegram bot token from environment
 const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN');
@@ -235,7 +234,7 @@ async function handleNewMessage(
         logWithCorrelation(correlationId, `Caption changed for message ${message.message_id}. Old: "${existingMessage.data.caption}", New: "${message.caption}"`, 'INFO', functionName);
         
         // When caption changes, we need to:
-        // 1. Move current analyzed_content to old_analyzed_content array
+        // 1. Move current analyzed_content to old_analyzed_content field (not array)
         // 2. Reset processing_state to trigger reprocessing
         // 3. Set analyzed_content to new captionData
         // We'll handle this by preparing additional updates for the upsert operation
@@ -262,9 +261,7 @@ async function handleNewMessage(
         // If the message has analyzed content, move it to old_analyzed_content
         if (existingMessage.data.analyzed_content) {
           additionalUpdates = {
-            old_analyzed_content: existingMessage.data.old_analyzed_content 
-              ? [...existingMessage.data.old_analyzed_content, existingMessage.data.analyzed_content]
-              : [existingMessage.data.analyzed_content],
+            old_analyzed_content: existingMessage.data.analyzed_content, // Simply overwrite with current analyzed_content
             // Set the new analyzed content
             analyzed_content: captionData
           };
@@ -335,22 +332,10 @@ async function handleNewMessage(
           logWithCorrelation(correlationId, `Error triggering caption parser: ${error instanceof Error ? error.message : String(error)}`, 'ERROR', functionName);
         });
         
-        // If this message is part of a media group, sync the caption changes to other messages in the group
+        // If this message is part of a media group, PostgreSQL triggers will handle synchronization
         if (message.media_group_id) {
-          logWithCorrelation(correlationId, `Caption changed for message in media group ${message.media_group_id}, syncing to other messages`, 'INFO', functionName);
-          
-          // Sync caption changes to other messages in the group
-          syncMediaGroupCaptions(
-            supabaseClient,
-            message.media_group_id,
-            dbResult.data.id,
-            message.caption,
-            captionData,
-            'initialized', // Reset processing state for other messages
-            correlationId
-          ).catch(error => {
-            logWithCorrelation(correlationId, `Error syncing media group captions: ${error instanceof Error ? error.message : String(error)}`, 'ERROR', functionName);
-          });
+          logWithCorrelation(correlationId, `Caption changed for message in media group ${message.media_group_id}, PostgreSQL trigger will handle synchronization`, 'INFO', functionName);
+          // Media group synchronization is handled automatically by PostgreSQL triggers
         }
       }
 
@@ -529,10 +514,8 @@ async function handleEditedMessage(
       
       // If the message has analyzed content, move it to old_analyzed_content
       if (existingMessage.analyzed_content) {
-        updates.old_analyzed_content = existingMessage.old_analyzed_content 
-          ? [...existingMessage.old_analyzed_content, existingMessage.analyzed_content]
-          : [existingMessage.analyzed_content];
-        updates.analyzed_content = captionData; // Set to captionData for consistency with media group sync
+        updates.old_analyzed_content = existingMessage.analyzed_content; // Simply overwrite with current analyzed_content
+        updates.analyzed_content = captionData; // Set to captionData for consistency
       }
     }
     
@@ -564,20 +547,10 @@ async function handleEditedMessage(
       );
     }
     
-    // If caption has changed and this is part of a media group, sync the caption to other messages in the group
+    // If caption has changed and this is part of a media group, PostgreSQL triggers will handle synchronization
     if (captionChanged && message.media_group_id) {
-      logWithCorrelation(correlationId, `Caption changed for message in media group ${message.media_group_id}, syncing to other messages`, 'INFO', functionName);
-      
-      // Sync caption changes to other messages in the group
-      await syncMediaGroupCaptions(
-        supabaseClient,
-        message.media_group_id,
-        existingMessage.id,
-        message.caption,
-        captionData,
-        'initialized', // Reset processing state for other messages
-        correlationId
-      );
+      logWithCorrelation(correlationId, `Caption changed for message in media group ${message.media_group_id}, PostgreSQL trigger will handle synchronization`, 'INFO', functionName);
+      // Media group synchronization is handled automatically by PostgreSQL triggers
     }
     
     // If caption has changed, trigger the caption parser

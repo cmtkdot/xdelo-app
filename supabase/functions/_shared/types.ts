@@ -1,4 +1,3 @@
-
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 
 export type ProcessingState = 'pending' | 'processing' | 'completed' | 'error' | 'initialized';
@@ -76,7 +75,8 @@ export interface Message {
   processing_started_at?: string;
   processing_completed_at?: string;
   analyzed_content?: AnalyzedContent;
-  // Change to simple JSONB (not array)
+  // Single JSONB object that stores the previous version of analyzed_content
+  // Gets completely overwritten whenever caption changes
   old_analyzed_content?: AnalyzedContent;
   telegram_data?: Record<string, unknown>;
   error_message?: string;
