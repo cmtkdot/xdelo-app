@@ -109,12 +109,6 @@ export interface ProcessingResult {
 }
 
 /**
- * MediaProcessor class for handling Telegram media
- * 
- * This class provides a comprehensive set of methods for processing media files from Telegram messages.
- * It handles downloading media from Telegram, uploading to Supabase Storage, and managing file metadata.
- */
-/**
  * Utility function to retry an asynchronous operation with exponential backoff
  * 
  * @param operation - Async function to retry
@@ -498,58 +492,8 @@ export class MediaProcessor {
   private getMimeTypeFromExtension(extension: string): string | null {
     if (!extension) return null;
     
-    const extensionToMimeMap: Record<string, string> = {
-      // Images
-      'jpg': 'image/jpeg',
-      'jpeg': 'image/jpeg',
-      'png': 'image/png',
-      'gif': 'image/gif',
-      'webp': 'image/webp',
-      'svg': 'image/svg+xml',
-      'avif': 'image/avif',
-      'bmp': 'image/bmp',
-      'tiff': 'image/tiff',
-      
-      // Videos
-      'mp4': 'video/mp4',
-      'webm': 'video/webm',
-      'mov': 'video/quicktime',
-      'avi': 'video/x-msvideo',
-      'mkv': 'video/x-matroska',
-      'ogv': 'video/ogg',
-      'mpg': 'video/mpeg',
-      
-      // Audio
-      'mp3': 'audio/mpeg',
-      'ogg': 'audio/ogg',
-      'weba': 'audio/webm',
-      'wav': 'audio/wav',
-      'aac': 'audio/aac',
-      'flac': 'audio/flac',
-      
-      // Documents
-      'pdf': 'application/pdf',
-      'doc': 'application/msword',
-      'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'xls': 'application/vnd.ms-excel',
-      'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'ppt': 'application/vnd.ms-powerpoint',
-      'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-      'zip': 'application/zip',
-      'rar': 'application/x-rar-compressed',
-      '7z': 'application/x-7z-compressed',
-      'tar': 'application/x-tar',
-      'gz': 'application/gzip',
-      'bz2': 'application/x-bzip2',
-      'txt': 'text/plain',
-      'html': 'text/html',
-      'css': 'text/css',
-      'js': 'text/javascript',
-      'json': 'application/json',
-      'xml': 'application/xml'
-    };
-    
-    return extensionToMimeMap[extension.toLowerCase()] || null;
+    // Use the mapping initialized in constructor
+    return this.extensionToMimeMap[extension.toLowerCase()] || null;
   }
 
   /**
@@ -671,14 +615,56 @@ export class MediaProcessor {
     const extension = this.getExtensionFromMimeType(mimeType);
     return this.getStandardizedPath(fileUniqueId, extension);
   }
-  
+
+  /**
+   * Get standardized path for a file
+   * 
+   * This method combines a file unique ID with an extension to create a standardized path.
+   * It ensures consistent file naming and handles file type categorization for better organization.
+   * 
+   * @param fileUniqueId - Unique identifier for the file from Telegram
+   * @param extension - The file extension (without leading dot)
+   * @returns The standardized path string
+   * @example
+   * ```typescript
+   * // Returns 'images/AgADcAUAAj-vwFc.jpeg'
+   * const path = mediaProcessor.getStandardizedPath('AgADcAUAAj-vwFc', 'jpeg');
+   * ```
+   */
+  public getStandardizedPath(fileUniqueId: string, extension: string): string {
+    // Ensure fileUniqueId is cleaned of any unsafe characters
+    const sanitizedFileId = fileUniqueId.replace(/[^a-zA-Z0-9_-]/g, '');
+    
+    // Determine the path segment based on media type
+    const extensionLower = extension.toLowerCase();
+    
+    // Group by general media type
+    let typeSegment = 'other';
+    if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(extensionLower)) {
+      typeSegment = 'images';
+    } else if (['mp4', 'webm', 'mov', 'avi'].includes(extensionLower)) {
+      typeSegment = 'videos';
+    } else if (['mp3', 'ogg', 'wav', 'm4a'].includes(extensionLower)) {
+      typeSegment = 'audio';
+    } else if (['pdf', 'doc', 'docx', 'txt', 'rtf'].includes(extensionLower)) {
+      typeSegment = 'documents';
+    }
+    
+    // Format: type/fileUniqueId.extension
+    return `${typeSegment}/${sanitizedFileId}.${extensionLower}`;
+  }
+
   /**
    * Check if a file already exists in the database
    * 
    * This method checks if a file with the given unique ID exists in the database.
    * It returns an object with a boolean indicating existence and the message data if found.
    * 
-   * @param fileUniqueId - Unique identifier for the file
+   * IMPORTANT: Always use the Telegram file_unique_id directly from the message
+   * rather than extracting it from storage paths or other derived sources.
+   * This ensures proper duplicate detection and prevents issues with file tracking.
+   * 
+   * @param fileUniqueId - Unique identifier for the file from Telegram (NOT derived from storage path)
    * @returns Object with exists flag and message data if found
    * @example
    * ```typescript
@@ -1022,6 +1008,18 @@ export class MediaProcessor {
    * }
    * ```
    */
+  /**
+   * Check if a file exists in storage using its Telegram file_unique_id
+   * 
+   * IMPORTANT: This method uses the original Telegram file_unique_id to check for duplicates,
+   * not a derived path or identifier. This ensures proper duplicate detection and handling
+   * of caption changes for the same media content.
+   * 
+   * @param fileUniqueId - Unique identifier for the file directly from Telegram
+   * @param extension - File extension to use in the storage path
+   * @param correlationId - Correlation ID for logging
+   * @returns Object with existence status and file info if found
+   */
   public async checkFileExistsInStorage(
     fileUniqueId: string,
     extension: string,
@@ -1031,7 +1029,7 @@ export class MediaProcessor {
     console.log(`[${correlationId}][${functionName}] Checking if file ${fileUniqueId}.${extension} exists in storage`);
     
     try {
-      // Check if the file exists in the database
+      // Check if the file exists in the database first (most reliable source of truth)
       const { data: existingMessage, error: dbError } = await this.supabaseClient
         .from('messages')
         .select('storage_path, public_url')
@@ -1047,87 +1045,42 @@ export class MediaProcessor {
         console.log(`[${correlationId}][${functionName}] Found existing file record in database with file_unique_id ${fileUniqueId}`);
         
         // Check if the file actually exists in storage
-        const { data: storageData, error: storageError } = await this.supabaseClient
+        const { data: storageData } = await this.supabaseClient
           .storage
           .from(this.storageBucket)
           .getPublicUrl(existingMessage.storage_path);
         
-        if (!storageError) {
-          // Verify the file exists by making a HEAD request
-          try {
-            const response = await fetch(storageData.publicUrl, { 
-              method: 'HEAD',
-              headers: { 'Cache-Control': 'no-cache' }
-            });
-            
-            if (response.ok) {
-              console.log(`[${correlationId}][${functionName}] Verified file exists in storage at path ${existingMessage.storage_path}`);
-              return { 
-                exists: true, 
-                storagePath: existingMessage.storage_path,
-                publicUrl: existingMessage.public_url || storageData.publicUrl
-              };
-            }
-          } catch (fetchError) {
-            console.error(`[${correlationId}][${functionName}] Error verifying file existence: ${fetchError instanceof Error ? fetchError.message : String(fetchError)}`);
-          }
+        if (storageData && await this.verifyUrlExists(storageData.publicUrl, correlationId)) {
+          console.log(`[${correlationId}][${functionName}] Verified file exists in storage at path ${existingMessage.storage_path}`);
+          return { 
+            exists: true, 
+            storagePath: existingMessage.storage_path,
+            publicUrl: existingMessage.public_url || storageData.publicUrl
+          };
         }
       }
       
-      // Simple fallback: try with the direct fileUniqueId.extension format
-      const simplePath = `${fileUniqueId}.${extension}`;
-      try {
-        const { data: storageData, error: storageError } = await this.supabaseClient
-          .storage
-          .from(this.storageBucket)
-          .getPublicUrl(simplePath);
-        
-        if (!storageError) {
-          // Verify the file exists by making a HEAD request
-          const response = await fetch(storageData.publicUrl, { 
-            method: 'HEAD',
-            headers: { 'Cache-Control': 'no-cache' }
-          });
-          
-          if (response.ok) {
-            console.log(`[${correlationId}][${functionName}] Found file in storage at simple path ${simplePath}`);
-            return { 
-              exists: true, 
-              storagePath: simplePath,
-              publicUrl: storageData.publicUrl
-            };
-          }
-        }
-      } catch (error) {
-        console.error(`[${correlationId}][${functionName}] Error checking simple path: ${error instanceof Error ? error.message : String(error)}`);
-      }
+      // Try potential file paths in order of likelihood
+      const potentialPaths = [
+        `${fileUniqueId}.${extension}`, // Standard path with provided extension
+        `${fileUniqueId}.bin`,         // Fallback with bin extension
+        `${fileUniqueId}`              // Bare fileUniqueId as a last resort
+      ];
       
-      // Try one more fallback with .bin extension which seems to be used in your system
-      const binPath = `${fileUniqueId}.bin`;
-      try {
-        const { data: storageData, error: storageError } = await this.supabaseClient
+      for (const path of potentialPaths) {
+        const { data: storageData } = await this.supabaseClient
           .storage
           .from(this.storageBucket)
-          .getPublicUrl(binPath);
-        
-        if (!storageError) {
-          // Verify the file exists by making a HEAD request
-          const response = await fetch(storageData.publicUrl, { 
-            method: 'HEAD',
-            headers: { 'Cache-Control': 'no-cache' }
-          });
+          .getPublicUrl(path);
           
-          if (response.ok) {
-            console.log(`[${correlationId}][${functionName}] Found file in storage at bin path ${binPath}`);
-            return { 
-              exists: true, 
-              storagePath: binPath,
-              publicUrl: storageData.publicUrl
-            };
-          }
+        if (storageData && await this.verifyUrlExists(storageData.publicUrl, correlationId)) {
+          console.log(`[${correlationId}][${functionName}] Found file in storage at path ${path}`);
+          return { 
+            exists: true, 
+            storagePath: path,
+            publicUrl: storageData.publicUrl
+          };
         }
-      } catch (error) {
-        console.error(`[${correlationId}][${functionName}] Error checking bin path: ${error instanceof Error ? error.message : String(error)}`);
       }
       
       console.log(`[${correlationId}][${functionName}] File with file_unique_id ${fileUniqueId} not found in storage`);
@@ -1135,6 +1088,28 @@ export class MediaProcessor {
     } catch (error) {
       console.error(`[${correlationId}][${functionName}] Exception checking file existence: ${error instanceof Error ? error.message : String(error)}`);
       return { exists: false };
+    }
+  }
+  
+  /**
+   * Verify if a URL exists by making a HEAD request
+   * 
+   * @param url - URL to verify
+   * @param correlationId - Correlation ID for logging
+   * @returns Boolean indicating if the URL exists and is accessible
+   * @private
+   */
+  private async verifyUrlExists(url: string, correlationId: string): Promise<boolean> {
+    try {
+      const response = await fetch(url, { 
+        method: 'HEAD',
+        headers: { 'Cache-Control': 'no-cache' }
+      });
+      
+      return response.ok;
+    } catch (error) {
+      console.error(`[${correlationId}] Error verifying URL existence: ${error instanceof Error ? error.message : String(error)}`);
+      return false;
     }
   }
   
@@ -1164,6 +1139,9 @@ export class MediaProcessor {
     // Create a standardized path in the format fileUniqueId.extension
     return `${fileUniqueId}.${cleanExtension}`;
   }
+  /**
+   * Process media content from Telegram
+   * 
    * This method extracts media content from Telegram, processes it,
    * and stores it in Supabase storage. It handles duplicate detection,
    * downloading, and uploading, while ensuring proper MIME type detection.
@@ -1188,6 +1166,20 @@ export class MediaProcessor {
     console.log(`[${correlationId}][${functionName}] Processing media ${mediaContent.fileUniqueId}`);
     
     try {
+      // Validate required fields
+      if (!mediaContent.fileId || !mediaContent.fileUniqueId) {
+        return {
+          status: 'error',
+          fileId: mediaContent.fileId || '',
+          fileUniqueId: mediaContent.fileUniqueId || '',
+          storagePath: null,
+          publicUrl: null,
+          mimeType: null,
+          extension: null,
+          error: 'Missing required file identifiers'
+        };
+      }
+
       // Detect proper MIME type from Telegram data
       let detectedMimeType = mediaContent.mimeType || this.inferMimeTypeFromMediaType(mediaContent.mediaType);
       
@@ -1199,6 +1191,13 @@ export class MediaProcessor {
         extension = 'jpeg';
         detectedMimeType = 'image/jpeg';
       }
+      
+      // Log fileUniqueId to aid in debugging duplicate detection issues
+      console.log(`[${correlationId}][${functionName}] Processing media with fileUniqueId: ${mediaContent.fileUniqueId}, fileId: ${mediaContent.fileId}`, {
+        mediaType: mediaContent.mediaType,
+        mimeType: detectedMimeType,
+        extension
+      });
       
       // Check if file already exists in storage by file_unique_id
       const existingFile = await this.checkFileExistsInStorage(
@@ -1243,14 +1242,21 @@ export class MediaProcessor {
       );
       
       if (!downloadResult.success || !downloadResult.blob) {
-        if (downloadResult.error && downloadResult.error.includes('file reference expired') || downloadResult.error.includes('File_id doesn\'t match')) {
+        // Improved detection of file reference issues common with forwarded media
+        const errorMessage = downloadResult.error || 'Unknown download error';
+        const isForwardedMediaError = errorMessage.includes('file reference expired') || 
+                                     errorMessage.includes('File_id doesn\'t match') ||
+                                     errorMessage.includes('bot can\'t access') ||
+                                     errorMessage.includes('file is no longer available');
+        
+        if (isForwardedMediaError) {
           return {
             status: 'download_failed_forwarded',
             fileId: mediaContent.fileId,
             fileUniqueId: mediaContent.fileUniqueId,
             storagePath: null,
             publicUrl: null,
-            mimeType: mediaContent.mimeType,
+            mimeType: mediaContent.mimeType || null,
             extension: extension,
             error: 'Cannot download forwarded media due to inaccessible file_id.'
           };
@@ -1261,9 +1267,9 @@ export class MediaProcessor {
             fileUniqueId: mediaContent.fileUniqueId,
             storagePath: null,
             publicUrl: null,
-            mimeType: mediaContent.mimeType,
+            mimeType: mediaContent.mimeType || null,
             extension: extension,
-            error: downloadResult.error || 'Failed to download media'
+            error: errorMessage
           };
         }
       }
@@ -1296,15 +1302,16 @@ export class MediaProcessor {
       
       console.log(`[${correlationId}][${functionName}] File MIME type: ${downloadResult.mimeType}, Content-Disposition: ${contentDisposition}`);
       
+      // Success result with correct fileUniqueId handling
       return {
         status: 'success',
         fileId: mediaContent.fileId,
-        fileUniqueId: mediaContent.fileUniqueId,
+        fileUniqueId: mediaContent.fileUniqueId, // Important: preserve original fileUniqueId
         storagePath: downloadResult.storagePath,
         publicUrl: uploadResult.publicUrl,
         mimeType: downloadResult.mimeType,
         extension: extension,
-        contentDisposition: contentDisposition,  // Add content disposition to the result
+        contentDisposition: contentDisposition,
         error: undefined
       };
       

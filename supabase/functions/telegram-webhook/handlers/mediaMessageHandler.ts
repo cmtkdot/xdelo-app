@@ -220,8 +220,7 @@ async function handleNewMessage(
       correlationId
     );
 
-    // Change from const to let for processingState so it can be reassigned
-    let processingState = mapStatusToProcessingState(processingResult.status);
+    // Variable can be reassigned later if caption changes
     let processingState = mapStatusToProcessingState(processingResult.status);
     logWithCorrelation(correlationId, `Media processing status for message ${message.message_id}: ${processingResult.status} -> DB state: ${processingState}`, 'INFO', functionName);
 
