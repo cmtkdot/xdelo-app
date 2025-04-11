@@ -137,3 +137,38 @@ export interface TelegramMessage {
   // Media group ID for grouped media
   media_group_id?: string;
 }
+
+/**
+ * Database record for messages (both media and text)
+ * This interface represents the combined fields from both media_messages and other_messages tables
+ */
+export interface MessageRecord {
+  id: string;
+  telegram_message_id: number;
+  chat_id: number;
+  chat_type: string;
+  chat_title?: string;
+  text?: string;
+  caption?: string;
+  media_group_id?: string;
+  file_id?: string;
+  file_unique_id?: string;
+  storage_path?: string;
+  public_url?: string;
+  mime_type?: string;
+  extension?: string;
+  media_type?: string;
+  width?: number;
+  height?: number;
+  duration?: number;
+  file_size?: number;
+  message_data: any;
+  created_at: string;
+  updated_at: string;
+  processing_state: string;
+  processing_error?: string | null;
+  forward_info?: any;
+  edit_history?: any[];
+  analyzed_content?: any;
+  caption_data?: any;
+}

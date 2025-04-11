@@ -1,4 +1,4 @@
-import { supabaseClient } from '../../_shared/supabaseClient.ts';
+ import { supabaseClient } from '../../_shared/supabaseClient.ts';
 import { logWithCorrelation } from './logger.ts';
 
 /**
@@ -121,7 +121,7 @@ export async function upsertMediaMessageRecord({
         analyzed_content: analyzedContent ? '[set]' : '[not set]',
         old_analyzed_content: formattedOldAnalyzedContent ? '[set]' : '[not set]'
       })}`, 
-      'INFO', 
+      'debug', 
       'upsertMediaMessageRecord'
     );
     
@@ -153,7 +153,7 @@ export async function upsertMediaMessageRecord({
       logWithCorrelation(
         correlationId, 
         `Error upserting media message: ${error.message}`, 
-        'ERROR', 
+        'error', 
         'upsertMediaMessageRecord'
       );
       return { success: false, error };
@@ -162,7 +162,7 @@ export async function upsertMediaMessageRecord({
     logWithCorrelation(
       correlationId, 
       `Successfully upserted media message with ID: ${data}`, 
-      'INFO', 
+      'debug', 
       'upsertMediaMessageRecord'
     );
     
@@ -171,7 +171,7 @@ export async function upsertMediaMessageRecord({
     logWithCorrelation(
       correlationId, 
       `Exception in upsertMediaMessageRecord: ${error}`, 
-      'ERROR', 
+      'error', 
       'upsertMediaMessageRecord'
     );
     return { success: false, error: error instanceof Error ? error.message : String(error) };
@@ -229,9 +229,28 @@ export async function createMessageRecord(supabaseClient, message, mediaType, fi
 /**
  * Update a message record in the database
  */
-export async function updateMessageRecord(supabaseClient, existingMessage, message, mediaInfo, captionData, correlationId, updates = {}) {
+export async function updateMessageRecord(supabaseClient, existingMessage, message, mediaInfo, captionData, correlationId, updates = {}): Promise<{ success: boolean; error?: any }> {
   try {
-    const updateData = {
+    interface MessageUpdateData {
+      telegram_message_id: number;
+      chat_id: number;
+      chat_type: string;
+      chat_title?: string;
+      caption?: string;
+      message_data: any;
+      caption_data: any;
+      analyzed_content: any;
+      correlation_id: string;
+      updated_at: string;
+      file_unique_id?: string;
+      storage_path?: string;
+      public_url?: string;
+      mime_type?: string;
+      extension?: string;
+      [key: string]: any; // For additional properties from updates
+    }
+    
+    const updateData: MessageUpdateData = {
       telegram_message_id: message.message_id,
       chat_id: message.chat.id,
       chat_type: message.chat.type,
@@ -244,6 +263,7 @@ export async function updateMessageRecord(supabaseClient, existingMessage, messa
       updated_at: new Date().toISOString(),
       ...updates
     };
+    
     if (mediaInfo) {
       updateData.file_unique_id = mediaInfo.fileUniqueId;
       updateData.storage_path = mediaInfo.storagePath;
@@ -254,12 +274,12 @@ export async function updateMessageRecord(supabaseClient, existingMessage, messa
     const { error } = await supabaseClient.from("messages").update(updateData).eq("id", existingMessage.id);
     if (error) {
       console.error("DB error updating message:", error);
-      return false;
+      return { success: false, error };
     }
-    return true;
+    return { success: true };
   } catch (error) {
     console.error("Exception updating message:", error);
-    return false;
+    return { success: false, error: error instanceof Error ? error.message : String(error) };
   }
 }
 
@@ -271,7 +291,7 @@ export async function findMessageByTelegramId(
   telegramMessageId: number,
   chatId: number,
   correlationId: string
-): Promise<{ success: boolean; message?: any; error?: any }> {
+): Promise<{ success: boolean; data?: any; error?: any }> {
   try {
     logWithCorrelation(correlationId, `Finding message with Telegram ID ${telegramMessageId} in chat ${chatId}`, 'info', 'findMessageByTelegramId');
     
@@ -287,7 +307,7 @@ export async function findMessageByTelegramId(
       if (error.code === 'PGRST116') {
         // Not found, which is a valid result
         logWithCorrelation(correlationId, `Message ${telegramMessageId} not found in chat ${chatId}`, 'info', 'findMessageByTelegramId');
-        return { success: true, message: null };
+        return { success: true, data: null };
       }
       
       logWithCorrelation(correlationId, `Error finding message: ${error.message}`, 'error', 'findMessageByTelegramId');
@@ -295,7 +315,7 @@ export async function findMessageByTelegramId(
     }
     
     logWithCorrelation(correlationId, `Found message ${telegramMessageId} in chat ${chatId}`, 'info', 'findMessageByTelegramId');
-    return { success: true, message: data };
+    return { success: true, data: data };
   } catch (error) {
     logWithCorrelation(correlationId, `Exception in findMessageByTelegramId: ${error}`, 'error', 'findMessageByTelegramId');
     return { success: false, error: error instanceof Error ? error.message : String(error) };
@@ -384,8 +404,9 @@ export async function logProcessingEvent(supabaseClient, event_type, entity_id, 
 
 /**
  * Trigger caption parsing by invoking an Edge Function
+ * @returns {Promise<{success: boolean, data?: any, error?: any}>}
  */
-export async function triggerCaptionParsing({ supabaseClient, messageId, correlationId }) {
+export async function triggerCaptionParsing({ supabaseClient, messageId, correlationId }): Promise<{success: boolean, data?: any, error?: any}> {
   try {
     const { data, error } = await supabaseClient.functions.invoke('xdelo_parse_caption', {
       body: {
@@ -395,11 +416,14 @@ export async function triggerCaptionParsing({ supabaseClient, messageId, correla
     });
     if (error) {
       console.error(`Error invoking caption parsing function for message ${messageId}:`, error);
+      return { success: false, error: error };
     } else {
       console.log(`Caption parsing triggered successfully for message ${messageId}`);
+      return { success: true, data: data };
     }
   } catch (e) {
     console.error(`Exception invoking caption parsing function for message ${messageId}:`, e);
+    return { success: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
 
@@ -506,7 +530,7 @@ export async function syncMediaGroupCaptions({
           'old_analyzed_content',
           'processing_state'
         ]
-      });
+      }, null);
       
       return {
         success: true,

@@ -14,7 +14,8 @@ import {
 } from "../../_shared/ErrorHandler.ts";
 import { TelegramMessage } from "../types.ts";
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
-import { RetryHandler, createRetryHandler, RetryOptions, RetryExecuteOptions, RetryResult } from "../../_shared/retryHandler.ts";
+import { RetryHandler, createRetryHandler, RetryResult } from "../../_shared/retryHandler.ts";
+import type { RetryConfig, RetryExecuteOptions } from "../../_shared/retryHandler.ts";
 
 /**
  * Context for Telegram message error handling
@@ -236,14 +237,21 @@ export async function retryWithBackoff<T>(
     {
       operationName: options.functionName,
       correlationId: options.correlationId,
+      supabaseClient: null as any, // Provide a mock or actual supabaseClient if available
       contextData: { source: 'legacy_retryWithBackoff' }
     }
   );
   
-  if (result.success) {
+  if (result.success && result.result !== undefined) {
     return result.result;
   } else {
-    throw result.error;
+    // If result.error is already an Error object, throw it directly
+    // Otherwise, create a new Error with the string message
+    if (result.error instanceof Error) {
+      throw result.error;
+    } else {
+      throw new Error(String(result.error) || 'Operation failed without a specific error message');
+    }
   }
 }
 

@@ -2,8 +2,6 @@
  * Error handling utilities for the Telegram webhook
  */
 import { corsHeaders } from "../../_shared/cors.ts";
-import { handleError as sharedHandleError } from "../../_shared/ErrorHandler.ts";
-
 /**
  * Create a standardized error response for the Telegram webhook
  * 
@@ -40,6 +38,21 @@ export function createErrorResponse(
 }
 
 /**
- * Re-export the shared handleError function for convenience
+ * Create a handleError function using the shared formatErrorDetail
  */
-export { sharedHandleError as handleError };
+export function formatErrorDetail(error: unknown, context?: Record<string, any>): ErrorDetail {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+      context
+    };
+  } else {
+    return {
+      name: 'UnknownError',
+      message: String(error),
+      context
+    };
+  }
+}

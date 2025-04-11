@@ -1,4 +1,4 @@
-/// <reference types="https://esm.sh/@supabase/functions-js/edge-runtime.d.ts" />
+/// <reference path="../../types/edge-runtime.d.ts" />
 
 // Shared Imports
 import { supabaseClient } from "../../_shared/cors.ts";

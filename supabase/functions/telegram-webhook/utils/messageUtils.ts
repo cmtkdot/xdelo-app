@@ -8,7 +8,57 @@
 
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { TelegramMessage, ForwardInfo } from "../types.ts";
-import { MediaProcessor, MediaContent, ProcessingResult } from "../../_shared/MediaProcessor.ts";
+import { MediaProcessor, MediaContent, ProcessingResult as OriginalProcessingResult } from "../../_shared/MediaProcessor.ts";
+
+// Our application's media processing result interface
+interface MediaProcessingResult {
+  status: 'success' | 'duplicate' | 'error' | 'download_failed_forwarded';
+  success: boolean;
+  isDuplicate: boolean;
+  fileId: string;
+  fileUniqueId: string;
+  storagePath: string | null;
+  publicUrl: string | null;
+  mimeType: string | null;
+  extension: string | null;
+  fileInfo?: {
+    fileUniqueId: string;
+    storagePath: string | null;
+    publicUrl: string | null;
+    mimeType: string | null;
+    extension: string | null;
+    fileSize?: number;
+    contentDisposition?: 'inline' | 'attachment';
+  };
+  error?: string;
+  contentDisposition?: 'inline' | 'attachment';
+}
+
+// Type adapter function to convert OriginalProcessingResult to our MediaProcessingResult
+function adaptProcessingResult(result: OriginalProcessingResult): MediaProcessingResult {
+  return {
+    status: result.status,
+    success: result.status === 'success',
+    isDuplicate: result.status === 'duplicate',
+    fileId: result.fileId,
+    fileUniqueId: result.fileUniqueId,
+    storagePath: result.storagePath,
+    publicUrl: result.publicUrl,
+    mimeType: result.mimeType,
+    extension: result.extension,
+    contentDisposition: result.contentDisposition,
+    error: result.error,
+    fileInfo: {
+      fileUniqueId: result.fileUniqueId,
+      storagePath: result.storagePath,
+      publicUrl: result.publicUrl,
+      mimeType: result.mimeType,
+      extension: result.extension,
+      contentDisposition: result.contentDisposition
+    }
+  };
+}
+
 import { RetryHandler, createRetryHandler } from "../../_shared/retryHandler.ts";
 import { processCaptionText } from "../../_shared/captionParser.ts";
 
@@ -30,14 +80,16 @@ export function extractForwardInfo(message: TelegramMessage): ForwardInfo | unde
   if (!message.forward_date) return undefined;
   
   const forwardInfo: ForwardInfo = {
-    date: message.forward_date,
-    fromChatId: message.forward_from_chat?.id,
-    fromChatType: message.forward_from_chat?.type,
-    fromMessageId: message.forward_from_message_id,
-    fromName: message.forward_sender_name,
+    date: message.forward_date || message.forward_origin?.date || 0,
+    fromChatId: message.forward_from_chat?.id || message.forward_origin?.chat?.id,
+    fromChatType: message.forward_from_chat?.type || message.forward_origin?.chat?.type,
+    fromMessageId: message.forward_origin?.message_id,
     fromUserId: message.forward_from?.id,
     fromUserIsBot: message.forward_from?.is_bot,
-    signature: message.forward_signature
+    // Handle different forward types based on available properties
+    fromName: message.forward_from?.first_name || message.forward_from?.username,
+    // Using any type assertion for properties not in the interface but might exist in the data
+    signature: (message as any).forward_signature
   };
   
   return forwardInfo;
@@ -129,7 +181,7 @@ export async function processCaptionWithRetry(
     {
       operationName: 'processCaptionText',
       correlationId,
-      supabaseClient: null, // We don't need supabaseClient for this simple retry
+      supabaseClient: {} as SupabaseClient, // Use a type assertion for a mock client 
       contextData: { captionLength: captionText.length }
     }
   );
@@ -237,7 +289,7 @@ export async function processMessageMedia(
   message: TelegramMessage,
   mediaProcessor: MediaProcessor,
   correlationId: string
-): Promise<ProcessingResult> {
+): Promise<MediaProcessingResult> {
   const functionName = 'processMessageMedia';
   console.log(`[${correlationId}][${functionName}] Processing media for message ${message.message_id}`);
   
@@ -246,10 +298,17 @@ export async function processMessageMedia(
     const mediaContent = extractMediaContent(message);
     if (!mediaContent) {
       return {
-        success: false,
+        status: 'error',
+        success: false, 
         isDuplicate: false,
+        fileId: '',
+        fileUniqueId: '',
+        storagePath: null,
+        publicUrl: null,
+        mimeType: null,
+        extension: null,
         error: "Could not extract media content from message"
-      };
+      } as MediaProcessingResult;
     }
     
     // Log media type and details for debugging
@@ -268,19 +327,34 @@ export async function processMessageMedia(
       {
         operationName: 'processMedia',
         correlationId,
-        supabaseClient: null, // We don't need supabaseClient for this operation
+        supabaseClient: {} as SupabaseClient, // Use type assertion for a mock client
         contextData: { mediaType: mediaContent.mediaType, fileUniqueId: mediaContent.fileUniqueId }
       }
     );
     
-    if (result.success) {
-      return result.result;
+    if (result.success && result.result) {
+      // Adapt the result to our MediaProcessingResult format
+      const adaptedResult = adaptProcessingResult(result.result);
+      
+      // Add file size from mediaContent if available
+      if (adaptedResult.fileInfo && mediaContent.fileSize) {
+        adaptedResult.fileInfo.fileSize = mediaContent.fileSize;
+      }
+      
+      return adaptedResult;
     } else {
       return {
+        status: 'error',
         success: false,
         isDuplicate: false,
-        error: result.error?.message || 'Unknown error processing media'
-      };
+        fileId: mediaContent.fileId,
+        fileUniqueId: mediaContent.fileUniqueId,
+        storagePath: null,
+        publicUrl: null,
+        mimeType: mediaContent.mimeType || null,
+        extension: null,
+        error: result.error || "Media processing failed"
+      } as MediaProcessingResult;
     }
   } catch (error) {
     console.error(`[${correlationId}][${functionName}] Exception processing media:`, error);
@@ -288,7 +362,7 @@ export async function processMessageMedia(
       success: false,
       isDuplicate: false,
       error: error instanceof Error ? error.message : String(error)
-    };
+    } as MediaProcessingResult;
   }
 }
 
@@ -313,7 +387,7 @@ export async function processMessageMedia(
 export async function createMessageRecord(
   supabaseClient: SupabaseClient,
   message: TelegramMessage,
-  mediaResult: ProcessingResult,
+  mediaResult: MediaProcessingResult,
   captionData: any,
   correlationId: string
 ): Promise<string | null> {
@@ -337,12 +411,12 @@ export async function createMessageRecord(
       correlation_id: correlationId,
       forward_info: forwardInfo,
       edit_history: [],
-      file_unique_id: mediaResult.fileInfo?.storagePath.split('.')[0],
-      storage_path: mediaResult.fileInfo?.storagePath,
-      public_url: mediaResult.fileInfo?.publicUrl,
-      mime_type: mediaResult.fileInfo?.mimeType,
-      file_size: mediaResult.fileInfo?.fileSize,
-      content_disposition: mediaResult.fileInfo?.contentDisposition
+      file_unique_id: mediaResult.fileInfo?.fileUniqueId || '',
+      storage_path: mediaResult.fileInfo?.storagePath || null,
+      public_url: mediaResult.fileInfo?.publicUrl || null,
+      mime_type: mediaResult.fileInfo?.mimeType || null,
+      file_size: mediaResult.fileInfo?.fileSize || null,
+      content_disposition: mediaResult.fileInfo?.contentDisposition || null,
     };
     
     // Insert record
@@ -389,7 +463,7 @@ export async function updateMessageRecord(
   supabaseClient: SupabaseClient,
   existingMessage: any,
   message: TelegramMessage,
-  mediaResult: ProcessingResult | null,
+  mediaResult: MediaProcessingResult | null,
   captionData: any,
   correlationId: string
 ): Promise<boolean> {
@@ -423,8 +497,10 @@ export async function updateMessageRecord(
     
     // If media changed, update media fields
     if (mediaResult && mediaResult.success && mediaResult.fileInfo) {
-      updateData.file_unique_id = mediaResult.fileInfo.storagePath.split('.')[0];
-      updateData.storage_path = mediaResult.fileInfo.storagePath;
+      if (mediaResult.fileInfo.storagePath) {
+        updateData.file_unique_id = mediaResult.fileInfo.storagePath.split('.')[0];
+        updateData.storage_path = mediaResult.fileInfo.storagePath;
+      }
       updateData.public_url = mediaResult.fileInfo.publicUrl;
       updateData.mime_type = mediaResult.fileInfo.mimeType;
       updateData.file_size = mediaResult.fileInfo.fileSize;

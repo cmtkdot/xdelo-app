@@ -44,7 +44,7 @@ async function logProcessingEvent(supabaseClient: any, event_type: string, entit
  */
 export interface SyncMediaGroupCaptionsParams {
   /** Initialized Supabase client */
-  supabaseClient: SupabaseClient<Database>;
+  supabaseClient: SupabaseClient;
   /** Media group ID to sync */
   mediaGroupId: string;
   /** Message ID to exclude from updates (usually the one that triggered the update) */

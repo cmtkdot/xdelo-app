@@ -20,15 +20,17 @@ export async function handleNewMessage(message, telegram_token, correlationId, f
     });
 
     const captionResult = await captionRetryHandler.execute(
-      async () => processCaptionText(message.caption || '', correlationId),
+      async () => processCaptionText(message.caption || null, correlationId),
       {
         operationName: 'processCaptionText',
         correlationId,
+        supabaseClient,
+        errorCategory: 'media_message_caption_error',
         contextData: { captionLength: (message.caption || '').length }
       }
     );
 
-    let captionData = null;
+    let captionData: { text: string; parsed: { extractedAt: string } } | null = null;
     if (captionResult.success && captionResult.result) {
       captionData = captionResult.result;
     }
@@ -44,10 +46,10 @@ export async function handleNewMessage(message, telegram_token, correlationId, f
     // Check if caption has changed compared to existing record
     const existingMessageResult = await findMessageByTelegramId(supabaseClient, message.message_id, message.chat.id, correlationId);
     if (existingMessageResult.success && 
-        existingMessageResult.message && 
-        existingMessageResult.message.caption !== message.caption) {
+        existingMessageResult.data && 
+        existingMessageResult.data.caption !== message.caption) {
       
-      logWithCorrelation(correlationId, `Caption changed for message ${message.message_id}. Old: "${existingMessageResult.message.caption}", New: "${message.caption}"`, 'warn', 'handleNewMessage');
+      logWithCorrelation(correlationId, `Caption changed for message ${message.message_id}. Old: "${existingMessageResult.data.caption}", New: "${message.caption}"`, 'warn', 'handleNewMessage');
     }
 
     // Upsert the message record with all the necessary parameters
@@ -59,8 +61,8 @@ export async function handleNewMessage(message, telegram_token, correlationId, f
       mediaType,
       fileId,
       fileUniqueId,
-      storagePath: mediaResult.storagePath,
-      publicUrl: mediaResult.publicUrl,
+      storagePath: mediaResult.storagePath || null,
+      publicUrl: mediaResult.publicUrl || null,
       mimeType,
       extension,
       messageData: message,
@@ -87,7 +89,7 @@ export async function handleNewMessage(message, telegram_token, correlationId, f
 }
 
 // Process caption text and extract structured data
-async function processCaptionText(caption, correlationId) {
+async function processCaptionText(caption: string | null, correlationId: string): Promise<{ text: string; parsed: { extractedAt: string } } | null> {
   try {
     if (!caption) return null;
     
@@ -306,54 +308,4 @@ export async function handleMediaMessage(telegramToken, message, context) {
   }
 }
 
-// Add missing functions
-
-async function checkFileExistsInStorage(fileUniqueId, extension, correlationId) {
-  try {
-    logWithCorrelation(correlationId, `Checking if file ${fileUniqueId}.${extension} exists in storage`, 'warn', 'checkFileExistsInStorage');
-    
-    // First check if the file exists in the database
-    const existingFileResult = await findMessageByFileUniqueId(supabaseClient, fileUniqueId, correlationId);
-    
-    if (existingFileResult.success && existingFileResult.data) {
-      logWithCorrelation(correlationId, `Found existing file record in database with file_unique_id ${fileUniqueId}`, 'warn', 'checkFileExistsInStorage');
-      
-      // Check if the file exists in storage
-      const { data, error } = await supabaseClient
-        .storage
-        .from('media')
-        .getPublicUrl(`${fileUniqueId}.${extension}`);
-      
-      if (error) {
-        logWithCorrelation(correlationId, `Error checking file in storage: ${error.message}`, 'error', 'checkFileExistsInStorage');
-        return { exists: false };
-      }
-      
-      logWithCorrelation(correlationId, `Verified file exists in storage at path ${fileUniqueId}.${extension}`, 'warn', 'checkFileExistsInStorage');
-      
-      return {
-        exists: true,
-        path: `${fileUniqueId}.${extension}`,
-        publicUrl: data.publicUrl,
-        mimeType: existingFileResult.data.mime_type,
-        storagePath: `${fileUniqueId}.${extension}`
-      };
-    }
-    
-    return { exists: false };
-  } catch (error) {
-    logWithCorrelation(correlationId, `Error checking file existence: ${error.message}`, 'error', 'checkFileExistsInStorage');
-    return { exists: false, error: error.message };
-  }
-}
-
-async function checkMessageExists(telegramMessageId, chatId, correlationId) {
-  try {
-    logWithCorrelation(correlationId, `Checking for message ${telegramMessageId} in chat ${chatId}`, 'warn', 'checkMessageExists');
-    const result = await findMessageByTelegramId(supabaseClient, telegramMessageId, chatId, correlationId);
-    return result;
-  } catch (error) {
-    logWithCorrelation(correlationId, `Error checking message existence: ${error.message}`, 'error', 'checkMessageExists');
-    return { success: false, error: error.message };
-  }
-}
+// End of file

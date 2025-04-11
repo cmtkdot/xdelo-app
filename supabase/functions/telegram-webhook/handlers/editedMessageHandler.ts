@@ -1,4 +1,4 @@
-/// <reference types="https://esm.sh/@supabase/functions-js/edge-runtime.d.ts" />
+/// <reference path="../../types/edge-runtime.d.ts" />
 
 // Shared Imports
 import { createCorsResponse, supabaseClient } from "../../_shared/cors.ts";
@@ -122,7 +122,7 @@ export async function handleEditedMessage(
       correlationId
     );
 
-    if (!updateResult) {
+    if (!updateResult || !updateResult.success) {
       logWithCorrelation(correlationId, `Failed to update message record for edit`, 'error', functionName);
       await logProcessingEvent(
         supabaseClient,
@@ -150,14 +150,15 @@ export async function handleEditedMessage(
       });
       
       if (!parserResult.success) {
-        logWithCorrelation(correlationId, `Failed to trigger caption parser: ${parserResult.error}`, 'error', functionName);
+        const errorMsg = typeof parserResult.error === 'string' ? parserResult.error : 'Unknown error';
+        logWithCorrelation(correlationId, `Failed to trigger caption parser: ${errorMsg}`, 'error', functionName);
         await logProcessingEvent(
           supabaseClient,
           'caption_parser_invoke_failed',
           dbMessageId,
           correlationId,
-          { error: parserResult.error, function: functionName },
-          `Failed to trigger caption parser: ${parserResult.error}`
+          { error: errorMsg, function: functionName },
+          `Failed to trigger caption parser: ${errorMsg}`
         );
       } else {
         logWithCorrelation(correlationId, `Successfully triggered caption parser for edited message ${dbMessageId}`, 'debug', functionName);
@@ -166,7 +167,8 @@ export async function handleEditedMessage(
           'caption_parser_invoked',
           dbMessageId,
           correlationId,
-          { function: functionName }
+          { function: functionName },
+          'Caption parser invoked successfully'
         );
       }
     } else {

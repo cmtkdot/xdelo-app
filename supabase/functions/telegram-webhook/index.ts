@@ -1,4 +1,4 @@
-import { serve } from "https://deno.land/std@0.208.0/http/server.ts";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { isMessageForwarded } from '../_shared/consolidatedMessageUtils.ts';
 import { corsHeaders } from '../_shared/cors.ts';
 import { supabaseClient } from '../_shared/supabaseClient.ts';
@@ -131,7 +131,7 @@ serve(async (req: Request) => {
         }
       );
       
-      if (retryResult.success) {
+      if (retryResult.success && retryResult.result) {
         response = Promise.resolve(retryResult.result);
       } else {
         // All retries failed, create error response
@@ -166,7 +166,7 @@ serve(async (req: Request) => {
         }
       );
       
-      if (retryResult.success) {
+      if (retryResult.success && retryResult.result) {
         response = Promise.resolve(retryResult.result);
       } else {
         // All retries failed, create error response
@@ -197,7 +197,7 @@ serve(async (req: Request) => {
         }
       );
       
-      if (retryResult.success) {
+      if (retryResult.success && retryResult.result) {
         response = Promise.resolve(retryResult.result);
       } else {
         // All retries failed, create error response
