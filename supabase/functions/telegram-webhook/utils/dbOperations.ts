@@ -151,7 +151,7 @@ export async function upsertMediaMessageRecord({
       messageId,                     // p_telegram_message_id
       null,                          // p_user_id
       false,                         // p_is_edited
-      additionalUpdates || null      // p_additional_updates
+      Object.keys(additionalUpdates || {}).length > 0 ? additionalUpdates : null      // p_additional_updates
     ];
 
     // Call function with positional parameters

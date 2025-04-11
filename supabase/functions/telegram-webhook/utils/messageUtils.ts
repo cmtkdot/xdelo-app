@@ -59,7 +59,7 @@ function adaptProcessingResult(result: OriginalProcessingResult): MediaProcessin
   };
 }
 
-import { RetryHandler, createRetryHandler } from "../../_shared/retryHandler.ts";
+import { createRetryHandler } from "../../_shared/retryHandler.ts";
 import { processCaptionText } from "../../_shared/captionParser.ts";
 
 /**
@@ -216,7 +216,7 @@ export async function checkMessageExists(
   correlationId: string
 ): Promise<{ exists: boolean; message?: any }> {
   const functionName = 'checkMessageExists';
-  console.log(`[${correlationId}][${functionName}] Checking for message ${telegramMessageId} in chat ${chatId}`);
+  logWithCorrelation(correlationId, `Checking for message ${telegramMessageId} in chat ${chatId}`, 'info', functionName);
   
   try {
     const { data, error } = await supabaseClient
@@ -291,7 +291,7 @@ export async function processMessageMedia(
   correlationId: string
 ): Promise<MediaProcessingResult> {
   const functionName = 'processMessageMedia';
-  console.log(`[${correlationId}][${functionName}] Processing media for message ${message.message_id}`);
+  logWithCorrelation(correlationId, `Processing media for message ${message.message_id}`, 'info', functionName);
   
   try {
     // Extract media content
@@ -312,7 +312,7 @@ export async function processMessageMedia(
     }
     
     // Log media type and details for debugging
-    console.log(`[${correlationId}][${functionName}] Found ${mediaContent.mediaType} with ID ${mediaContent.fileUniqueId}`);
+    logWithCorrelation(correlationId, `Found ${mediaContent.mediaType} with ID ${mediaContent.fileUniqueId}`, 'info', functionName);
     
     // Process the media with retry logic using the centralized RetryHandler
     const retryHandler = createRetryHandler({
@@ -392,7 +392,7 @@ export async function createMessageRecord(
   correlationId: string
 ): Promise<string | null> {
   const functionName = 'createMessageRecord';
-  console.log(`[${correlationId}][${functionName}] Creating message record for ${message.message_id}`);
+  logWithCorrelation(correlationId, `Creating message record for ${message.message_id}`, 'info', functionName);
   
   try {
     // Extract forward info if present
@@ -427,14 +427,14 @@ export async function createMessageRecord(
       .single();
     
     if (error) {
-      console.error(`[${correlationId}][${functionName}] Error creating message:`, error.message);
+      logWithCorrelation(correlationId, `Error creating message: ${error.message}`, 'error', functionName);
       return null;
     }
     
-    console.log(`[${correlationId}][${functionName}] Created message with ID: ${data.id}`);
+    logWithCorrelation(correlationId, `Created message with ID: ${data.id}`, 'info', functionName);
     return data.id;
   } catch (error) {
-    console.error(`[${correlationId}][${functionName}] Exception creating message:`, error);
+    logWithCorrelation(correlationId, `Exception creating message: ${error instanceof Error ? error.message : String(error)}`, 'error', functionName);
     return null;
   }
 }
@@ -468,7 +468,7 @@ export async function updateMessageRecord(
   correlationId: string
 ): Promise<boolean> {
   const functionName = 'updateMessageRecord';
-  console.log(`[${correlationId}][${functionName}] Updating message record ${existingMessage.id}`);
+  logWithCorrelation(correlationId, `Updating message record ${existingMessage.id}`, 'info', functionName);
   
   try {
     // Create edit history entry
@@ -514,14 +514,14 @@ export async function updateMessageRecord(
       .eq('id', existingMessage.id);
     
     if (error) {
-      console.error(`[${correlationId}][${functionName}] Error updating message:`, error.message);
+      logWithCorrelation(correlationId, `Error updating message: ${error.message}`, 'error', functionName);
       return false;
     }
     
-    console.log(`[${correlationId}][${functionName}] Updated message ${existingMessage.id}`);
+    logWithCorrelation(correlationId, `Updated message ${existingMessage.id}`, 'info', functionName);
     return true;
   } catch (error) {
-    console.error(`[${correlationId}][${functionName}] Exception updating message:`, error);
+    logWithCorrelation(correlationId, `Exception updating message: ${error instanceof Error ? error.message : String(error)}`, 'error', functionName);
     return false;
   }
 }
