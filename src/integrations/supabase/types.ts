@@ -1422,24 +1422,24 @@ export type Database = {
         Args: {
           p_telegram_message_id: number
           p_chat_id: number
-          p_caption: string
-          p_media_type: string
-          p_file_id: string
           p_file_unique_id: string
+          p_file_id: string
           p_storage_path: string
           p_public_url: string
           p_mime_type: string
           p_extension: string
-          p_message_data: Json
+          p_media_type: string
+          p_caption: string
           p_processing_state: string
-          p_processing_error: string
-          p_caption_data: string
-          p_analyzed_content: Json
-          p_old_analyzed_content: Json
-          p_user_id: string
-          p_media_group_id: string
-          p_forward_info: Json
+          p_message_data: Json
           p_correlation_id: string
+          p_user_id?: number
+          p_media_group_id?: string
+          p_forward_info?: Json
+          p_processing_error?: string
+          p_caption_data?: Json
+          p_old_analyzed_content?: Json[]
+          p_analyzed_content?: Json
         }
         Returns: string
       }

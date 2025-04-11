@@ -1,81 +1,47 @@
 
-/**
- * Types for Make integration
- */
+// Define Make webhook related types
 
 export enum MakeEventType {
   MESSAGE_RECEIVED = 'message_received',
-  MESSAGE_UPDATED = 'message_updated', 
-  MEDIA_PROCESSED = 'media_processed',
   CHANNEL_JOINED = 'channel_joined',
+  USER_REGISTERED = 'user_registered',
+  ORDER_CREATED = 'order_created',
+  PAYMENT_PROCESSED = 'payment_processed',
+  ITEM_SHIPPED = 'item_shipped',
   PRODUCT_CREATED = 'product_created',
-  PRODUCT_UPDATED = 'product_updated',
-  USER_ACTION = 'user_action',
+  MEDIA_UPLOADED = 'media_uploaded',
+  ANALYSIS_COMPLETED = 'analysis_completed',
   SYSTEM_EVENT = 'system_event'
+}
+
+export interface FieldSelectionConfig {
+  include: boolean;
+  transform?: string;
 }
 
 export interface MakeWebhookConfig {
   id: string;
   name: string;
-  description?: string;
+  description: string;
   url: string;
   event_types: string[];
   is_active: boolean;
-  field_selection?: Record<string, FieldSelectionConfig>;
-  payload_template?: Record<string, any>;
-  transformation_code?: string;
-  headers?: Record<string, string>;
-  retry_config?: RetryConfig;
-  created_at?: string;
-  updated_at?: string;
+  field_selection: Record<string, FieldSelectionConfig> | null;
+  payload_template: any | null;
+  transformation_code: string | null;
+  headers: Record<string, string> | null;
+  retry_config: any | null;
+  created_at: string;
+  updated_at: string;
 }
 
-export interface FieldSelectionConfig {
-  mode: 'include' | 'exclude';
-  fields: string[];
-}
-
-export interface RetryConfig {
-  max_attempts: number;
-  backoff_factor: number;
-  initial_delay_ms: number;
-}
-
-export interface MakeWebhookLog {
-  id: string;
-  webhook_id: string;
-  event_type: string;
-  payload: any;
-  response?: any;
-  status: 'success' | 'failed' | 'pending';
-  status_code?: number;
-  attempt?: number;
-  error_message?: string;
-  tags?: string[];
-  created_at?: string;
-  updated_at?: string;
-}
-
-export interface MakeCondition {
-  field: string;
-  operator: 'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte' | 'contains' | 'starts_with' | 'ends_with' | 'exists' | 'not_exists';
-  value: any;
-}
-
-export interface MakeAction {
-  type: 'webhook' | 'email' | 'notification' | 'database' | 'function';
-  config: Record<string, any>;
-}
-
-export interface MakeAutomationRule {
+export interface TestPayload {
   id: string;
   name: string;
-  description?: string;
-  event_type: MakeEventType | string;
-  conditions: MakeCondition[];
-  actions: MakeAction[];
-  is_active: boolean;
-  priority: number;
-  created_at?: string;
-  updated_at?: string;
+  description: string | null;
+  event_type: string;
+  payload: any;
+  is_template: boolean;
+  created_at: string;
+  updated_at: string;
 }

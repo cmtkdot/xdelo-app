@@ -1,3 +1,4 @@
+
 /**
  * @file db-functions.ts
  * @description TypeScript documentation for database functions and operations.
@@ -114,7 +115,7 @@ export type UpsertMediaMessageResult = string; // UUID of the created/updated me
  *   p_media_type: 'photo',
  *   p_caption: 'Beautiful sunset',
  *   p_processing_state: 'processed',
- *   p_message_data: { /* Telegram message object */ },
+ *   p_message_data: { chat: { type: 'supergroup', title: 'My Group' }, date: 1617234567 },
  *   p_correlation_id: 'abc-123-xyz',
  *   p_user_id: 98765432, // Will be ignored in database operations
  *   p_media_group_id: 'group123',

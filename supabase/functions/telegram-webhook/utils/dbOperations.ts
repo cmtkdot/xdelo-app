@@ -54,8 +54,14 @@ export async function upsertMediaMessageRecord({
     logWithCorrelation(correlationId, `Upserting media message ${messageId} in chat ${chatId}`, 'INFO', 'upsertMediaMessageRecord');
     
     // Ensure captionData is properly formatted as JSONB
+    // If it's a string that looks like JSON, parse it
+    // If it's already an object, use it as is
+    // If it's null or undefined, pass null
     const formattedCaptionData = captionData ? 
-      (typeof captionData === 'string' ? JSON.parse(captionData) : captionData) : 
+      (typeof captionData === 'string' ? 
+        (captionData.trim().startsWith('{') || captionData.trim().startsWith('[') ? 
+          JSON.parse(captionData) : { text: captionData }) : 
+        captionData) : 
       null;
     
     // Format old analyzed content as an array if it's not already
@@ -365,7 +371,18 @@ export async function findMessagesByMediaGroupId(supabaseClient, mediaGroupId, c
   }
 }
 
-export async function syncMediaGroupCaptions({ supabaseClient, mediaGroupId, sourceMessageId, newCaption, captionData, processingState = 'pending_analysis', correlationId }) {
+/**
+ * Sync captions for media group messages
+ */
+export async function syncMediaGroupCaptions({ 
+  supabaseClient, 
+  mediaGroupId, 
+  sourceMessageId, 
+  newCaption, 
+  captionData, 
+  processingState = 'pending_analysis', 
+  correlationId 
+}) {
   try {
     // Validation - only mediaGroupId is critical
     if (!mediaGroupId) {
@@ -376,13 +393,20 @@ export async function syncMediaGroupCaptions({ supabaseClient, mediaGroupId, sou
         error: errorMsg
       };
     }
+    
     logWithCorrelation(correlationId, `Syncing captions for media group ${mediaGroupId}${sourceMessageId ? ` from source message ${sourceMessageId}` : ''}`, 'INFO', 'syncMediaGroupCaptions');
+    
     // Ensure captionData is a proper object for JSONB conversion
-    const preparedCaptionData = typeof captionData === 'string' ? JSON.parse(captionData) : captionData || {};
+    // Same pattern as in upsertMediaMessageRecord
+    const preparedCaptionData = typeof captionData === 'string' ? 
+      (captionData.trim().startsWith('{') || captionData.trim().startsWith('[') ? 
+        JSON.parse(captionData) : { text: captionData }) : 
+      captionData || {};
+    
     // Debug the parameters to help identify issues
     logWithCorrelation(correlationId, `Calling sync_media_group_captions with mediaGroupId=${mediaGroupId}, sourceMessageId=${sourceMessageId || 'none'}`, 'DEBUG', 'syncMediaGroupCaptions');
+    
     // Call the PostgreSQL function with properly typed parameters
-    // The PostgreSQL function has been updated to handle null parameters gracefully
     const { data, error } = await supabaseClient.rpc('sync_media_group_captions', {
       p_media_group_id: mediaGroupId,
       p_exclude_message_id: sourceMessageId,
@@ -390,8 +414,10 @@ export async function syncMediaGroupCaptions({ supabaseClient, mediaGroupId, sou
       p_caption_data: preparedCaptionData,
       p_processing_state: processingState
     });
+    
     if (error) {
       logWithCorrelation(correlationId, `Error syncing captions for media group ${mediaGroupId}: ${error.message}`, 'ERROR', 'syncMediaGroupCaptions');
+      
       // Log a detailed error with parameter types for troubleshooting
       await logProcessingEvent(supabaseClient, 'media_group_sync_error', sourceMessageId, correlationId, {
         media_group_id: mediaGroupId,
@@ -404,6 +430,7 @@ export async function syncMediaGroupCaptions({ supabaseClient, mediaGroupId, sou
           p_processing_state_type: typeof processingState
         }
       }, error.message);
+      
       return {
         success: false,
         error
@@ -411,6 +438,7 @@ export async function syncMediaGroupCaptions({ supabaseClient, mediaGroupId, sou
     } else {
       const updatedCount = Array.isArray(data) ? data.length : 0;
       logWithCorrelation(correlationId, `Successfully synced captions for ${updatedCount} messages in media group ${mediaGroupId}`, 'INFO', 'syncMediaGroupCaptions');
+      
       // Log success event
       await logProcessingEvent(supabaseClient, 'media_group_sync_success', sourceMessageId, correlationId, {
         media_group_id: mediaGroupId,
@@ -423,6 +451,7 @@ export async function syncMediaGroupCaptions({ supabaseClient, mediaGroupId, sou
           'processing_state'
         ]
       });
+      
       return {
         success: true,
         data
@@ -431,12 +460,14 @@ export async function syncMediaGroupCaptions({ supabaseClient, mediaGroupId, sou
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     logWithCorrelation(correlationId, `Exception syncing media group captions for media group ${mediaGroupId}: ${errorMessage}`, 'ERROR', 'syncMediaGroupCaptions');
+    
     // Log the exception with stack trace for debugging
     await logProcessingEvent(supabaseClient, 'media_group_sync_exception', sourceMessageId, correlationId, {
       media_group_id: mediaGroupId,
       caption: newCaption,
       stack: error instanceof Error ? error.stack : undefined
     }, errorMessage);
+    
     return {
       success: false,
       error: errorMessage
