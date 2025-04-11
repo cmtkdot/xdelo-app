@@ -296,18 +296,24 @@ export async function findMessageByFileUniqueId(
       .single();
       
     if (error) {
-      // Not found is not an error
-      if (error.message.includes('No rows found')) {
+      // These are normal "not found" error cases, not actual errors
+      if (error.message.includes('No rows found') || 
+          error.message.includes('multiple (or no) rows returned') || 
+          error.code === 'PGRST116') {
+        logWithCorrelation(correlationId, `No message found with file_unique_id ${fileUniqueId}`, 'INFO', 'findMessageByFileUniqueId');
         return { success: false };
       }
       
-      console.error(`DB error finding message by file_unique_id ${fileUniqueId}:`, error);
+      // Real error case
+      logWithCorrelation(correlationId, `DB error finding message by file_unique_id ${fileUniqueId}: ${error.message}`, 'ERROR', 'findMessageByFileUniqueId');
       return { success: false };
     }
     
+    logWithCorrelation(correlationId, `Found message with ID ${data.id} for file_unique_id ${fileUniqueId}`, 'INFO', 'findMessageByFileUniqueId');
     return { success: true, data: data };
   } catch (error) {
-    console.error(`Exception finding message by file_unique_id ${fileUniqueId}:`, error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logWithCorrelation(correlationId, `Exception finding message by file_unique_id ${fileUniqueId}: ${errorMessage}`, 'ERROR', 'findMessageByFileUniqueId');
     return { success: false };
   }
 }
