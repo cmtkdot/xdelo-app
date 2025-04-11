@@ -1,4 +1,5 @@
 
+import { Json } from '@/integrations/supabase/types';
 import { MatchResult } from "./index";
 
 /**
@@ -26,7 +27,7 @@ export interface BatchResults {
 export interface ProcessingMessage {
   id: string;
   caption: string;
-  analyzed_content: any;
+  analyzed_content: Json;
   vendor_uid: string;
   product_name: string;
   purchase_date: string;

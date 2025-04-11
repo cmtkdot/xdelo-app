@@ -71,16 +71,15 @@ export async function upsertMediaMessageRecord({
       // Otherwise leave as is (assuming it's already an object)
     }
     
-    // Handle oldAnalyzedContent properly as JSONB or null
-    let formattedOldAnalyzedContent = null;
+    // Simplify old_analyzed_content handling to avoid array vs non-array issues
+    // We'll just pass it directly as a JSONB value without trying to make it an array
+    let formattedOldAnalyzedContent = oldAnalyzedContent;
     
-    // Only pass oldAnalyzedContent if it has content
-    if (oldAnalyzedContent) {
-      // Convert to array if it's not already one
-      if (!Array.isArray(oldAnalyzedContent)) {
-        formattedOldAnalyzedContent = JSON.stringify([oldAnalyzedContent]);
-      } else if (oldAnalyzedContent.length > 0) {
-        formattedOldAnalyzedContent = JSON.stringify(oldAnalyzedContent);
+    if (oldAnalyzedContent && typeof oldAnalyzedContent === 'string') {
+      try {
+        formattedOldAnalyzedContent = JSON.parse(oldAnalyzedContent);
+      } catch (e) {
+        formattedOldAnalyzedContent = { text: oldAnalyzedContent };
       }
     }
     
@@ -114,8 +113,8 @@ export async function upsertMediaMessageRecord({
       p_media_group_id: mediaGroupId,
       p_forward_info: forwardInfo,
       p_processing_error: processingError,
-      p_caption_data: formattedCaptionData, // Now properly sent as JSONB
-      p_old_analyzed_content: formattedOldAnalyzedContent, // Properly formatted as JSONB
+      p_caption_data: formattedCaptionData,
+      p_old_analyzed_content: formattedOldAnalyzedContent,
       p_analyzed_content: analyzedContent
     });
 

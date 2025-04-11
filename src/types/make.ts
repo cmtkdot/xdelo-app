@@ -88,3 +88,43 @@ export interface MakeAction {
   config: Record<string, any>;
   order: number;
 }
+
+// Add database table definitions for type safety
+export interface MakeWebhookConfigTable {
+  id: string;
+  name: string;
+  description: string;
+  url: string;
+  event_types: string[];
+  is_active: boolean;
+  field_selection: Record<string, FieldSelectionConfig> | null;
+  payload_template: any | null;
+  transformation_code: string | null;
+  headers: Record<string, string> | null;
+  retry_config: any | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MakeTestPayloadTable {
+  id: string;
+  name: string;
+  description: string | null;
+  event_type: string;
+  payload: any;
+  is_template: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GlProductTable {
+  id: string;
+  glide_id: string;
+  new_product_name: string;
+  vendor_product_name: string;
+  vendor_uid: string;
+  product_purchase_date: string;
+  created_at: string;
+  updated_at: string;
+  product_name_display: string;
+}

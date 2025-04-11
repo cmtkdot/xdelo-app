@@ -76,7 +76,8 @@ export interface Message {
   processing_started_at?: string;
   processing_completed_at?: string;
   analyzed_content?: AnalyzedContent;
-  old_analyzed_content?: AnalyzedContent[];
+  // Change to simple JSONB (not array)
+  old_analyzed_content?: AnalyzedContent;
   telegram_data?: Record<string, unknown>;
   error_message?: string;
   error_code?: string;

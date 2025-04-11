@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -13,9 +12,37 @@ export const BatchMatchingPanel = () => {
   const [results, setResults] = useState<BatchResults | null>(null);
   const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
   const [unprocessedMessages, setUnprocessedMessages] = useState<ProcessingMessage[]>([]);
+  const [products, setProducts] = useState<GlProduct[]>([]);
+  const [errorMessage, setErrorMessage] = useState<string>('');
   const { toast } = useToast();
 
-  // Load unprocessed messages
+  const mapMessagesToProcessingItems = (messages: Message[]): ProcessingMessage[] => {
+    return messages.map(message => {
+      let analyzedContent = message.analyzed_content;
+      
+      if (typeof analyzedContent === 'string') {
+        try {
+          analyzedContent = JSON.parse(analyzedContent);
+        } catch (e) {
+          analyzedContent = {};
+        }
+      }
+      
+      if (!analyzedContent || typeof analyzedContent !== 'object') {
+        analyzedContent = {};
+      }
+      
+      return {
+        id: message.id,
+        caption: message.caption || '',
+        analyzed_content: analyzedContent,
+        vendor_uid: analyzedContent?.vendor_uid || '',
+        product_name: analyzedContent?.product_name || '',
+        purchase_date: analyzedContent?.purchase_date || ''
+      };
+    });
+  };
+
   const loadUnprocessedMessages = async () => {
     setIsLoading(true);
     try {
@@ -27,14 +54,7 @@ export const BatchMatchingPanel = () => {
 
       if (error) throw error;
 
-      // Ensure we have meaningful data to match
-      const filteredMessages = (data || []).filter(
-        (msg) => 
-          msg.analyzed_content && 
-          (msg.analyzed_content.product_name || 
-           msg.analyzed_content.vendor_uid || 
-           msg.analyzed_content.purchase_date)
-      ) as ProcessingMessage[];
+      const filteredMessages = mapMessagesToProcessingItems(data || []) as ProcessingMessage[];
 
       setUnprocessedMessages(filteredMessages);
 
@@ -54,7 +74,6 @@ export const BatchMatchingPanel = () => {
     }
   };
 
-  // Run batch matching
   const runBatchMatching = async () => {
     setIsAutoMatching(true);
     setResults(null);
@@ -88,7 +107,6 @@ export const BatchMatchingPanel = () => {
     }
   };
 
-  // Handle manual match
   const handleManualMatch = async (messageId: string, productId: string) => {
     try {
       const { data, error } = await supabase.functions.invoke("set-message-product", {
@@ -101,7 +119,6 @@ export const BatchMatchingPanel = () => {
       
       if (error) throw error;
       
-      // Remove the processed message from the list
       setUnprocessedMessages(prev => prev.filter(msg => msg.id !== messageId));
       
       toast({
@@ -118,26 +135,26 @@ export const BatchMatchingPanel = () => {
     }
   };
 
-  // Load products for manual matching
-  const loadProducts = async () => {
+  const fetchProductsForMatching = async () => {
     try {
-      // Cast the result to unknown first to avoid TypeScript errors
-      // This is because gl_products is not in the TypeScript schema yet
       const { data, error } = await supabase
-        .from("gl_products")
-        .select("id, new_product_name")
-        .order("new_product_name", { ascending: true });
-
-      if (error) throw error;
+        .from('gl_products')
+        .select('*')
+        .order('created_at', { ascending: false });
       
-      return data as unknown as GlProduct[];
+      if (error) {
+        console.error('Error fetching products:', error);
+        setErrorMessage(`Failed to fetch products: ${error.message}`);
+        return;
+      }
+      
+      setProducts(data as unknown as GlProduct[]);
     } catch (err) {
-      console.error("Error loading products:", err);
-      return [];
+      console.error('Exception fetching products:', err);
+      setErrorMessage(`An error occurred: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 
-  // Apply all best matches above threshold
   const applyAllMatches = async () => {
     if (!results || !results.results) return;
     
@@ -171,7 +188,6 @@ export const BatchMatchingPanel = () => {
         description: `Successfully applied ${data.applied} product matches.`,
       });
       
-      // Refresh the unprocessed messages
       loadUnprocessedMessages();
     } catch (err) {
       console.error("Error applying matches:", err);
@@ -249,9 +265,7 @@ export const BatchMatchingPanel = () => {
                   size="sm"
                   variant="outline"
                   onClick={async () => {
-                    const products = await loadProducts();
-                    // Open a dialog or dropdown to select a product
-                    // This is simplified - you'd likely want a proper UI component
+                    const products = await fetchProductsForMatching();
                     const productId = prompt(
                       "Select a product ID to match:\n" +
                       products.map(p => `${p.id}: ${p.new_product_name}`).join("\n")
