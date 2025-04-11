@@ -128,29 +128,36 @@ export async function upsertMediaMessageRecord({
       'upsertMediaMessageRecord'
     );
     
-    // Call database function with parameters in the correct order
-    const { data, error } = await supabaseClient.rpc('upsert_media_message', {
-      p_telegram_message_id: messageId,
-      p_chat_id: chatId,
-      p_file_unique_id: fileUniqueId,
-      p_file_id: fileId,
-      p_storage_path: storagePath,
-      p_public_url: publicUrl,
-      p_mime_type: mimeType,
-      p_extension: extension,
-      p_media_type: mediaType,
-      p_caption: caption,
-      p_processing_state: processingState,
-      p_message_data: messageData,
-      p_correlation_id: correlationId,
-      p_user_id: null, // Ignored by the function, kept for compatibility
-      p_media_group_id: mediaGroupId,
-      p_forward_info: forwardInfo,
-      p_processing_error: processingError,
-      p_caption_data: formattedCaptionData,
-      p_old_analyzed_content: formattedOldAnalyzedContent,
-      p_analyzed_content: analyzedContent
-    });
+    // Create an array of parameters in the exact order defined in the PostgreSQL function
+    // This avoids issues with named parameters being sent alphabetically
+    const params = [
+      analyzedContent,               // p_analyzed_content
+      caption,                       // p_caption
+      formattedCaptionData,          // p_caption_data
+      chatId,                        // p_chat_id
+      correlationId,                 // p_correlation_id
+      extension,                     // p_extension
+      fileId,                        // p_file_id
+      fileUniqueId,                  // p_file_unique_id
+      forwardInfo,                   // p_forward_info
+      mediaGroupId,                  // p_media_group_id
+      mediaType,                     // p_media_type
+      messageData,                   // p_message_data
+      mimeType,                      // p_mime_type
+      formattedOldAnalyzedContent,   // p_old_analyzed_content
+      processingError,               // p_processing_error
+      processingState,               // p_processing_state
+      publicUrl,                     // p_public_url
+      storagePath,                   // p_storage_path
+      messageId,                     // p_telegram_message_id
+      null,                          // p_user_id
+      false,                         // p_is_edited
+      additionalUpdates || null      // p_additional_updates
+    ];
+
+    // Call function with positional parameters
+    const { data, error } = await supabaseClient
+      .rpc('upsert_media_message', params, { count: 'exact' });
 
     if (error) {
       logWithCorrelation(
