@@ -41,11 +41,16 @@ export async function handleOtherMessage(
   message: TelegramMessage,
   context: MessageContext
 ): Promise<Response> {
-  const { correlationId } = context;
+  const { correlationId, isRecoveredEdit } = context;
   const functionName = 'handleOtherMessage';
   let dbMessageId: string | undefined = undefined;
 
-  logWithCorrelation(correlationId, `Processing text message ${message.message_id}`, 'INFO', functionName);
+  // Add specific logging for recovered edits
+  if (isRecoveredEdit) {
+    logWithCorrelation(correlationId, `Processing recovered edit as new text message ${message.message_id}`, 'INFO', functionName);
+  } else {
+    logWithCorrelation(correlationId, `Processing text message ${message.message_id}`, 'INFO', functionName);
+  }
 
   try {
     // Basic Validation - but ensure we can still save partial data
@@ -85,7 +90,13 @@ export async function handleOtherMessage(
     const messageType = message.text ? "text" : 
                       message.sticker ? "sticker" : 
                       message.poll ? "poll" : 
-                      message.contact ? "contact" : "unknown";
+                      message.contact ? "contact" : 
+                      message.voice ? "voice" :
+                      message.audio ? "audio" :
+                      "unknown";
+    
+    // If this is a recovered edit, add additional context
+    const processingState = isRecoveredEdit ? 'recovered_edit' : 'pending_analysis';
     
     const upsertResult = await upsertTextMessageRecord({
       supabaseClient,
@@ -97,7 +108,7 @@ export async function handleOtherMessage(
       chatType: message.chat?.type || null,
       chatTitle: message.chat?.title || null,
       forwardInfo: forwardInfo,
-      processingState: 'pending_analysis',
+      processingState: processingState,
       correlationId
     });
 
@@ -161,7 +172,8 @@ export async function handleOtherMessage(
     logWithCorrelation(correlationId, `Successfully upserted text message, DB ID: ${dbMessageId}`, 'INFO', functionName);
     await logProcessingEvent(
       supabaseClient,
-      isForwarded ? "forwarded_text_message_received" : "text_message_received", 
+      isRecoveredEdit ? "recovered_edit_text_processed" :
+      (isForwarded ? "forwarded_text_message_received" : "text_message_received"), 
       dbMessageId, 
       correlationId,
       { 
@@ -179,8 +191,9 @@ export async function handleOtherMessage(
     return new Response(
       JSON.stringify({
         success: true, 
-        operation: 'upserted', 
-        messageId: dbMessageId, 
+        operation: isRecoveredEdit ? 'recovered_edit' : 'upserted', 
+        messageId: dbMessageId,
+        recoveredEdit: isRecoveredEdit || false,
         correlationId
       }),
       { 

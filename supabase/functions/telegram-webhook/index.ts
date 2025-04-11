@@ -130,7 +130,75 @@ serve(async (req)=>{
         }
       });
       if (retryResult.success && retryResult.result) {
-        response = Promise.resolve(retryResult.result);
+        // Check if the result is a messageNotFound response object rather than a Response
+        const result = retryResult.result;
+        if (result && typeof result === 'object' && 'messageNotFound' in result && result.messageNotFound === true) {
+          // We need to handle this as a new message
+          logWithCorrelation(correlationId, `Original message not found for edit, processing as new ${result.detailedType} message`, 'INFO', functionName, {
+            message_id: message.message_id,
+            message_type: result.detailedType,
+            is_recovered_edit: true
+          });
+          
+          await logProcessingEvent(supabaseClient, "recovered_edit_fallback", null, correlationId, {
+            message_id: message.message_id,
+            chat_id: message.chat?.id,
+            message_type: result.detailedType,
+            detailed_type: result.detailedType
+          }, "Falling back to process edited message as new message");
+          
+          // Create a modified context to indicate this is a recovered edit
+          const recoveredContext = {
+            ...context,
+            isRecoveredEdit: true
+          };
+          
+          // Route to appropriate handler based on message type
+          if (result.media) {
+            // Handle as new media message
+            logWithCorrelation(correlationId, `Routing recovered edit to handleMediaMessage`, 'INFO', functionName);
+            const mediaResult = await retryHandler.execute(async ()=>handleMediaMessage(telegramToken, message, recoveredContext), {
+              operationName: 'handleMediaMessage_recoveredEdit',
+              correlationId,
+              supabaseClient,
+              errorCategory: 'webhook_error',
+              contextData: {
+                message_id: message.message_id,
+                chat_id: message.chat?.id,
+                is_recovered_edit: true
+              }
+            });
+            
+            response = Promise.resolve(mediaResult.success ? mediaResult.result : createManualCorsResponse({
+              success: false,
+              error: `Failed to process recovered edit as media message: ${mediaResult.error?.message}`,
+              correlationId
+            }, { status: 500 }));
+          } else {
+            // Handle as new text/other message
+            logWithCorrelation(correlationId, `Routing recovered edit to handleOtherMessage`, 'INFO', functionName);
+            const textResult = await retryHandler.execute(async ()=>handleOtherMessage(message, recoveredContext), {
+              operationName: 'handleOtherMessage_recoveredEdit',
+              correlationId,
+              supabaseClient,
+              errorCategory: 'webhook_error',
+              contextData: {
+                message_id: message.message_id,
+                chat_id: message.chat?.id,
+                is_recovered_edit: true
+              }
+            });
+            
+            response = Promise.resolve(textResult.success ? textResult.result : createManualCorsResponse({
+              success: false,
+              error: `Failed to process recovered edit as text message: ${textResult.error?.message}`,
+              correlationId
+            }, { status: 500 }));
+          }
+        } else {
+          // Normal successful response
+          response = Promise.resolve(result);
+        }
       } else {
         // All retries failed, create error response
         response = Promise.resolve(createManualCorsResponse({
@@ -163,7 +231,75 @@ serve(async (req)=>{
         }
       });
       if (retryResult.success && retryResult.result) {
-        response = Promise.resolve(retryResult.result);
+        // Check if the result is a messageNotFound response object rather than a Response
+        const result = retryResult.result;
+        if (result && typeof result === 'object' && 'messageNotFound' in result && result.messageNotFound === true) {
+          // We need to handle this as a new message
+          logWithCorrelation(correlationId, `Original message not found for edit, processing as new ${result.detailedType} message`, 'INFO', functionName, {
+            message_id: message.message_id,
+            message_type: result.detailedType,
+            is_recovered_edit: true
+          });
+          
+          await logProcessingEvent(supabaseClient, "recovered_edit_fallback", null, correlationId, {
+            message_id: message.message_id,
+            chat_id: message.chat?.id,
+            message_type: result.detailedType,
+            detailed_type: result.detailedType
+          }, "Falling back to process edited message as new message");
+          
+          // Create a modified context to indicate this is a recovered edit
+          const recoveredContext = {
+            ...context,
+            isRecoveredEdit: true
+          };
+          
+          // Route to appropriate handler based on message type
+          if (result.media) {
+            // Handle as new media message
+            logWithCorrelation(correlationId, `Routing recovered edit to handleMediaMessage`, 'INFO', functionName);
+            const mediaResult = await retryHandler.execute(async ()=>handleMediaMessage(telegramToken, message, recoveredContext), {
+              operationName: 'handleMediaMessage_recoveredEdit',
+              correlationId,
+              supabaseClient,
+              errorCategory: 'webhook_error',
+              contextData: {
+                message_id: message.message_id,
+                chat_id: message.chat?.id,
+                is_recovered_edit: true
+              }
+            });
+            
+            response = Promise.resolve(mediaResult.success ? mediaResult.result : createManualCorsResponse({
+              success: false,
+              error: `Failed to process recovered edit as media message: ${mediaResult.error?.message}`,
+              correlationId
+            }, { status: 500 }));
+          } else {
+            // Handle as new text/other message
+            logWithCorrelation(correlationId, `Routing recovered edit to handleOtherMessage`, 'INFO', functionName);
+            const textResult = await retryHandler.execute(async ()=>handleOtherMessage(message, recoveredContext), {
+              operationName: 'handleOtherMessage_recoveredEdit',
+              correlationId,
+              supabaseClient,
+              errorCategory: 'webhook_error',
+              contextData: {
+                message_id: message.message_id,
+                chat_id: message.chat?.id,
+                is_recovered_edit: true
+              }
+            });
+            
+            response = Promise.resolve(textResult.success ? textResult.result : createManualCorsResponse({
+              success: false,
+              error: `Failed to process recovered edit as text message: ${textResult.error?.message}`,
+              correlationId
+            }, { status: 500 }));
+          }
+        } else {
+          // Normal successful response
+          response = Promise.resolve(result);
+        }
       } else {
         // All retries failed, create error response
         response = Promise.resolve(createManualCorsResponse({
@@ -195,7 +331,75 @@ serve(async (req)=>{
         }
       });
       if (retryResult.success && retryResult.result) {
-        response = Promise.resolve(retryResult.result);
+        // Check if the result is a messageNotFound response object rather than a Response
+        const result = retryResult.result;
+        if (result && typeof result === 'object' && 'messageNotFound' in result && result.messageNotFound === true) {
+          // We need to handle this as a new message
+          logWithCorrelation(correlationId, `Original message not found for edit, processing as new ${result.detailedType} message`, 'INFO', functionName, {
+            message_id: message.message_id,
+            message_type: result.detailedType,
+            is_recovered_edit: true
+          });
+          
+          await logProcessingEvent(supabaseClient, "recovered_edit_fallback", null, correlationId, {
+            message_id: message.message_id,
+            chat_id: message.chat?.id,
+            message_type: result.detailedType,
+            detailed_type: result.detailedType
+          }, "Falling back to process edited message as new message");
+          
+          // Create a modified context to indicate this is a recovered edit
+          const recoveredContext = {
+            ...context,
+            isRecoveredEdit: true
+          };
+          
+          // Route to appropriate handler based on message type
+          if (result.media) {
+            // Handle as new media message
+            logWithCorrelation(correlationId, `Routing recovered edit to handleMediaMessage`, 'INFO', functionName);
+            const mediaResult = await retryHandler.execute(async ()=>handleMediaMessage(telegramToken, message, recoveredContext), {
+              operationName: 'handleMediaMessage_recoveredEdit',
+              correlationId,
+              supabaseClient,
+              errorCategory: 'webhook_error',
+              contextData: {
+                message_id: message.message_id,
+                chat_id: message.chat?.id,
+                is_recovered_edit: true
+              }
+            });
+            
+            response = Promise.resolve(mediaResult.success ? mediaResult.result : createManualCorsResponse({
+              success: false,
+              error: `Failed to process recovered edit as media message: ${mediaResult.error?.message}`,
+              correlationId
+            }, { status: 500 }));
+          } else {
+            // Handle as new text/other message
+            logWithCorrelation(correlationId, `Routing recovered edit to handleOtherMessage`, 'INFO', functionName);
+            const textResult = await retryHandler.execute(async ()=>handleOtherMessage(message, recoveredContext), {
+              operationName: 'handleOtherMessage_recoveredEdit',
+              correlationId,
+              supabaseClient,
+              errorCategory: 'webhook_error',
+              contextData: {
+                message_id: message.message_id,
+                chat_id: message.chat?.id,
+                is_recovered_edit: true
+              }
+            });
+            
+            response = Promise.resolve(textResult.success ? textResult.result : createManualCorsResponse({
+              success: false,
+              error: `Failed to process recovered edit as text message: ${textResult.error?.message}`,
+              correlationId
+            }, { status: 500 }));
+          }
+        } else {
+          // Normal successful response
+          response = Promise.resolve(result);
+        }
       } else {
         // All retries failed, create error response
         response = Promise.resolve(createManualCorsResponse({

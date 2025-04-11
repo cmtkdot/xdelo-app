@@ -93,9 +93,15 @@ export async function handleMediaMessage(
   message: TelegramMessage,
   context: MessageContext
 ): Promise<Response> {
-  const { correlationId } = context;
+  const { correlationId, isRecoveredEdit } = context;
   const functionName = 'handleMediaMessage';
-  logWithCorrelation(correlationId, `Processing message ${message.message_id} in chat ${message.chat.id}`, 'INFO', functionName);
+  
+  // Add additional logging for recovered edits
+  if (isRecoveredEdit) {
+    logWithCorrelation(correlationId, `Processing recovered edit as new media message ${message.message_id} in chat ${message.chat.id}`, 'INFO', functionName);
+  } else {
+    logWithCorrelation(correlationId, `Processing message ${message.message_id} in chat ${message.chat.id}`, 'INFO', functionName);
+  }
   
   try {
     // Validate required environment variables
@@ -118,8 +124,8 @@ export async function handleMediaMessage(
       );
     }
     
-    // Check if this is an edited message
-    const isEditedMessage = !!message.edit_date;
+    // Check if this is an edited message or a recovered edit
+    const isEditedMessage = !!message.edit_date || !!isRecoveredEdit;
     
     // Check if message already exists in database
     const { exists: messageExists, message: existingMessage } = await checkMessageExists(
@@ -147,7 +153,11 @@ export async function handleMediaMessage(
       // This is a new message
       if (messageExists) {
         // Message already exists in database, return existing record
+        if (isRecoveredEdit) {
+        logWithCorrelation(correlationId, `Message ${message.message_id} exists but is being processed as a recovered edit`, 'INFO', functionName);
+      } else {
         logWithCorrelation(correlationId, `Message ${message.message_id} already exists in database`, 'INFO', functionName);
+      }
         return new Response(
           JSON.stringify({
             success: true,

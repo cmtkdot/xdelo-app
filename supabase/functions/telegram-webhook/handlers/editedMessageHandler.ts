@@ -39,9 +39,12 @@ function createErrorResponse(
 export async function handleEditedMessage(
   message: TelegramMessage,
   context: MessageContext
-): Promise<Response | { messageNotFound: boolean; messageType: string }> {
+): Promise<Response | { messageNotFound: boolean; messageType: string; detailedType: string; media: boolean; isRecoveredEdit: boolean }> {
   const { correlationId } = context;
   const functionName = 'handleEditedMessage';
+  
+  // Adding debug logging at the start
+  logWithCorrelation(correlationId, `Looking up original message by tg_msg_id: ${message.message_id}, chat_id: ${message.chat?.id}`, 'DEBUG', functionName);
 
   logWithCorrelation(correlationId, `Processing edited message ${message.message_id}`, 'INFO', functionName);
 
@@ -69,18 +72,33 @@ export async function handleEditedMessage(
       correlationId
     );
 
-    // Determine message type for potential fallback routing
-    const messageType = message.text ? "text" : 
-                       message.photo ? "photo" : 
-                       message.video ? "video" : 
-                       message.document ? "document" :
+    // Determine message type for potential fallback routing - more detailed for proper handler selection
+    const messageType = message.photo || message.video || message.document ? "media" :
+                       message.text ? "text" : 
                        message.sticker ? "sticker" : 
                        message.poll ? "poll" : 
-                       message.contact ? "contact" : "unknown";
+                       message.contact ? "contact" : 
+                       message.voice ? "voice" :
+                       message.audio ? "audio" :
+                       message.animation ? "animation" :
+                       "unknown";
+    
+    // For debugging and routing logic
+    const detailedType = message.photo ? "photo" :
+                       message.video ? "video" :
+                       message.document ? "document" :
+                       message.text ? "text" :
+                       message.sticker ? "sticker" :
+                       message.poll ? "poll" :
+                       message.contact ? "contact" :
+                       message.voice ? "voice" :
+                       message.audio ? "audio" :
+                       message.animation ? "animation" :
+                       "unknown";
 
     // If the message wasn't found, return metadata for fallback processing
     if (!messageFound || !existingMessage) {
-      logWithCorrelation(correlationId, `Original message ${messageId} not found, returning for fallback processing`, 'INFO', functionName);
+      logWithCorrelation(correlationId, `Original message ${messageId} not found, returning for fallback processing as ${detailedType} message`, 'INFO', functionName);
       
       await logProcessingEvent(
         supabaseClient,
@@ -97,29 +115,68 @@ export async function handleEditedMessage(
       );
       
       // Return metadata for fallback processing
+      // Include detailed information for proper routing
       return {
         messageNotFound: true,
-        messageType
+        messageType,
+        detailedType,
+        media: messageType === 'media',
+        isRecoveredEdit: true // Flag to indicate this is a recovered edit
       };
     }
 
     // Original message found - handle the edit
     logWithCorrelation(correlationId, `Found original message ${messageId}, updating record`, 'INFO', functionName);
+    
+    // Debug log with additional details for tracking
+    logWithCorrelation(correlationId, `Message details: type=${detailedType}, media=${messageType === 'media'}`, 'DEBUG', functionName);
 
-    // Here would be the logic to update the existing message record
-    // For example:
+    // Process caption/content if present
+    let contentData = null;
+    const hasCaption = !!message.caption;
+    const hasText = !!message.text;
+    
+    if (hasCaption || hasText) {
+      // Process caption or text content
+      if (hasCaption) {
+        logWithCorrelation(correlationId, `Processing caption for edited ${detailedType} message`, 'INFO', functionName);
+        // In a real implementation, we'd process the caption here
+        contentData = { rawText: message.caption };
+      } else if (hasText) {
+        logWithCorrelation(correlationId, `Processing text for edited message`, 'INFO', functionName);
+        contentData = { content: message.text };
+      }
+    }
+
+    // Check if caption/content has changed
+    const captionChanged = hasCaption && message.caption !== existingMessage.caption;
+    const textChanged = hasText && message.text !== existingMessage.text;
+    const contentChanged = captionChanged || textChanged;
+    
+    // Prepare update data
+    const updates: Record<string, any> = {
+      processing_state: 'edited',
+      edit_count: (existingMessage.edit_count || 0) + 1,
+      last_edited_at: new Date().toISOString()
+    };
+    
+    // If content has changed, handle old_analyzed_content properly
+    if (contentChanged && existingMessage.analyzed_content) {
+      logWithCorrelation(correlationId, `Content changed, preserving current analyzed_content in old_analyzed_content field`, 'INFO', functionName);
+      // Simply move current analyzed_content to old_analyzed_content (as a single object, not array)
+      updates.old_analyzed_content = existingMessage.analyzed_content;
+      updates.analyzed_content = contentData;
+      updates.processing_state = 'initialized'; // Reset processing state
+    }
+
     const updateResult = await updateMessageRecord(
       supabaseClient,
       existingMessage,
       message,
       null, // No new media info for text edits
-      message.text ? { content: message.text } : null,
+      contentData, // Use our processed content data
       correlationId,
-      {
-        processing_state: 'edited',
-        edit_count: (existingMessage.edit_count || 0) + 1,
-        last_edited_at: new Date().toISOString()
-      }
+      updates
     );
 
     if (!updateResult) {
