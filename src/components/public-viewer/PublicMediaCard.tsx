@@ -1,9 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Message } from '@/types/entities/Message'
-import { Button } from '@/components/ui/button'
-import { ExternalLink, Video, Play, Eye, Pencil, Trash } from 'lucide-react'
+import { Video, Play, Eye, Pencil, Trash } from 'lucide-react'
 import { useVideoThumbnail } from '@/hooks/useVideoThumbnail'
-import { getVideoDuration, isVideoMessage } from '@/utils/mediaUtils'
+import { isVideoMessage } from '@/utils/mediaUtils'
 import { ExpandableTabs } from '@/components/ui/expandable-tabs'
 import { MediaEditDialog } from '@/components/MediaEditDialog/MediaEditDialog'
 import { DeleteConfirmationDialog } from '@/components/MessagesTable/TableComponents/DeleteConfirmationDialog'
@@ -20,35 +19,68 @@ function formatDuration(seconds: number): string {
   return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`
 }
 
+// Helper function to get image dimensions, prefixed with _ as currently unused
+function _getImageDimensions(img: HTMLImageElement): Promise<{ width: number; height: number }> {
+  return new Promise((resolve) => {
+    img.onload = () => {
+      resolve({ width: img.width, height: img.height });
+    };
+  });
+}
+
 export function PublicMediaCard({ message, onClick }: PublicMediaCardProps) {
-  const isVideo = isVideoMessage(message)
+  // Enhanced video detection - check MIME type, Telegram data, and URL extension
+  const isVideo = isVideoMessage(message) || 
+    (message.public_url && (
+      message.public_url.endsWith('.mp4') || 
+      message.public_url.endsWith('.mov') ||
+      message.public_url.endsWith('.webm') ||
+      message.public_url.endsWith('.avi')
+    ))
   const videoRef = useRef<HTMLVideoElement>(null)
   const [isHovering, setIsHovering] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   
   // Use the video thumbnail hook to generate thumbnails for videos
-  const { thumbnailUrl, isLoading, hasError, generateThumbnail } = useVideoThumbnail(message)
+  const { thumbnailUrl, isLoading, generateThumbnail } = useVideoThumbnail(message)
   
-  // Auto-generate thumbnail for videos on component mount
+  // Auto-generate thumbnail for videos on component mount with debouncing
   useEffect(() => {
-    if (isVideo && !thumbnailUrl && !isLoading) {
-      generateThumbnail()
-    }
+    // Skip if not a video or if we already have a thumbnail or are currently generating one
+    if (!isVideo || thumbnailUrl || isLoading) return;
+    
+    // Add a slight delay to avoid too many simultaneous thumbnail generations
+    const timeoutId = setTimeout(() => {
+      generateThumbnail();
+    }, 100 * (Math.floor(Math.random() * 10) + 1)); // Random delay between 100-1000ms
+    
+    return () => clearTimeout(timeoutId);
   }, [isVideo, message.id, thumbnailUrl, isLoading, generateThumbnail])
   
-  // Handle video playback on hover
+  // Handle video playback on hover with better error handling
   useEffect(() => {
     const video = videoRef.current
     if (video && isVideo) {
       if (isHovering) {
-        // Start playing when hovering
-        video.play().catch(err => {
-          console.error('Error autoplaying video:', err)
-        })
+        // Start playing when hovering with proper error handling
+        const playPromise = video.play()
+        
+        // Only handle the promise if it exists (some browsers don't return a promise)
+        if (playPromise !== undefined) {
+          playPromise.catch(err => {
+            // Convert to warning and provide context
+            console.warn('Browser blocked video autoplay, this is normal behavior:', err)
+            // No need to handle this error since it's expected in some browsers
+            // Just keep showing the thumbnail
+          })
+        }
       } else {
         // Pause and reset to beginning when not hovering
-        video.pause()
+        // We need to check if the video is actually playing to avoid errors
+        if (!video.paused) {
+          video.pause()
+        }
         video.currentTime = 0
       }
     }
@@ -62,11 +94,8 @@ export function PublicMediaCard({ message, onClick }: PublicMediaCardProps) {
     const target = e.currentTarget as HTMLElement
     target.classList.add('ring-2', 'ring-primary')
     
-    console.log(`PublicMediaCard: Card clicked for message ${message.id}`)
-    
     // Call the onClick handler with the message
     if (onClick) {
-      console.log(`PublicMediaCard: Calling onClick handler for message ${message.id}`)
       onClick(message)
       
       // Remove visual feedback after a delay
@@ -76,7 +105,8 @@ export function PublicMediaCard({ message, onClick }: PublicMediaCardProps) {
     }
   }
   
-  const openTelegramLink = (e: React.MouseEvent) => {
+  // Not currently used but keeping for future implementation
+  const _openTelegramLink = (e: React.MouseEvent) => {
     e.stopPropagation()
     e.preventDefault()
     const chatId = message.chat_id?.toString().replace('-100', '')
@@ -103,9 +133,8 @@ export function PublicMediaCard({ message, onClick }: PublicMediaCardProps) {
     }
   }
   
-  const handleDeleteConfirm = async (deleteTelegram: boolean) => {
-    console.log(`Deleting message ${message.id}, delete from telegram: ${deleteTelegram}`)
-    // Implement delete functionality
+  const handleDeleteConfirm = async (_deleteTelegram: boolean) => {
+    // Will be implemented in future
     setIsDeleteDialogOpen(false)
   }
   
@@ -207,24 +236,48 @@ export function PublicMediaCard({ message, onClick }: PublicMediaCardProps) {
           <div className="relative w-full h-full bg-black">
             {/* Thumbnail image (shown while not hovering) */}
             {!isHovering && (
-              <img
-                src={thumbnailUrl || message.public_url}
-                alt={message.product_name || "Video thumbnail"}
-                className="w-full h-full object-cover"
-                loading="lazy"
-                onError={() => console.error('Error loading video thumbnail')}
-              />
+              <div className="w-full h-full bg-muted flex items-center justify-center relative">
+                <img
+                  src={thumbnailUrl || message.public_url}
+                  alt={message.product_name || "Video thumbnail"}
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                  onError={(e) => {
+                    // Replace with a fallback thumbnail instead of showing error in console
+                    e.currentTarget.onerror = null; // Prevent infinite error loop
+                    e.currentTarget.src = '/images/video-placeholder.png'; // Use fallback image
+                    // If fallback doesn't exist, use a solid background with a video icon
+                    e.currentTarget.style.display = 'none';
+                  }}
+                />
+                {/* Fallback content when thumbnail fails to load */}
+                <div className="absolute inset-0 flex items-center justify-center bg-gray-800 z-0">
+                  <Video className="h-10 w-10 text-gray-400" />
+                </div>
+              </div>
             )}
             
             {/* Autoplay video (plays on hover) */}
             <video
               ref={videoRef}
               src={message.public_url}
+              poster={thumbnailUrl || undefined}
               className={`w-full h-full object-cover ${isHovering ? 'opacity-100' : 'opacity-0 absolute inset-0'}`}
               playsInline
               muted
               loop
               preload="metadata"
+              onLoadedMetadata={() => {
+                // Once metadata is loaded, generate a thumbnail if we don't have one
+                if (!thumbnailUrl && !isLoading) {
+                  generateThumbnail();
+                }
+              }}
+              onError={(e) => {
+                console.warn(`Video playback error for message: ${message.id}`, e);
+                // Show the thumbnail with a play icon instead
+                setIsHovering(false);
+              }}
             />
             
             {/* Video Play Overlay - only show when not hovering */}
