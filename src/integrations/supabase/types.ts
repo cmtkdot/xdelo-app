@@ -197,7 +197,6 @@ export type Database = {
           sync_attempt: number | null
           telegram_data: Json | null
           telegram_message_id: number | null
-          telegram_metadata: Json | null
           text: string | null
           trigger_source: string | null
           update_id: string | null
@@ -300,7 +299,6 @@ export type Database = {
           sync_attempt?: number | null
           telegram_data?: Json | null
           telegram_message_id?: number | null
-          telegram_metadata?: Json | null
           text?: string | null
           trigger_source?: string | null
           update_id?: string | null
@@ -403,7 +401,6 @@ export type Database = {
           sync_attempt?: number | null
           telegram_data?: Json | null
           telegram_message_id?: number | null
-          telegram_metadata?: Json | null
           text?: string | null
           trigger_source?: string | null
           update_id?: string | null

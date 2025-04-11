@@ -53,7 +53,6 @@ export type MessageData = {
   message_url: string | null;
   glide_row_id: string | null;
   // Additional columns
-  telegram_metadata: Record<string, any> | null;
   message_data: Record<string, any> | null;
   caption_data: string | null;
   analyzed_content: Record<string, any> | null;
@@ -93,7 +92,6 @@ export function DatabaseTable() {
         caption_data: false,
         analyzed_content: false,
         message_url: false,
-        telegram_metadata: false,
         message_data: false,
         telegram_data: false,
       });
@@ -114,7 +112,7 @@ export function DatabaseTable() {
       const { data, error } = await supabase
         .from("messages")
         .select(
-          "id, telegram_message_id, chat_title, media_group_id, caption, file_unique_id, public_url, processing_state, correlation_id, product_name, product_code, vendor_uid, media_group_sync, product_sku, message_url, glide_row_id, telegram_metadata, message_data, caption_data, analyzed_content, telegram_data"
+          "id, telegram_message_id, chat_title, media_group_id, caption, file_unique_id, public_url, processing_state, correlation_id, product_name, product_code, vendor_uid, media_group_sync, product_sku, message_url, glide_row_id, message_data, caption_data, analyzed_content, telegram_data"
         )
         .order("telegram_message_id", { ascending: false })
         .limit(100);
@@ -303,7 +301,7 @@ export function DatabaseTable() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col md:flex-row items-center gap-4 justify-between">
+      <div className="flex flex-col gap-4 justify-between items-center md:flex-row">
         <Input
           placeholder="Filter by product name..."
           value={(table.getColumn("product_name")?.getFilterValue() as string) ?? ""}
@@ -312,7 +310,7 @@ export function DatabaseTable() {
           }
           className="max-w-sm"
         />
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap gap-2 items-center">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" className="ml-auto">
@@ -342,7 +340,7 @@ export function DatabaseTable() {
         </div>
       </div>
 
-      <div className="rounded-md border overflow-hidden">
+      <div className="overflow-hidden rounded-md border">
         <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600">
           <Table>
             <TableHeader>
@@ -370,7 +368,7 @@ export function DatabaseTable() {
                   <TableRow key={`loading-${index}`}>
                     {Array.from({ length: isMobile ? 4 : columns.length }).map((_, colIndex) => (
                       <TableCell key={`loading-cell-${colIndex}`}>
-                        <Skeleton className="h-4 w-full" />
+                        <Skeleton className="w-full h-4" />
                       </TableCell>
                     ))}
                   </TableRow>
@@ -400,13 +398,13 @@ export function DatabaseTable() {
         </div>
       </div>
 
-      <div className="flex flex-col sm:flex-row items-center gap-2 justify-between">
+      <div className="flex flex-col gap-2 justify-between items-center sm:flex-row">
         <div className="text-sm text-muted-foreground">
           {table.getFilteredRowModel().rows.length} of{" "}
           {table.getFilteredRowModel().rows.length} row(s) displayed.
         </div>
         <div className="flex items-center space-x-2">
-          <div className="flex items-center gap-1 mr-2">
+          <div className="flex gap-1 items-center mr-2">
             <span className="text-sm font-medium">Page</span>
             <span className="text-sm text-muted-foreground">
               {table.getState().pagination.pageIndex + 1} of{" "}
@@ -418,10 +416,10 @@ export function DatabaseTable() {
             size="icon"
             onClick={() => table.previousPage()}
             disabled={!table.getCanPreviousPage()}
-            className="h-8 w-8 p-0"
+            className="p-0 w-8 h-8"
             aria-label="Previous page"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
               <path d="m15 18-6-6 6-6"/>
             </svg>
           </Button>
@@ -430,10 +428,10 @@ export function DatabaseTable() {
             size="icon"
             onClick={() => table.nextPage()}
             disabled={!table.getCanNextPage()}
-            className="h-8 w-8 p-0"
+            className="p-0 w-8 h-8"
             aria-label="Next page"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
               <path d="m9 18 6-6-6-6"/>
             </svg>
           </Button>
