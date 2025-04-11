@@ -41,5 +41,30 @@ export default tseslint.config(
         version: "detect",
       },
     },
+  },
+  // Specific configuration for Supabase Edge Functions
+  {
+    files: ["supabase/functions/**/*.ts"],
+    languageOptions: {
+      globals: {
+        ...globals.deno,
+        Deno: "readonly",
+      },
+      parserOptions: {
+        project: "./supabase/functions/tsconfig.json",
+      },
+    },
+    rules: {
+      // Deno-specific rules
+      "@typescript-eslint/no-explicit-any": "off",
+      "@typescript-eslint/explicit-module-boundary-types": "off",
+      // Allow imports with .ts extension (required for Deno)
+      "import/extensions": "off",
+      // Less strict rules for Edge Functions
+      "@typescript-eslint/no-unused-vars": ["warn", { 
+        argsIgnorePattern: "^_",
+        varsIgnorePattern: "^_",
+      }],
+    },
   }
 );

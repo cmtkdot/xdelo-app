@@ -1,9 +1,8 @@
 import { supabaseClient } from '../../_shared/supabaseClient.ts';
 import { logWithCorrelation } from '../utils/logger.ts';
 import { upsertMediaMessageRecord, findMessageByTelegramId, findMessageByFileUniqueId, extractForwardInfo } from '../utils/dbOperations.ts';
-import { MessageContext, TelegramMessage } from '../types.ts';
-import { RetryHandler, createRetryHandler } from '../../_shared/retryHandler.ts';
 import { corsHeaders } from '../../_shared/cors.ts';
+import { createRetryHandler } from '../../_shared/retryHandler.ts';
 
 // Function to handle new messages
 export async function handleNewMessage(message, telegram_token, correlationId, fileUniqueId, fileId, mediaType, mimeType, extension) {

@@ -1,4 +1,3 @@
- import { supabaseClient } from '../../_shared/supabaseClient.ts';
 import { logWithCorrelation } from './logger.ts';
 
 /**
@@ -90,11 +89,11 @@ export async function upsertMediaMessageRecord({
       if (typeof captionData === 'string') {
         // If it's a string that looks like JSON, parse it
         if (captionData.trim().startsWith('{') || captionData.trim().startsWith('[')) {
-          try {
-            formattedCaptionData = JSON.parse(captionData);
-          } catch (e) {
-            formattedCaptionData = { text: captionData };
-          }
+          // Try to parse as JSON, fallback to text object if parsing fails
+          formattedCaptionData = (() => {
+            try { return JSON.parse(captionData); } 
+            catch { return { text: captionData }; }
+          })()
         } else {
           formattedCaptionData = { text: captionData };
         }
@@ -109,11 +108,11 @@ export async function upsertMediaMessageRecord({
     if (oldAnalyzedContent) {
       // If it's a string, try to parse it
       if (typeof oldAnalyzedContent === 'string') {
-        try {
-          formattedOldAnalyzedContent = JSON.parse(oldAnalyzedContent);
-        } catch (e) {
-          formattedOldAnalyzedContent = { text: oldAnalyzedContent };
-        }
+        // Try to parse as JSON, fallback to text object if parsing fails
+        formattedOldAnalyzedContent = (() => {
+          try { return JSON.parse(oldAnalyzedContent); } 
+          catch { return { text: oldAnalyzedContent }; }
+        })()
       }
     }
     
@@ -434,19 +433,25 @@ export async function triggerCaptionParsing({ supabaseClient, messageId, correla
       console.error(`Error invoking caption parsing function for message ${messageId}:`, error);
       return { success: false, error: error };
     } else {
-      console.log(`Caption parsing triggered successfully for message ${messageId}`);
+      logWithCorrelation(correlationId, `Caption parsing triggered successfully for message ${messageId}`, 'info', 'triggerCaptionParsing');
       return { success: true, data: data };
     }
-  } catch (e) {
-    console.error(`Exception invoking caption parsing function for message ${messageId}:`, e);
-    return { success: false, error: e instanceof Error ? e.message : String(e) };
+  } catch (error) {
+    // Using logWithCorrelation instead of console.error for consistency
+    logWithCorrelation(
+      correlationId,
+      `Exception invoking caption parsing function for message ${messageId}: ${error instanceof Error ? error.message : String(error)}`,
+      'error',
+      'triggerCaptionParsing'
+    );
+    return { success: false, error: error instanceof Error ? error.message : String(error) };
   }
 }
 
 /**
  * Find messages by media group ID
  */
-export async function findMessagesByMediaGroupId(supabaseClient, mediaGroupId, correlationId) {
+export async function findMessagesByMediaGroupId(supabaseClient, mediaGroupId, _correlationId) {
   try {
     const { data, error } = await supabaseClient.from("messages").select("*").eq("media_group_id", mediaGroupId);
     if (error) {

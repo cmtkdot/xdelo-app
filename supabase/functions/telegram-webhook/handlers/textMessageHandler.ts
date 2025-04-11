@@ -1,5 +1,3 @@
-/// <reference path="../../types/edge-runtime.d.ts" />
-
 // Shared Imports
 import { supabaseClient } from "../../_shared/cors.ts";
 // Local Imports
