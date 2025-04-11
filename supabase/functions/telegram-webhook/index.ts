@@ -1,15 +1,16 @@
 /// <reference types="https://unpkg.com/@supabase/functions-js@2.1.1/src/edge-runtime.d.ts" />
 
 import { serve } from "https://deno.land/std@0.208.0/http/server.ts";
+import { isMessageForwarded } from '../_shared/consolidatedMessageUtils.ts';
+import { corsHeaders } from '../_shared/cors.ts';
+import { supabaseClient } from '../_shared/supabaseClient.ts';
+import { RetryHandler, createRetryHandler } from '../_shared/retryHandler.ts';
+import { handleEditedMessage } from './handlers/editedMessageHandler.ts';
 import { handleMediaMessage } from './handlers/mediaMessageHandler.ts';
 import { handleOtherMessage } from './handlers/textMessageHandler.ts';
-import { handleEditedMessage } from './handlers/editedMessageHandler.ts';
-import { corsHeaders } from '../_shared/cors.ts';
+import { MessageContext, TelegramMessage } from './types.ts';
 import { logProcessingEvent } from './utils/dbOperations.ts';
 import { logWithCorrelation } from './utils/logger.ts';
-import { isMessageForwarded } from '../_shared/consolidatedMessageUtils.ts';
-import { TelegramMessage, MessageContext } from './types.ts';
-import { supabaseClient } from '../_shared/supabaseClient.ts';
 
 // Helper to manually create CORS response
 function createManualCorsResponse(body: object | string | null, options: ResponseInit = {}): Response {
@@ -33,6 +34,15 @@ serve(async (req: Request) => {
     return createManualCorsResponse(null);
   }
 
+  // Initialize retry handler with configured parameters
+  const retryHandler = createRetryHandler({
+    maxRetries: 3,           // Initial retry count: 3
+    initialDelayMs: 30000,   // Retry delay: 30 seconds
+    maxDelayMs: 300000,      // Maximum retry delay: 5 minutes
+    backoffFactor: 2.0,      // Standard exponential backoff
+    useJitter: true          // Add jitter to prevent thundering herd
+  });
+  
   try {
     logWithCorrelation(correlationId, 'Webhook received', 'INFO', functionName, { method: req.method, url: req.url });
     
@@ -109,16 +119,101 @@ serve(async (req: Request) => {
     }
 
     if (context.isEdit) {
-      logWithCorrelation(correlationId, `Routing to handleEditedMessage`, 'INFO', functionName, { message_id: message.message_id });
-      response = handleEditedMessage(message, context);
+      logWithCorrelation(correlationId, `Routing to handleEditedMessage with retry support`, 'INFO', functionName, { message_id: message.message_id });
+      
+      // Use retry handler for edited message processing
+      const retryResult = await retryHandler.execute(
+        async () => handleEditedMessage(message, context),
+        {
+          operationName: 'handleEditedMessage',
+          correlationId,
+          supabaseClient,
+          errorCategory: 'webhook_error',
+          contextData: { message_id: message.message_id, chat_id: message.chat?.id }
+        }
+      );
+      
+      if (retryResult.success) {
+        response = Promise.resolve(retryResult.result);
+      } else {
+        // All retries failed, create error response
+        response = Promise.resolve(createManualCorsResponse({ 
+          success: false, 
+          error: `Failed to process edited message after ${retryResult.attempts} attempts: ${retryResult.error?.message}`,
+          correlationId,
+          retryInfo: {
+            attempts: retryResult.attempts,
+            maxRetriesReached: retryResult.maxRetriesReached,
+            totalTimeMs: retryResult.totalTimeMs
+          }
+        }, { status: 500 }));
+      }
     }
     else if (message.photo || message.video || message.document) {
-      logWithCorrelation(correlationId, `Routing to handleMediaMessage`, 'INFO', functionName, { message_id: message.message_id });
-      response = handleMediaMessage(telegramToken, message, context);
+      logWithCorrelation(correlationId, `Routing to handleMediaMessage with retry support`, 'INFO', functionName, { message_id: message.message_id });
+      
+      // Use retry handler for media message processing
+      const retryResult = await retryHandler.execute(
+        async () => handleMediaMessage(telegramToken, message, context),
+        {
+          operationName: 'handleMediaMessage',
+          correlationId,
+          supabaseClient,
+          errorCategory: 'webhook_error',
+          contextData: { 
+            message_id: message.message_id, 
+            chat_id: message.chat?.id,
+            media_type: message.photo ? 'photo' : (message.video ? 'video' : 'document')
+          }
+        }
+      );
+      
+      if (retryResult.success) {
+        response = Promise.resolve(retryResult.result);
+      } else {
+        // All retries failed, create error response
+        response = Promise.resolve(createManualCorsResponse({ 
+          success: false, 
+          error: `Failed to process media message after ${retryResult.attempts} attempts: ${retryResult.error?.message}`,
+          correlationId,
+          retryInfo: {
+            attempts: retryResult.attempts,
+            maxRetriesReached: retryResult.maxRetriesReached,
+            totalTimeMs: retryResult.totalTimeMs
+          }
+        }, { status: 500 }));
+      }
     }
     else if (message.text) {
-      logWithCorrelation(correlationId, `Routing to handleOtherMessage`, 'INFO', functionName, { message_id: message.message_id });
-      response = handleOtherMessage(message, context);
+      logWithCorrelation(correlationId, `Routing to handleOtherMessage with retry support`, 'INFO', functionName, { message_id: message.message_id });
+      
+      // Use retry handler for text message processing
+      const retryResult = await retryHandler.execute(
+        async () => handleOtherMessage(message, context),
+        {
+          operationName: 'handleOtherMessage',
+          correlationId,
+          supabaseClient,
+          errorCategory: 'webhook_error',
+          contextData: { message_id: message.message_id, chat_id: message.chat?.id }
+        }
+      );
+      
+      if (retryResult.success) {
+        response = Promise.resolve(retryResult.result);
+      } else {
+        // All retries failed, create error response
+        response = Promise.resolve(createManualCorsResponse({ 
+          success: false, 
+          error: `Failed to process text message after ${retryResult.attempts} attempts: ${retryResult.error?.message}`,
+          correlationId,
+          retryInfo: {
+            attempts: retryResult.attempts,
+            maxRetriesReached: retryResult.maxRetriesReached,
+            totalTimeMs: retryResult.totalTimeMs
+          }
+        }, { status: 500 }));
+      }
     }
     else {
       logWithCorrelation(correlationId, `Unsupported new message type received`, 'WARN', functionName, { message_id: message.message_id, message_keys: Object.keys(message) });
@@ -138,9 +233,29 @@ serve(async (req: Request) => {
     const duration = Date.now() - startTime;
     logWithCorrelation(correlationId, `Finished processing message ${message.message_id}`, 'INFO', functionName, { 
         status: resultResponse.status, 
-        durationMs: duration 
+        durationMs: duration,
+        retry_enabled: true
     });
-    return resultResponse;
+    
+    // Add retry diagnostic information to the response
+    const responseObj = resultResponse instanceof Response ? resultResponse : new Response(
+      JSON.stringify({
+        ...(typeof resultResponse === 'object' ? resultResponse : { data: resultResponse }),
+        processingTime: duration,
+        correlationId
+      }),
+      { 
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json',
+          'X-Processing-Time': duration.toString(),
+          'X-Correlation-ID': correlationId,
+          'X-Retry-Enabled': 'true'
+        }
+      }
+    );
+    
+    return responseObj;
     
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);

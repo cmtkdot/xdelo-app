@@ -185,7 +185,7 @@ async function handleNewMessage(
       correlationId
     );
 
-    const processingState = mapStatusToProcessingState(processingResult.status);
+    let processingState = mapStatusToProcessingState(processingResult.status);
     logWithCorrelation(correlationId, `Media processing status for message ${message.message_id}: ${processingResult.status} -> DB state: ${processingState}`, 'INFO', functionName);
 
     // Check if this message already exists in the database
@@ -229,12 +229,39 @@ async function handleNewMessage(
         // Reset processing state to trigger reprocessing
         processingState = 'initialized';
         
-        // If the message has analyzed content, move it to old_analyzed_content
+        // If the message has analyzed content, prepare the old_analyzed_content update
+        // But construct it in a way that avoids SQL reassignment issues
         if (existingMessage.data.analyzed_content) {
+          // Create a properly formatted old_analyzed_content array manually
+          // avoiding the problematic SQL reassignment
+          let oldContent;
+          
+          if (existingMessage.data.old_analyzed_content) {
+            // If old_analyzed_content already exists as an array, copy it and append
+            try {
+              // Make a deep copy to avoid mutation issues
+              oldContent = JSON.parse(JSON.stringify(existingMessage.data.old_analyzed_content));
+              // Add the current analyzed_content as a new item
+              oldContent.push(existingMessage.data.analyzed_content);
+            } catch (error) {
+              // Fallback if there's any parsing issue
+              logWithCorrelation(correlationId, `Error processing old_analyzed_content: ${error instanceof Error ? error.message : String(error)}`, 'WARN', functionName);
+              // Create a new array with existing content to ensure we don't lose data
+              if (Array.isArray(existingMessage.data.old_analyzed_content)) {
+                // If it's an array but JSON.parse failed, try to use it directly
+                oldContent = [...existingMessage.data.old_analyzed_content, existingMessage.data.analyzed_content];
+              } else {
+                // Complete fallback - start fresh with just the current analyzed content
+                oldContent = [existingMessage.data.analyzed_content];
+              }
+            }
+          } else {
+            // If old_analyzed_content doesn't exist, create a new array
+            oldContent = [existingMessage.data.analyzed_content];
+          }
+          
           additionalUpdates = {
-            old_analyzed_content: existingMessage.data.old_analyzed_content 
-              ? [...existingMessage.data.old_analyzed_content, existingMessage.data.analyzed_content]
-              : [existingMessage.data.analyzed_content],
+            old_analyzed_content: oldContent,
             // Set the new analyzed content
             analyzed_content: captionData
           };
@@ -480,7 +507,7 @@ async function handleEditedMessage(
         correlationId
       );
       
-      const processingState = mapStatusToProcessingState(processingResult.status);
+      let processingState = mapStatusToProcessingState(processingResult.status);
       logWithCorrelation(correlationId, `Media processing status for edited message ${message.message_id}: ${processingResult.status} -> DB state: ${processingState}`, 'INFO', functionName);
       
       // Update media fields
