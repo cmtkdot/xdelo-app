@@ -450,6 +450,10 @@ export async function findMessagesByMediaGroupId(
   } catch (error) {
     console.error(`Exception finding messages by media group ID ${mediaGroupId}:`, error);
     return { success: false };
+  }
+}
+
+/**
  * Sync media group captions across all messages in a media group
  * Uses the PostgreSQL sync_media_group_captions function to synchronize:
  * - caption
