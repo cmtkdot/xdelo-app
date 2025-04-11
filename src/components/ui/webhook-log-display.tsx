@@ -13,8 +13,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
-// Updated interface to match the actual structure used
-interface MakeWebhookLog {
+// Updated interface - renamed to remove Make references
+interface WebhookLog {
   id: string;
   webhook_id: string;
   webhook_name?: string;
@@ -39,7 +39,7 @@ interface MakeWebhookLog {
 }
 
 interface WebhookLogDisplayProps {
-  log: MakeWebhookLog;
+  log: WebhookLog;
   showDetails?: boolean;
 }
 

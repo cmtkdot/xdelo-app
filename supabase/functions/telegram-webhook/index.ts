@@ -1,5 +1,3 @@
-/// <reference types="https://unpkg.com/@supabase/functions-js@2.1.1/src/edge-runtime.d.ts" />
-
 import { serve } from "https://deno.land/std@0.208.0/http/server.ts";
 import { isMessageForwarded } from '../_shared/consolidatedMessageUtils.ts';
 import { corsHeaders } from '../_shared/cors.ts';
@@ -29,7 +27,7 @@ serve(async (req: Request) => {
   const startTime = Date.now();
   
   if (req.method === 'OPTIONS') {
-    logWithCorrelation(correlationId, 'Received OPTIONS request, returning CORS headers', 'DEBUG', functionName);
+    logWithCorrelation(correlationId, 'Received OPTIONS request, returning CORS headers', 'debug', functionName);
     // Use manual helper for OPTIONS response
     return createManualCorsResponse(null);
   }
@@ -44,7 +42,7 @@ serve(async (req: Request) => {
   });
   
   try {
-    logWithCorrelation(correlationId, 'Webhook received', 'INFO', functionName, { method: req.method, url: req.url });
+    logWithCorrelation(correlationId, 'Webhook received', 'info', functionName, { method: req.method, url: req.url });
     
     let update;
     try {
@@ -53,10 +51,10 @@ serve(async (req: Request) => {
           throw new Error('Request body is empty');
       }
       update = JSON.parse(bodyText);
-      logWithCorrelation(correlationId, 'Received Telegram update', 'DEBUG', functionName, { update_id: update.update_id });
+      logWithCorrelation(correlationId, 'Received Telegram update', 'debug', functionName, { update_id: update.update_id });
     } catch (error) {
       const errorMsg = `Failed to parse request body: ${error.message}`;
-      logWithCorrelation(correlationId, errorMsg, 'ERROR', functionName, { bodyPreview: error instanceof SyntaxError ? req.body?.toString().substring(0,100) : 'N/A' });
+      logWithCorrelation(correlationId, errorMsg, 'error', functionName, { bodyPreview: error instanceof SyntaxError ? req.body?.toString().substring(0,100) : 'N/A' });
       await logProcessingEvent(
         supabaseClient,
         "webhook_parse_error", 
@@ -72,7 +70,7 @@ serve(async (req: Request) => {
     const message: TelegramMessage | undefined = update.message || update.edited_message || update.channel_post || update.edited_channel_post;
     
     if (!message) {
-      logWithCorrelation(correlationId, 'No processable message found in update', 'WARN', functionName, { update_keys: Object.keys(update) });
+      logWithCorrelation(correlationId, 'No processable message found in update', 'warn', functionName, { update_keys: Object.keys(update) });
       await logProcessingEvent(
         supabaseClient,
         "webhook_no_message", 
@@ -94,7 +92,7 @@ serve(async (req: Request) => {
       startTime: new Date(startTime).toISOString()
     };
 
-    logWithCorrelation(correlationId, `Processing message ${message.message_id}`, 'INFO', functionName, {
+    logWithCorrelation(correlationId, `Processing message ${message.message_id}`, 'info', functionName, {
       chat_id: message.chat?.id, 
       chat_type: message.chat?.type,
       is_edit: context.isEdit,
@@ -106,7 +104,7 @@ serve(async (req: Request) => {
     let response: Promise<Response>;
     const telegramToken = Deno.env.get("TELEGRAM_BOT_TOKEN");
     if (!telegramToken) {
-        logWithCorrelation(correlationId, "TELEGRAM_BOT_TOKEN environment variable not set.", 'ERROR', functionName);
+        logWithCorrelation(correlationId, "TELEGRAM_BOT_TOKEN environment variable not set.", 'error', functionName);
         await logProcessingEvent(
           supabaseClient,
           "config_error", 
@@ -119,7 +117,7 @@ serve(async (req: Request) => {
     }
 
     if (context.isEdit) {
-      logWithCorrelation(correlationId, `Routing to handleEditedMessage with retry support`, 'INFO', functionName, { message_id: message.message_id });
+      logWithCorrelation(correlationId, `Routing to handleEditedMessage with retry support`, 'info', functionName, { message_id: message.message_id });
       
       // Use retry handler for edited message processing
       const retryResult = await retryHandler.execute(
@@ -150,7 +148,7 @@ serve(async (req: Request) => {
       }
     }
     else if (message.photo || message.video || message.document) {
-      logWithCorrelation(correlationId, `Routing to handleMediaMessage with retry support`, 'INFO', functionName, { message_id: message.message_id });
+      logWithCorrelation(correlationId, `Routing to handleMediaMessage with retry support`, 'info', functionName, { message_id: message.message_id });
       
       // Use retry handler for media message processing
       const retryResult = await retryHandler.execute(
@@ -185,7 +183,7 @@ serve(async (req: Request) => {
       }
     }
     else if (message.text) {
-      logWithCorrelation(correlationId, `Routing to handleOtherMessage with retry support`, 'INFO', functionName, { message_id: message.message_id });
+      logWithCorrelation(correlationId, `Routing to handleOtherMessage with retry support`, 'info', functionName, { message_id: message.message_id });
       
       // Use retry handler for text message processing
       const retryResult = await retryHandler.execute(
@@ -216,7 +214,7 @@ serve(async (req: Request) => {
       }
     }
     else {
-      logWithCorrelation(correlationId, `Unsupported new message type received`, 'WARN', functionName, { message_id: message.message_id, message_keys: Object.keys(message) });
+      logWithCorrelation(correlationId, `Unsupported new message type received`, 'warn', functionName, { message_id: message.message_id, message_keys: Object.keys(message) });
       await logProcessingEvent(
         supabaseClient,
         "webhook_unsupported_new_type", 
@@ -231,7 +229,7 @@ serve(async (req: Request) => {
 
     const resultResponse = await response;
     const duration = Date.now() - startTime;
-    logWithCorrelation(correlationId, `Finished processing message ${message.message_id}`, 'INFO', functionName, { 
+    logWithCorrelation(correlationId, `Finished processing message ${message.message_id}`, 'info', functionName, { 
         status: resultResponse.status, 
         durationMs: duration,
         retry_enabled: true
@@ -259,7 +257,7 @@ serve(async (req: Request) => {
     
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    logWithCorrelation(correlationId, 'Unhandled error in webhook entry point', 'ERROR', functionName, { 
+    logWithCorrelation(correlationId, 'Unhandled error in webhook entry point', 'error', functionName, { 
       error: errorMessage, 
       stack: error instanceof Error ? error.stack : undefined 
     });

@@ -25,7 +25,7 @@ export async function handleEditedMessage(
   const functionName = 'handleEditedMessage';
   let dbMessageId: string | undefined = undefined;
 
-  logWithCorrelation(correlationId, `Processing edited message ${message.message_id}`, 'INFO', functionName);
+  logWithCorrelation(correlationId, `Processing edited message ${message.message_id}`, 'info', functionName);
 
   try {
     // Basic Validation
@@ -39,7 +39,7 @@ export async function handleEditedMessage(
 
     if (!isTextEdit && !isMediaEdit) {
         // Neither text nor known media - likely unsupported edit type (e.g., poll)
-        logWithCorrelation(correlationId, `Received edit for unsupported message type (no text/photo/video/document). Skipping.`, 'WARN', functionName);
+        logWithCorrelation(correlationId, `Received edit for unsupported message type (no text/photo/video/document). Skipping.`, 'warn', functionName);
         await logProcessingEvent(
             supabaseClient,
             "edit_skipped_unsupported_type",
@@ -55,7 +55,7 @@ export async function handleEditedMessage(
     }
 
     // --- Find the Original Message --- (Use new utility function)
-    logWithCorrelation(correlationId, `Looking up original message by tg_msg_id: ${message.message_id}, chat_id: ${message.chat.id}`, 'INFO', functionName);
+    logWithCorrelation(correlationId, `Looking up original message by tg_msg_id: ${message.message_id}, chat_id: ${message.chat.id}`, 'debug', functionName);
     const findResult = await findMessageByTelegramId(
       supabaseClient, // Pass client explicitly
       message.message_id,
@@ -65,7 +65,7 @@ export async function handleEditedMessage(
 
     // --- Handle Find Errors or Not Found ---    
     if (!findResult.success) {
-      logWithCorrelation(correlationId, `Error finding message to edit: ${findResult.error}`, 'ERROR', functionName);
+      logWithCorrelation(correlationId, `Error finding message to edit: ${findResult.error}`, 'error', functionName);
       await logProcessingEvent(
         supabaseClient,
         "db_find_edit_target_failed", 
@@ -81,7 +81,7 @@ export async function handleEditedMessage(
     }
 
     if (!findResult.data) {
-      logWithCorrelation(correlationId, `Original message not found for edit (tg_msg_id: ${message.message_id}, chat_id: ${message.chat.id}). Cannot process edit.`, 'WARN', functionName);
+      logWithCorrelation(correlationId, `Original message not found for edit (tg_msg_id: ${message.message_id}, chat_id: ${message.chat.id}). Cannot process edit.`, 'warn', functionName);
       await logProcessingEvent(
         supabaseClient,
         "edit_target_not_found", 
@@ -99,7 +99,7 @@ export async function handleEditedMessage(
     const existingRecord = findResult.data as MessageRecord; // Cast to expected type
     dbMessageId = existingRecord.id; // Store for later use
 
-    logWithCorrelation(correlationId, `Found existing message with DB ID: ${dbMessageId}`, 'INFO', functionName);
+    logWithCorrelation(correlationId, `Found existing message with DB ID: ${dbMessageId}`, 'debug', functionName);
 
     // --- Check for Caption Changes (Media Messages) ---
     const hasCaptionChanged = isMediaEdit && 
@@ -107,7 +107,7 @@ export async function handleEditedMessage(
                              (message.caption !== undefined); // Only consider if caption is actually present
 
     if (hasCaptionChanged) {
-      logWithCorrelation(correlationId, `Caption changed for media message. Old: "${existingRecord.caption}", New: "${message.caption}"`, 'INFO', functionName);
+      logWithCorrelation(correlationId, `Caption changed for media message. Old: "${existingRecord.caption}", New: "${message.caption}"`, 'debug', functionName);
     }
 
     // --- Update the Message Record ---
@@ -123,7 +123,7 @@ export async function handleEditedMessage(
     );
 
     if (!updateResult) {
-      logWithCorrelation(correlationId, `Failed to update message record for edit`, 'ERROR', functionName);
+      logWithCorrelation(correlationId, `Failed to update message record for edit`, 'error', functionName);
       await logProcessingEvent(
         supabaseClient,
         "edit_db_update_failed", 
@@ -140,7 +140,7 @@ export async function handleEditedMessage(
 
     // --- Process Caption Changes (if applicable) ---
     if (hasCaptionChanged) {
-      logWithCorrelation(correlationId, `Triggering caption parser for edited message ${dbMessageId}`, 'INFO', functionName);
+      logWithCorrelation(correlationId, `Triggering caption parser for edited message ${dbMessageId}`, 'debug', functionName);
       
       // Use the new triggerCaptionParsing function
       const parserResult = await triggerCaptionParsing({
@@ -150,7 +150,7 @@ export async function handleEditedMessage(
       });
       
       if (!parserResult.success) {
-        logWithCorrelation(correlationId, `Failed to trigger caption parser: ${parserResult.error}`, 'ERROR', functionName);
+        logWithCorrelation(correlationId, `Failed to trigger caption parser: ${parserResult.error}`, 'error', functionName);
         await logProcessingEvent(
           supabaseClient,
           'caption_parser_invoke_failed',
@@ -160,7 +160,7 @@ export async function handleEditedMessage(
           `Failed to trigger caption parser: ${parserResult.error}`
         );
       } else {
-        logWithCorrelation(correlationId, `Successfully triggered caption parser for edited message ${dbMessageId}`, 'INFO', functionName);
+        logWithCorrelation(correlationId, `Successfully triggered caption parser for edited message ${dbMessageId}`, 'debug', functionName);
         await logProcessingEvent(
           supabaseClient,
           'caption_parser_invoked',
@@ -185,7 +185,7 @@ export async function handleEditedMessage(
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    logWithCorrelation(correlationId, `Exception processing edited message: ${errorMessage}`, 'ERROR', functionName);
+    logWithCorrelation(correlationId, `Exception processing edited message: ${errorMessage}`, 'error', functionName);
     await logProcessingEvent(
         supabaseClient,
         "edit_handler_exception", 

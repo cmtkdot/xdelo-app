@@ -1,6 +1,37 @@
 import { supabaseClient } from '../../_shared/supabaseClient.ts';
 import { logWithCorrelation } from './logger.ts';
-import { validateChatType, ProcessingState } from '../../_shared/db-functions.ts';
+
+/**
+ * Processing state for messages
+ */
+export type ProcessingState = 'pending' | 'processing' | 'processed' | 'error' | 'initialized';
+
+/**
+ * Telegram chat type enum values supported in the database
+ */
+export type TelegramChatType = 'private' | 'group' | 'supergroup' | 'channel' | 'unknown';
+
+/**
+ * Validates and normalizes a chat type to ensure it matches the telegram_chat_type enum.
+ */
+export function validateChatType(chatType: string | undefined): TelegramChatType {
+  if (!chatType) return 'unknown';
+  
+  // Check if the chat type matches one of the valid enum values
+  switch (chatType.toLowerCase()) {
+    case 'private':
+      return 'private';
+    case 'group':
+      return 'group';
+    case 'supergroup':
+      return 'supergroup';
+    case 'channel':
+      return 'channel';
+    default:
+      return 'unknown';
+  }
+}
+
 
 /**
  * Upsert a media message record in the database
@@ -51,7 +82,7 @@ export async function upsertMediaMessageRecord({
   additionalUpdates?: Record<string, any>;
 }): Promise<{ success: boolean; data?: any; error?: any }> {
   try {
-    logWithCorrelation(correlationId, `Upserting media message record for ${messageId} in chat ${chatId}`, 'INFO', 'upsertMediaMessageRecord');
+    logWithCorrelation(correlationId, `Upserting media message record for ${messageId} in chat ${chatId}`, 'info', 'upsertMediaMessageRecord');
     
     // Ensure captionData is properly formatted as JSONB
     let formattedCaptionData = captionData;
@@ -242,7 +273,7 @@ export async function findMessageByTelegramId(
   correlationId: string
 ): Promise<{ success: boolean; message?: any; error?: any }> {
   try {
-    logWithCorrelation(correlationId, `Finding message with Telegram ID ${telegramMessageId} in chat ${chatId}`, 'INFO', 'findMessageByTelegramId');
+    logWithCorrelation(correlationId, `Finding message with Telegram ID ${telegramMessageId} in chat ${chatId}`, 'info', 'findMessageByTelegramId');
     
     const { data, error } = await supabaseClient
       .from('messages')
@@ -255,18 +286,18 @@ export async function findMessageByTelegramId(
     if (error) {
       if (error.code === 'PGRST116') {
         // Not found, which is a valid result
-        logWithCorrelation(correlationId, `Message ${telegramMessageId} not found in chat ${chatId}`, 'INFO', 'findMessageByTelegramId');
+        logWithCorrelation(correlationId, `Message ${telegramMessageId} not found in chat ${chatId}`, 'info', 'findMessageByTelegramId');
         return { success: true, message: null };
       }
       
-      logWithCorrelation(correlationId, `Error finding message: ${error.message}`, 'ERROR', 'findMessageByTelegramId');
+      logWithCorrelation(correlationId, `Error finding message: ${error.message}`, 'error', 'findMessageByTelegramId');
       return { success: false, error };
     }
     
-    logWithCorrelation(correlationId, `Found message ${telegramMessageId} in chat ${chatId}`, 'INFO', 'findMessageByTelegramId');
+    logWithCorrelation(correlationId, `Found message ${telegramMessageId} in chat ${chatId}`, 'info', 'findMessageByTelegramId');
     return { success: true, message: data };
   } catch (error) {
-    logWithCorrelation(correlationId, `Exception in findMessageByTelegramId: ${error}`, 'ERROR', 'findMessageByTelegramId');
+    logWithCorrelation(correlationId, `Exception in findMessageByTelegramId: ${error}`, 'error', 'findMessageByTelegramId');
     return { success: false, error: error instanceof Error ? error.message : String(error) };
   }
 }
@@ -280,7 +311,7 @@ export async function findMessageByFileUniqueId(
   correlationId: string
 ): Promise<{ success: boolean; data?: any; error?: any }> {
   try {
-    logWithCorrelation(correlationId, `Finding message with file_unique_id ${fileUniqueId}`, 'INFO', 'findMessageByFileUniqueId');
+    logWithCorrelation(correlationId, `Finding message with file_unique_id ${fileUniqueId}`, 'info', 'findMessageByFileUniqueId');
     
     const { data, error } = await supabaseClient
       .from('messages')
@@ -292,18 +323,18 @@ export async function findMessageByFileUniqueId(
     if (error) {
       if (error.code === 'PGRST116') {
         // Not found, which is a valid result
-        logWithCorrelation(correlationId, `Message with file_unique_id ${fileUniqueId} not found`, 'INFO', 'findMessageByFileUniqueId');
+        logWithCorrelation(correlationId, `Message with file_unique_id ${fileUniqueId} not found`, 'info', 'findMessageByFileUniqueId');
         return { success: true, data: null };
       }
       
-      logWithCorrelation(correlationId, `Error finding message by file_unique_id: ${error.message}`, 'ERROR', 'findMessageByFileUniqueId');
+      logWithCorrelation(correlationId, `Error finding message by file_unique_id: ${error.message}`, 'error', 'findMessageByFileUniqueId');
       return { success: false, error };
     }
     
-    logWithCorrelation(correlationId, `Found message with file_unique_id ${fileUniqueId}`, 'INFO', 'findMessageByFileUniqueId');
+    logWithCorrelation(correlationId, `Found message with file_unique_id ${fileUniqueId}`, 'info', 'findMessageByFileUniqueId');
     return { success: true, data };
   } catch (error) {
-    logWithCorrelation(correlationId, `Exception in findMessageByFileUniqueId: ${error}`, 'ERROR', 'findMessageByFileUniqueId');
+    logWithCorrelation(correlationId, `Exception in findMessageByFileUniqueId: ${error}`, 'error', 'findMessageByFileUniqueId');
     return { success: false, error: error instanceof Error ? error.message : String(error) };
   }
 }
@@ -412,14 +443,14 @@ export async function syncMediaGroupCaptions({
     // Validation - only mediaGroupId is critical
     if (!mediaGroupId) {
       const errorMsg = 'Media group ID is required for caption synchronization';
-      logWithCorrelation(correlationId, errorMsg, 'ERROR', 'syncMediaGroupCaptions');
+      logWithCorrelation(correlationId, errorMsg, 'error', 'syncMediaGroupCaptions');
       return {
         success: false,
         error: errorMsg
       };
     }
     
-    logWithCorrelation(correlationId, `Syncing captions for media group ${mediaGroupId}${sourceMessageId ? ` from source message ${sourceMessageId}` : ''}`, 'INFO', 'syncMediaGroupCaptions');
+    logWithCorrelation(correlationId, `Syncing captions for media group ${mediaGroupId}${sourceMessageId ? ` from source message ${sourceMessageId}` : ''}`, 'info', 'syncMediaGroupCaptions');
     
     // Ensure captionData is a proper object for JSONB conversion
     // Same pattern as in upsertMediaMessageRecord
@@ -429,7 +460,7 @@ export async function syncMediaGroupCaptions({
       captionData || {};
     
     // Debug the parameters to help identify issues
-    logWithCorrelation(correlationId, `Calling sync_media_group_captions with mediaGroupId=${mediaGroupId}, sourceMessageId=${sourceMessageId || 'none'}`, 'DEBUG', 'syncMediaGroupCaptions');
+    logWithCorrelation(correlationId, `Calling sync_media_group_captions with mediaGroupId=${mediaGroupId}, sourceMessageId=${sourceMessageId || 'none'}`, 'debug', 'syncMediaGroupCaptions');
     
     // Call the PostgreSQL function with properly typed parameters
     const { data, error } = await supabaseClient.rpc('sync_media_group_captions', {
@@ -441,7 +472,7 @@ export async function syncMediaGroupCaptions({
     });
     
     if (error) {
-      logWithCorrelation(correlationId, `Error syncing captions for media group ${mediaGroupId}: ${error.message}`, 'ERROR', 'syncMediaGroupCaptions');
+      logWithCorrelation(correlationId, `Error syncing captions for media group ${mediaGroupId}: ${error.message}`, 'error', 'syncMediaGroupCaptions');
       
       // Log a detailed error with parameter types for troubleshooting
       await logProcessingEvent(supabaseClient, 'media_group_sync_error', sourceMessageId, correlationId, {
@@ -462,7 +493,7 @@ export async function syncMediaGroupCaptions({
       };
     } else {
       const updatedCount = Array.isArray(data) ? data.length : 0;
-      logWithCorrelation(correlationId, `Successfully synced captions for ${updatedCount} messages in media group ${mediaGroupId}`, 'INFO', 'syncMediaGroupCaptions');
+      logWithCorrelation(correlationId, `Successfully synced captions for ${updatedCount} messages in media group ${mediaGroupId}`, 'info', 'syncMediaGroupCaptions');
       
       // Log success event
       await logProcessingEvent(supabaseClient, 'media_group_sync_success', sourceMessageId, correlationId, {
@@ -484,7 +515,7 @@ export async function syncMediaGroupCaptions({
     }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    logWithCorrelation(correlationId, `Exception syncing media group captions for media group ${mediaGroupId}: ${errorMessage}`, 'ERROR', 'syncMediaGroupCaptions');
+    logWithCorrelation(correlationId, `Exception syncing media group captions for media group ${mediaGroupId}: ${errorMessage}`, 'error', 'syncMediaGroupCaptions');
     
     // Log the exception with stack trace for debugging
     await logProcessingEvent(supabaseClient, 'media_group_sync_exception', sourceMessageId, correlationId, {
@@ -548,7 +579,7 @@ export async function upsertTextMessageRecord({
   correlationId 
 }) {
   try {
-    logWithCorrelation(correlationId, `Upserting text message record for ${messageId} in chat ${chatId}`, 'INFO', 'upsertTextMessageRecord');
+    logWithCorrelation(correlationId, `Upserting text message record for ${messageId} in chat ${chatId}`, 'info', 'upsertTextMessageRecord');
     
     // Call the RPC function to upsert the text message - parameters must match the database function signature
     const { data, error } = await supabaseClient.rpc('upsert_text_message', {
@@ -565,7 +596,7 @@ export async function upsertTextMessageRecord({
     });
     
     if (error) {
-      logWithCorrelation(correlationId, `Error upserting text message: ${error.message}`, 'ERROR', 'upsertTextMessageRecord');
+      logWithCorrelation(correlationId, `Error upserting text message: ${error.message}`, 'error', 'upsertTextMessageRecord');
       console.error("DB error upserting text message:", error);
       return {
         success: false,
@@ -578,7 +609,7 @@ export async function upsertTextMessageRecord({
       const { data: completeRecord, error: fetchError } = await supabaseClient.from('other_messages').select('*').eq('id', data).single();
       
       if (fetchError) {
-        logWithCorrelation(correlationId, `Warning: Successfully upserted text message with ID ${data}, but failed to fetch complete record: ${fetchError.message}`, 'WARN', 'upsertTextMessageRecord');
+        logWithCorrelation(correlationId, `Warning: Successfully upserted text message with ID ${data}, but failed to fetch complete record: ${fetchError.message}`, 'warn', 'upsertTextMessageRecord');
         return {
           success: true,
           data
@@ -597,7 +628,7 @@ export async function upsertTextMessageRecord({
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    logWithCorrelation(correlationId, `Exception upserting text message: ${errorMessage}`, 'ERROR', 'upsertTextMessageRecord');
+    logWithCorrelation(correlationId, `Exception upserting text message: ${errorMessage}`, 'error', 'upsertTextMessageRecord');
     console.error("Exception upserting text message:", error);
     return {
       success: false,

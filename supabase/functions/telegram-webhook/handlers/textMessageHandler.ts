@@ -48,13 +48,13 @@ export async function handleOtherMessage(
   const functionName = 'handleOtherMessage';
   let dbMessageId: string | undefined = undefined;
 
-  logWithCorrelation(correlationId, `Processing text message ${message.message_id}`, 'INFO', functionName);
+  logWithCorrelation(correlationId, `Processing text message ${message.message_id}`, 'debug', functionName);
 
   try {
     // Basic Validation - but ensure we can still save partial data
     if (!message) {
       const errorMessage = `Invalid text message structure: Message object is null or undefined`;
-      logWithCorrelation(correlationId, errorMessage, 'ERROR', functionName);
+      logWithCorrelation(correlationId, errorMessage, 'error', functionName);
       return createErrorResponse(errorMessage, functionName, 400, correlationId, {});
     }
     
@@ -63,7 +63,7 @@ export async function handleOtherMessage(
     const chatId = message.chat?.id || 0;
     
     if (!messageId || !chatId) {
-      logWithCorrelation(correlationId, `Warning: Missing critical fields (message_id: ${messageId}, chat_id: ${chatId}), but will attempt to store data anyway`, 'WARN', functionName);
+      logWithCorrelation(correlationId, `Warning: Missing critical fields (message_id: ${messageId}, chat_id: ${chatId}), but will attempt to store data anyway`, 'warn', functionName);
     }
 
     // Extract forward information if this is a forwarded message
@@ -75,14 +75,14 @@ export async function handleOtherMessage(
       logWithCorrelation(
         correlationId, 
         `Processing forwarded message from ${forwardInfo?.fromChatId || 'unknown source'} (original msg ID: ${forwardInfo?.fromMessageId || 'unknown'})`, 
-        'INFO', 
+        'info', 
         functionName
       );
     }
     
     // Use our upsertTextMessageRecord function with complete parameters matching the PostgreSQL function
     // The function has a fallback mechanism for PostgreSQL function ambiguity errors
-    logWithCorrelation(correlationId, `Upserting text message record for telegram_message_id: ${messageId}`, 'INFO', functionName);
+    logWithCorrelation(correlationId, `Upserting text message record for telegram_message_id: ${messageId}`, 'debug', functionName);
     const upsertResult = await upsertTextMessageRecord({
       supabaseClient,
       messageId: messageId,
@@ -99,7 +99,7 @@ export async function handleOtherMessage(
 
     // Handle upsert result
     if (!upsertResult.success) {
-      logWithCorrelation(correlationId, `Failed to upsert text message: ${upsertResult.error}`, 'ERROR', functionName);
+      logWithCorrelation(correlationId, `Failed to upsert text message: ${upsertResult.error}`, 'error', functionName);
       await logProcessingEvent(
         supabaseClient,
         "db_upsert_text_failed", 
@@ -128,7 +128,7 @@ export async function handleOtherMessage(
     // Get the message ID from the result
     dbMessageId = upsertResult.data?.id;
     if (!dbMessageId) {
-      logWithCorrelation(correlationId, `Upsert succeeded but no ID returned`, 'ERROR', functionName);
+      logWithCorrelation(correlationId, `Upsert succeeded but no ID returned`, 'error', functionName);
       await logProcessingEvent(
         supabaseClient,
         "db_upsert_text_no_id", 
@@ -154,7 +154,7 @@ export async function handleOtherMessage(
       );
     }
 
-    logWithCorrelation(correlationId, `Successfully upserted text message, DB ID: ${dbMessageId}`, 'INFO', functionName);
+    logWithCorrelation(correlationId, `Successfully upserted text message, DB ID: ${dbMessageId}`, 'debug', functionName);
     await logProcessingEvent(
       supabaseClient,
       isForwarded ? "forwarded_text_message_received" : "text_message_received", 
@@ -189,7 +189,7 @@ export async function handleOtherMessage(
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    logWithCorrelation(correlationId, `Exception processing text message: ${errorMessage}`, 'ERROR', functionName);
+    logWithCorrelation(correlationId, `Exception processing text message: ${errorMessage}`, 'error', functionName);
     
     await logProcessingEvent(
       supabaseClient,

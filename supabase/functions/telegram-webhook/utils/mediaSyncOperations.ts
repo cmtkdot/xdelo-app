@@ -7,8 +7,36 @@
  */
 
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
-import { Database, Json } from "../../_shared/types.ts";
-import { logWithCorrelation, logProcessingEvent, ProcessingState, DbOperationResult } from "./dbOperations.ts";
+import { Database } from "../../_shared/types.ts";
+import { logWithCorrelation } from "./logger.ts";
+import { ProcessingState } from "./dbOperations.ts";
+
+// Define Json type that was missing
+type Json = string | number | boolean | null | { [key: string]: Json } | Json[];
+
+// Define DbOperationResult interface
+export interface DbOperationResult<T> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  errorCode?: string;
+}
+
+// Import the logProcessingEvent function directly since it's not properly exported
+async function logProcessingEvent(supabaseClient: any, event_type: string, entity_id: string, correlation_id: string, metadata: any = {}, error?: string): Promise<void> {
+  try {
+    await supabaseClient.from('unified_audit_logs').insert({
+      event_type,
+      entity_id,
+      correlation_id,
+      metadata,
+      error_message: error,
+      event_timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    console.error(`Failed to log processing event: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
 
 /**
  * Input parameters for syncing media group captions using the database function.
@@ -75,7 +103,7 @@ export async function syncMediaGroupCaptionsDb(
   logWithCorrelation(
     correlationId,
     `Syncing captions for media group ${mediaGroupId} using database function`,
-    'INFO',
+    'info',
     functionName
   );
 
@@ -94,7 +122,7 @@ export async function syncMediaGroupCaptionsDb(
       logWithCorrelation(
         correlationId,
         `Failed to sync media group captions: ${error.message}`,
-        'ERROR',
+        'error',
         functionName
       );
       return {
@@ -109,7 +137,7 @@ export async function syncMediaGroupCaptionsDb(
     logWithCorrelation(
       correlationId,
       `Successfully synced captions for ${updatedCount} messages in media group ${mediaGroupId}`,
-      'INFO',
+      'info',
       functionName
     );
 
@@ -136,7 +164,7 @@ export async function syncMediaGroupCaptionsDb(
     logWithCorrelation(
       correlationId,
       `Exception syncing media group captions: ${errorMessage}`,
-      'ERROR',
+      'error',
       functionName
     );
     return {
