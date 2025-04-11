@@ -21,6 +21,7 @@ import {
     logProcessingEvent,
     upsertMediaMessageRecord,
     triggerCaptionParsing,
+    syncMediaGroupCaptions,
     extractForwardInfo
 } from '../utils/dbOperations.ts';
 import { 
@@ -563,10 +564,20 @@ async function handleEditedMessage(
       );
     }
     
-    // If caption has changed and this is part of a media group, log it (syncing now happens in PostgreSQL)
+    // If caption has changed and this is part of a media group, sync the caption to other messages in the group
     if (captionChanged && message.media_group_id) {
-      logWithCorrelation(correlationId, `Caption changed for message in media group ${message.media_group_id}. Media group syncing is handled by PostgreSQL.`, 'INFO', functionName);
-      // No need to explicitly sync captions as this is now handled by the database trigger
+      logWithCorrelation(correlationId, `Caption changed for message in media group ${message.media_group_id}, syncing to other messages`, 'INFO', functionName);
+      
+      // Sync caption changes to other messages in the group
+      await syncMediaGroupCaptions(
+        supabaseClient,
+        message.media_group_id,
+        existingMessage.id,
+        message.caption,
+        captionData,
+        'initialized', // Reset processing state for other messages
+        correlationId
+      );
     }
     
     // If caption has changed, trigger the caption parser
