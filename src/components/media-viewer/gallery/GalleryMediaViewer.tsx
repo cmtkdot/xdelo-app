@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
-import { MediaDisplay } from '../shared/MediaDisplay';
+import { EnhancedMediaDisplay } from '../shared/EnhancedMediaDisplay';
 import { Message } from '@/types/entities/Message';
 import { ChevronLeft, ChevronRight, X, ExternalLink } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -207,10 +207,13 @@ export function GalleryMediaViewer({
             </Button>
           )}
 
-          {/* Media Display */}
-          <div className="flex-1 flex items-center justify-center p-4">
+          {/* Enhanced Media Display */}
+          <div className="flex-1 flex items-center justify-center p-4 bg-black/50">
             {currentItem && (
-              <MediaDisplay message={currentItem} />
+              <EnhancedMediaDisplay 
+                message={currentItem}
+                className="rounded-md"
+              />
             )}
           </div>
 

@@ -9,7 +9,7 @@ Preserves caption history by moving existing analyzed_content to old_analyzed_co
 Synchronizes captions across all messages in a media group
 Manages processing states automatically
 Parameters
-| Parameter | Type | Default | Description | |-----------|------|---------|-------------| | p_telegram_message_id | bigint | NULL | Telegram message ID | | p_chat_id | bigint | NULL | Chat ID where message was sent | | p_file_unique_id | text | NULL | Unique file ID from Telegram (key for duplicate detection) | | p_file_id | text | NULL | File ID from Telegram | | p_storage_path | text | NULL | Path where file is stored | | p_public_url | text | NULL | Public URL to access the file | | p_mime_type | text | NULL | MIME type of the file | | p_extension | text | NULL | File extension | | p_media_type | text | NULL | Type of media (photo, video, document, etc.) | | p_caption | text | NULL | Caption text | | p_message_data | jsonb | NULL | Complete Telegram message data | | p_media_group_id | text | NULL | Group ID for messages in an album | | p_forward_info | jsonb | NULL | Information about forwarded messages | | p_processing_state | text | 'initialized' | Processing state for the message | | p_processing_error | text | NULL | Error message if processing failed | | p_caption_data | jsonb | NULL | Structured data from caption | | p_analyzed_content | jsonb | NULL | Structured data from caption (mirror of caption_data) | | p_old_analyzed_content | jsonb | NULL | Previous version of analyzed_content | | p_correlation_id | text | NULL | Request correlation ID for tracing | | p_user_id | bigint | NULL | User ID who sent the message | | p_is_edited | boolean | false | Whether the message is edited | | p_additional_updates | jsonb | NULL | Additional fields to update |
+| Parameter | Type | Default | Description | |-----------|------|---------|-------------| | p_telegram_message_id | bigint | NULL | Telegram message ID | | p_chat_id | bigint | NULL | Chat ID where message was sent | | p_file_unique_id | text | NULL | Unique file ID from Telegram (key for duplicate detection) | | p_file_id | text | NULL | File ID from Telegram | | p_storage_path | text | NULL | Path where file is stored | | p_public_url | text | NULL | Public URL to access the file | | p_mime_type | text | NULL | MIME type of the file | | p_extension | text | NULL | File extension | | p_media_type | text | NULL | Type of media (photo, video, document, etc.) | | p_caption | text | NULL | Caption text | | p_message_data | jsonb | NULL | Complete Telegram message data | | p_media_group_id | text | NULL | Group ID for messages in an album | | p_forward_info | jsonb | NULL | Information about forwarded messages | | p_processing_state | text | 'initialized' | Processing state for the message | | p_processing_error | text | NULL | Error message if processing failed | | p_caption_data | jsonb | NULL | Structured data from caption | | p_analyzed_content | jsonb | NULL | Structured data from caption (mirror of caption_data) | | p_old_analyzed_content | jsonb | NULL | Previous version of analyzed_content | | p_correlation_id | text | NULL | Request correlation ID for tracing | | p_user_id | bigint | NULL | User ID who sent the message | | p_is_edited | boolean | false | Whether the message is edited | | p_additional_updates | jsonb | NULL | Additional fields to update | | p_telegram_data | jsonb | NULL | Complete Telegram message data |
 
 Return Value
 UUID of the created or updated message
@@ -37,6 +37,46 @@ Key Logic
 Uses ON CONFLICT to handle duplicate message IDs
 Extracts message date from Telegram data
 Logs operations if correlation_id is provided
+
+## Telegram Data Sync Trigger
+
+This trigger ensures the `telegram_data` field is automatically kept in sync with `message_data` for all records in the `messages` table.
+
+```sql
+-- Create a function to copy message_data to telegram_data
+CREATE OR REPLACE FUNCTION x_sync_telegram_data()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- If message_data exists but telegram_data is NULL, copy the data
+    IF NEW.message_data IS NOT NULL AND 
+       (NEW.telegram_data IS NULL OR NEW.telegram_data = '{}'::jsonb) THEN
+        NEW.telegram_data := NEW.message_data;
+    END IF;
+    
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create a trigger that fires before insert or update
+CREATE TRIGGER x_trg_sync_telegram_data
+BEFORE INSERT OR UPDATE ON messages
+FOR EACH ROW
+EXECUTE FUNCTION x_sync_telegram_data();
+```
+
+### Purpose
+- Ensures `telegram_data` field is always populated when `message_data` exists
+- Works automatically for all inserts and updates, regardless of source
+- Maintains data consistency across all operations
+- Only modifies `telegram_data` when it's NULL or empty
+
+### Usage Notes
+- No application code changes required
+- Database-level solution that works independently of application logic
+- If both fields contain data, `telegram_data` is preserved (not overwritten)
+- Applies to all new and updated records
+- Does not modify existing records (requires a migration to backfill)
+
 SQL Recreation Scripts
 Here are the scripts to recreate both functions:
 
@@ -67,7 +107,8 @@ CREATE OR REPLACE FUNCTION public.upsert_media_message(
   p_telegram_message_id bigint DEFAULT NULL::bigint,
   p_user_id bigint DEFAULT NULL::bigint,
   p_is_edited boolean DEFAULT false,
-  p_additional_updates jsonb DEFAULT NULL::jsonb
+  p_additional_updates jsonb DEFAULT NULL::jsonb,
+  p_telegram_data jsonb DEFAULT NULL::jsonb
 )
 RETURNS uuid
 LANGUAGE plpgsql
@@ -148,6 +189,7 @@ BEGIN
       mime_type = COALESCE(p_mime_type, mime_type),
       extension = COALESCE(p_extension, extension),
       message_data = p_message_data,
+      telegram_data = COALESCE(p_telegram_data, p_message_data),
       -- If caption changed, reset processing state
       processing_state = CASE 
         WHEN v_caption_changed THEN 'initialized'::public.processing_state_type
@@ -201,6 +243,7 @@ BEGIN
       mime_type,
       extension,
       message_data,
+      telegram_data,
       processing_state,
       processing_error,
       is_forward,
@@ -225,6 +268,7 @@ BEGIN
       p_mime_type,
       p_extension,
       p_message_data,
+      COALESCE(p_telegram_data, p_message_data),
       v_processing_state_enum,
       p_processing_error,
       v_is_forward,

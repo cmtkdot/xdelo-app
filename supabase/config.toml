@@ -6,8 +6,6 @@ verify_jwt = false
 verify_jwt = false
 [functions.delete-telegram-message]
 verify_jwt = false
-[functions.product-matching]
-verify_jwt = false
 [functions.telegram-webhook]
 verify_jwt = false
 [functions.update-telegram-caption]

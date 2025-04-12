@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { Message } from '@/types';
-import { MediaDisplay } from './MediaDisplay';
+import { EnhancedMediaDisplay } from '@/components/media-viewer/shared/EnhancedMediaDisplay';
 import { MediaToolbar } from './MediaToolbar';
 import { cn } from '@/lib/utils';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
@@ -163,9 +163,9 @@ export function MediaViewer({
           </div>
         )}
         
-        {/* Media display */}
-        <div className="flex-1 overflow-hidden relative">
-          <MediaDisplay message={currentMedia} />
+        {/* Enhanced Media display */}
+        <div className="flex-1 overflow-hidden relative flex items-center justify-center bg-black/50">
+          <EnhancedMediaDisplay message={currentMedia} className="rounded-md" />
         </div>
         
         {/* Toolbar */}
