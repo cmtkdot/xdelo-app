@@ -9,7 +9,7 @@ export function useVendors() {
       try {
         // Try to get vendors from a direct query on analyzed_content
         const { data, error } = await supabase
-          .from('v_messages_compatibility')
+          .from('messages')
           .select('analyzed_content')
           .not('analyzed_content', 'is', null);
         

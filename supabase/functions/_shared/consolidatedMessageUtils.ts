@@ -1,4 +1,3 @@
-import { corsHeaders } from './cors.ts';
 import { supabaseClient } from './supabaseClient.ts';
 
 /**
@@ -137,7 +136,7 @@ export function isMessageForwarded(message: any): boolean {
  * Create Supabase client with enhanced error handling and retry capabilities
  */
 export function createSupabaseClient(options = {}) {
-  const supabaseUrl = Deno.env.get('SUPABASE_URL') || 'https://xjhhehxcxkiumnwbirel.supabase.co';
+  const supabaseUrl = Deno.env.get('SUPABASE_URL') || 'https://swrfsullhirscyxqneay.supabase.co';
   const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
   
   if (!supabaseKey) {

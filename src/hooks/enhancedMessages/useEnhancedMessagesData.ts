@@ -24,13 +24,13 @@ export function useEnhancedMessagesData({
     queryKey: ['enhanced-messages', limit, processingStates, sortBy, sortOrder, searchTerm, grouped],
     queryFn: async () => {
       try {
-        console.log('Fetching enhanced messages with options:', {
+        console.info('Fetching enhanced messages with options:', {
           limit, processingStates, sortBy, sortOrder, searchTerm, grouped
         });
         
         // Build the query
         let query = supabase
-          .from('v_messages_compatibility')
+          .from('messages')
           .select('*')
           .order(sortBy, { ascending: sortOrder === 'asc' })
           .limit(limit);
@@ -55,17 +55,20 @@ export function useEnhancedMessagesData({
         
         // Early return for empty data
         if (!data || data.length === 0) {
-          console.log('No messages found');
+          console.info('No messages found');
           return {
             flatMessages: [],
             groupedMessages: []
           };
         }
         
-        console.log(`Retrieved ${data.length} messages from database`);
+        console.info(`Retrieved ${data.length} messages from database`);
         
         // Map the data to ensure required fields have values
-        const validMessages: Message[] = data.map((rawMessage: any): Message => ({
+        // Define RawMessage as a partial of Message to avoid using 'any'
+        type RawMessage = Partial<Message> & Record<string, unknown>;
+        
+        const validMessages: Message[] = data.map((rawMessage: RawMessage): Message => ({
           id: rawMessage.id || `missing-id-${Date.now()}-${Math.random().toString(36).substring(2)}`,
           file_unique_id: rawMessage.file_unique_id || `missing-file-id-${Date.now()}`,
           public_url: rawMessage.public_url || '/placeholder.svg',
@@ -87,7 +90,7 @@ export function useEnhancedMessagesData({
             mediaGroups[groupId].push(message);
           });
           
-          console.log(`Created ${Object.keys(mediaGroups).length} media groups`);
+          console.info(`Created ${Object.keys(mediaGroups).length} media groups`);
           
           // Sort messages within each group
           Object.values(mediaGroups).forEach(group => {

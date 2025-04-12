@@ -1,8 +1,8 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Message, ProcessingState } from '@/types';
-import { format, subDays, subWeeks, subMonths, parseISO } from 'date-fns';
+import { ProcessingState } from '@/types';
+import { format, subWeeks, subMonths } from 'date-fns';
 
 interface MessageStatistics {
   totalMessages: number;
@@ -42,7 +42,7 @@ export function useMessageAnalytics() {
     queryFn: async (): Promise<MessageStatistics> => {
       // Fetch messages for analysis
       const { data: messages, error } = await supabase
-        .from('v_messages_compatibility')
+        .from('messages')
         .select('*');
         
       if (error) throw error;
@@ -76,14 +76,25 @@ export function useMessageAnalytics() {
       const oneWeekAgo = subWeeks(now, 1);
       const oneMonthAgo = subMonths(now, 1);
       
+      // Define a type for database messages to avoid using 'any'
+      type DbMessage = {
+        id: string;
+        media_group_id?: string;
+        mime_type?: string;
+        processing_state?: ProcessingState;
+        created_at?: string;
+        analyzed_content?: Record<string, unknown>;
+        [key: string]: unknown;
+      };
+      
       // Media group tracking
-      const mediaGroups = new Map<string, any[]>();
+      const mediaGroups = new Map<string, DbMessage[]>();
       
       // Vendor tracking
       const vendors = new Map<string, number>();
       
       // Process each message
-      messages.forEach((message: any) => {
+      messages.forEach((message: DbMessage) => {
         // Media type stats
         if (message.mime_type) {
           if (message.mime_type.startsWith('image/')) {

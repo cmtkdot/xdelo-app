@@ -121,9 +121,7 @@ export interface Database {
       messages_view: {
         Row: { [key: string]: any }
       }
-      v_messages_compatibility: {
-        Row: { [key: string]: any }
-      }
+
       gl_tables_view: {
         Row: { [key: string]: any }
       }
