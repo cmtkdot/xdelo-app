@@ -56,7 +56,7 @@ export type Database = {
           deletion_error?: string | null
           file_id?: string | null
           file_unique_id?: string | null
-          id: string
+          id?: string
           media_group_id?: string | null
           message_caption_id?: string | null
           mime_type?: string | null
@@ -990,6 +990,7 @@ export type Database = {
           last_error_at: string | null
           last_processing_attempt: string | null
           last_synced_at: string | null
+          match_type: Database["public"]["Enums"]["match_type"] | null
           media_group_id: string | null
           media_group_sync: boolean | null
           media_type: string | null
@@ -1017,6 +1018,9 @@ export type Database = {
           processing_started_at: string | null
           processing_state: Database["public"]["Enums"]["processing_state_type"]
           product_code: string | null
+          product_match_confidence: number | null
+          product_match_date: string | null
+          product_match_status: string | null
           product_name: string | null
           product_quantity: number | null
           product_sku: string | null
@@ -1051,7 +1055,7 @@ export type Database = {
           chat_title?: string | null
           chat_type?: Database["public"]["Enums"]["telegram_chat_type"] | null
           correlation_id?: string | null
-          created_at: string
+          created_at?: string
           deleted_from_telegram?: boolean | null
           duplicate_reference_id?: string | null
           duration?: number | null
@@ -1078,7 +1082,7 @@ export type Database = {
           group_last_message_time?: string | null
           group_message_count?: string | null
           height?: number | null
-          id: string
+          id?: string
           is_channel_post?: string | null
           is_duplicate?: boolean | null
           is_edit?: boolean | null
@@ -1093,6 +1097,7 @@ export type Database = {
           last_error_at?: string | null
           last_processing_attempt?: string | null
           last_synced_at?: string | null
+          match_type?: Database["public"]["Enums"]["match_type"] | null
           media_group_id?: string | null
           media_group_sync?: boolean | null
           media_type?: string | null
@@ -1118,8 +1123,11 @@ export type Database = {
           processing_completed_at?: string | null
           processing_error?: string | null
           processing_started_at?: string | null
-          processing_state: Database["public"]["Enums"]["processing_state_type"]
+          processing_state?: Database["public"]["Enums"]["processing_state_type"]
           product_code?: string | null
+          product_match_confidence?: number | null
+          product_match_date?: string | null
+          product_match_status?: string | null
           product_name?: string | null
           product_quantity?: number | null
           product_sku?: string | null
@@ -1141,7 +1149,7 @@ export type Database = {
           text?: string | null
           trigger_source?: string | null
           update_id?: string | null
-          updated_at: string
+          updated_at?: string
           user_id?: string | null
           vendor_uid?: string | null
           width?: number | null
@@ -1196,6 +1204,7 @@ export type Database = {
           last_error_at?: string | null
           last_processing_attempt?: string | null
           last_synced_at?: string | null
+          match_type?: Database["public"]["Enums"]["match_type"] | null
           media_group_id?: string | null
           media_group_sync?: boolean | null
           media_type?: string | null
@@ -1223,6 +1232,9 @@ export type Database = {
           processing_started_at?: string | null
           processing_state?: Database["public"]["Enums"]["processing_state_type"]
           product_code?: string | null
+          product_match_confidence?: number | null
+          product_match_date?: string | null
+          product_match_status?: string | null
           product_name?: string | null
           product_quantity?: number | null
           product_sku?: string | null
@@ -1249,7 +1261,22 @@ export type Database = {
           vendor_uid?: string | null
           width?: number | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fk_message_caption"
+            columns: ["message_caption_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_message_caption_id_fkey"
+            columns: ["message_caption_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       "null.gl_relationship_mapping": {
         Row: {
@@ -1330,14 +1357,14 @@ export type Database = {
           chat_title?: string | null
           chat_type: Database["public"]["Enums"]["telegram_chat_type"]
           correlation_id?: string | null
-          created_at: string
+          created_at?: string
           edit_count?: number | null
           edit_date?: string | null
           edit_history?: Json | null
           error_message?: string | null
           forward_info?: Json | null
-          id: string
-          is_edited: boolean
+          id?: string
+          is_edited?: boolean
           is_forward?: boolean | null
           last_error_at?: string | null
           message_data?: Json | null
@@ -1351,7 +1378,7 @@ export type Database = {
           processing_correlation_id?: string | null
           processing_error?: string | null
           processing_started_at?: string | null
-          processing_state: Database["public"]["Enums"]["processing_state_type"]
+          processing_state?: Database["public"]["Enums"]["processing_state_type"]
           product_code?: string | null
           product_name?: string | null
           product_quantity?: number | null
@@ -1359,7 +1386,7 @@ export type Database = {
           retry_count?: number | null
           telegram_data?: Json | null
           telegram_message_id: number
-          updated_at: string
+          updated_at?: string
           user_id?: string | null
           vendor_uid?: string | null
         }
@@ -1482,44 +1509,236 @@ export type Database = {
         }
         Relationships: []
       }
-      product_matching_config: {
+      product_approval_queue: {
         Row: {
-          created_at: string
+          analyzed_content: Json | null
+          best_match_product_id: string | null
+          best_match_reasons: Json | null
+          best_match_score: number | null
+          caption_data: Json | null
+          created_at: string | null
           id: string
-          partial_match_date_format: string | null
-          partial_match_enabled: boolean
-          partial_match_min_length: number | null
-          similarity_threshold: number
-          updated_at: string
-          weight_name: number | null
-          weight_purchase_date: number | null
-          weight_vendor: number | null
+          message_id: string | null
+          notes: string | null
+          processed_at: string | null
+          processed_by: string | null
+          status: Database["public"]["Enums"]["approval_status"]
+          suggested_product_name: string | null
+          suggested_purchase_date: string | null
+          suggested_purchase_order_uid: string | null
+          suggested_vendor_uid: string | null
         }
         Insert: {
-          created_at: string
-          id: string
-          partial_match_date_format?: string | null
-          partial_match_enabled: boolean
-          partial_match_min_length?: number | null
-          similarity_threshold: number
-          updated_at: string
-          weight_name?: number | null
-          weight_purchase_date?: number | null
-          weight_vendor?: number | null
+          analyzed_content?: Json | null
+          best_match_product_id?: string | null
+          best_match_reasons?: Json | null
+          best_match_score?: number | null
+          caption_data?: Json | null
+          created_at?: string | null
+          id?: string
+          message_id?: string | null
+          notes?: string | null
+          processed_at?: string | null
+          processed_by?: string | null
+          status?: Database["public"]["Enums"]["approval_status"]
+          suggested_product_name?: string | null
+          suggested_purchase_date?: string | null
+          suggested_purchase_order_uid?: string | null
+          suggested_vendor_uid?: string | null
         }
         Update: {
-          created_at?: string
+          analyzed_content?: Json | null
+          best_match_product_id?: string | null
+          best_match_reasons?: Json | null
+          best_match_score?: number | null
+          caption_data?: Json | null
+          created_at?: string | null
           id?: string
-          partial_match_date_format?: string | null
-          partial_match_enabled?: boolean
-          partial_match_min_length?: number | null
-          similarity_threshold?: number
-          updated_at?: string
-          weight_name?: number | null
-          weight_purchase_date?: number | null
-          weight_vendor?: number | null
+          message_id?: string | null
+          notes?: string | null
+          processed_at?: string | null
+          processed_by?: string | null
+          status?: Database["public"]["Enums"]["approval_status"]
+          suggested_product_name?: string | null
+          suggested_purchase_date?: string | null
+          suggested_purchase_order_uid?: string | null
+          suggested_vendor_uid?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_approval_queue_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_approval_queue_archive: {
+        Row: {
+          analyzed_content: Json | null
+          archived_at: string | null
+          best_match_product_id: string | null
+          best_match_reasons: Json | null
+          best_match_score: number | null
+          caption_data: Json | null
+          created_at: string | null
+          id: string
+          message_id: string | null
+          notes: string | null
+          processed_at: string | null
+          processed_by: string | null
+          status: Database["public"]["Enums"]["approval_status"]
+          suggested_product_name: string | null
+          suggested_purchase_date: string | null
+          suggested_purchase_order_uid: string | null
+          suggested_vendor_uid: string | null
+        }
+        Insert: {
+          analyzed_content?: Json | null
+          archived_at?: string | null
+          best_match_product_id?: string | null
+          best_match_reasons?: Json | null
+          best_match_score?: number | null
+          caption_data?: Json | null
+          created_at?: string | null
+          id?: string
+          message_id?: string | null
+          notes?: string | null
+          processed_at?: string | null
+          processed_by?: string | null
+          status?: Database["public"]["Enums"]["approval_status"]
+          suggested_product_name?: string | null
+          suggested_purchase_date?: string | null
+          suggested_purchase_order_uid?: string | null
+          suggested_vendor_uid?: string | null
+        }
+        Update: {
+          analyzed_content?: Json | null
+          archived_at?: string | null
+          best_match_product_id?: string | null
+          best_match_reasons?: Json | null
+          best_match_score?: number | null
+          caption_data?: Json | null
+          created_at?: string | null
+          id?: string
+          message_id?: string | null
+          notes?: string | null
+          processed_at?: string | null
+          processed_by?: string | null
+          status?: Database["public"]["Enums"]["approval_status"]
+          suggested_product_name?: string | null
+          suggested_purchase_date?: string | null
+          suggested_purchase_order_uid?: string | null
+          suggested_vendor_uid?: string | null
         }
         Relationships: []
+      }
+      product_matches: {
+        Row: {
+          confidence: number
+          created_at: string | null
+          id: string
+          match_date: string | null
+          match_details: Json | null
+          match_type: string
+          message_id: string
+          product_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          confidence?: number
+          created_at?: string | null
+          id?: string
+          match_date?: string | null
+          match_details?: Json | null
+          match_type?: string
+          message_id: string
+          product_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          confidence?: number
+          created_at?: string | null
+          id?: string
+          match_date?: string | null
+          match_details?: Json | null
+          match_type?: string
+          message_id?: string
+          product_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_matches_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_matches_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "gl_products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_matches_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "gl_unpaid_inventory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_matches_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "mv_product_vendor_details"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_matching_config: {
+        Row: {
+          config: Json
+          created_at: string | null
+          high_confidence_threshold: number | null
+          id: string
+          medium_confidence_threshold: number | null
+          updated_at: string | null
+          use_ai_assistance: boolean | null
+          webhook_id: string | null
+        }
+        Insert: {
+          config?: Json
+          created_at?: string | null
+          high_confidence_threshold?: number | null
+          id?: string
+          medium_confidence_threshold?: number | null
+          updated_at?: string | null
+          use_ai_assistance?: boolean | null
+          webhook_id?: string | null
+        }
+        Update: {
+          config?: Json
+          created_at?: string | null
+          high_confidence_threshold?: number | null
+          id?: string
+          medium_confidence_threshold?: number | null
+          updated_at?: string | null
+          use_ai_assistance?: boolean | null
+          webhook_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_matching_config_webhook_id_fkey"
+            columns: ["webhook_id"]
+            isOneToOne: false
+            referencedRelation: "webhook_config"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
@@ -1545,7 +1764,6 @@ export type Database = {
       settings: {
         Row: {
           bot_token: string | null
-          created_at: string | null
           id: string
           product_matching_config: Json | null
           updated_at: string | null
@@ -1553,7 +1771,6 @@ export type Database = {
         }
         Insert: {
           bot_token?: string | null
-          created_at?: string | null
           id: string
           product_matching_config?: Json | null
           updated_at?: string | null
@@ -1561,7 +1778,6 @@ export type Database = {
         }
         Update: {
           bot_token?: string | null
-          created_at?: string | null
           id?: string
           product_matching_config?: Json | null
           updated_at?: string | null
@@ -1599,9 +1815,9 @@ export type Database = {
           error_message?: string | null
           event_data?: string | null
           event_message?: string | null
-          event_timestamp: string
+          event_timestamp?: string
           event_type?: string | null
-          id: string
+          id?: string
           message_type?: string | null
           metadata?: Json | null
           new_state?: Json | null
@@ -1637,6 +1853,154 @@ export type Database = {
           user_id?: string | null
         }
         Relationships: []
+      }
+      webhook_config: {
+        Row: {
+          auth_token: string | null
+          created_at: string | null
+          description: string | null
+          enabled: boolean | null
+          endpoint_url: string
+          event_types: string[] | null
+          headers: Json | null
+          id: string
+          name: string
+          retry_count: number | null
+          timeout_seconds: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          auth_token?: string | null
+          created_at?: string | null
+          description?: string | null
+          enabled?: boolean | null
+          endpoint_url: string
+          event_types?: string[] | null
+          headers?: Json | null
+          id?: string
+          name: string
+          retry_count?: number | null
+          timeout_seconds?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          auth_token?: string | null
+          created_at?: string | null
+          description?: string | null
+          enabled?: boolean | null
+          endpoint_url?: string
+          event_types?: string[] | null
+          headers?: Json | null
+          id?: string
+          name?: string
+          retry_count?: number | null
+          timeout_seconds?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      webhook_implementation_details: {
+        Row: {
+          callback_function: string | null
+          created_at: string | null
+          data_schema: Json | null
+          entity_table: string | null
+          id: string
+          implementation_priority: number | null
+          implementation_status: string | null
+          notes: string | null
+          trigger_function: string | null
+          updated_at: string | null
+          webhook_id: string | null
+        }
+        Insert: {
+          callback_function?: string | null
+          created_at?: string | null
+          data_schema?: Json | null
+          entity_table?: string | null
+          id?: string
+          implementation_priority?: number | null
+          implementation_status?: string | null
+          notes?: string | null
+          trigger_function?: string | null
+          updated_at?: string | null
+          webhook_id?: string | null
+        }
+        Update: {
+          callback_function?: string | null
+          created_at?: string | null
+          data_schema?: Json | null
+          entity_table?: string | null
+          id?: string
+          implementation_priority?: number | null
+          implementation_status?: string | null
+          notes?: string | null
+          trigger_function?: string | null
+          updated_at?: string | null
+          webhook_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "webhook_implementation_details_webhook_id_fkey"
+            columns: ["webhook_id"]
+            isOneToOne: false
+            referencedRelation: "webhook_config"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      webhook_log: {
+        Row: {
+          attempt_count: number | null
+          completed_at: string | null
+          created_at: string | null
+          error_message: string | null
+          event_type: string
+          id: string
+          next_retry_at: string | null
+          payload: Json | null
+          response_body: string | null
+          response_status: number | null
+          success: boolean | null
+          webhook_id: string | null
+        }
+        Insert: {
+          attempt_count?: number | null
+          completed_at?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          event_type: string
+          id?: string
+          next_retry_at?: string | null
+          payload?: Json | null
+          response_body?: string | null
+          response_status?: number | null
+          success?: boolean | null
+          webhook_id?: string | null
+        }
+        Update: {
+          attempt_count?: number | null
+          completed_at?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          event_type?: string
+          id?: string
+          next_retry_at?: string | null
+          payload?: Json | null
+          response_body?: string | null
+          response_status?: number | null
+          success?: boolean | null
+          webhook_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "webhook_log_webhook_id_fkey"
+            columns: ["webhook_id"]
+            isOneToOne: false
+            referencedRelation: "webhook_config"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
@@ -1981,8 +2345,27 @@ export type Database = {
         }
         Relationships: []
       }
+      webhook_integration_checklist: {
+        Row: {
+          callback_function: string | null
+          description: string | null
+          enabled: boolean | null
+          entity_table: string | null
+          event_types: string[] | null
+          implementation_priority: number | null
+          implementation_status: string | null
+          notes: string | null
+          trigger_function: string | null
+          webhook_name: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
+      approve_product_from_queue: {
+        Args: { p_queue_id: string; p_product_id: string; p_user_id?: string }
+        Returns: Json
+      }
       backfill_all_vendor_balances: {
         Args: Record<PropertyKey, never>
         Returns: undefined
@@ -2045,6 +2428,18 @@ export type Database = {
       }
       get_pdf_coverage_stats: {
         Args: { p_table_name: string; p_document_type: string }
+        Returns: Json
+      }
+      get_potential_product_matches: {
+        Args: { p_message_id: string; p_limit?: number; p_min_score?: number }
+        Returns: Json
+      }
+      get_product_approval_queue: {
+        Args: {
+          p_status?: Database["public"]["Enums"]["approval_status"]
+          p_limit?: number
+          p_offset?: number
+        }
         Returns: Json
       }
       get_public_tables: {
@@ -2264,6 +2659,20 @@ export type Database = {
         }
         Returns: undefined
       }
+      match_message_to_products: {
+        Args: { p_message_id: string; p_confidence_override?: Json }
+        Returns: Json
+      }
+      process_ai_matching_result: {
+        Args: {
+          p_queue_id: string
+          p_action: string
+          p_product_id?: string
+          p_confidence_score?: number
+          p_ai_reasoning?: string
+        }
+        Returns: Json
+      }
       refresh_all_materialized_views: {
         Args: Record<PropertyKey, never>
         Returns: undefined
@@ -2276,9 +2685,21 @@ export type Database = {
         Args: { view_name: string }
         Returns: undefined
       }
+      reject_product_from_queue: {
+        Args: { p_queue_id: string; p_reason?: string; p_user_id?: string }
+        Returns: Json
+      }
       reset_pdf_generation_failure: {
         Args: { p_document_type: string; p_document_id: string }
         Returns: undefined
+      }
+      send_product_matching_webhook: {
+        Args: {
+          p_message_id: string
+          p_match_data: Json
+          p_confidence_level: Database["public"]["Enums"]["confidence_level"]
+        }
+        Returns: Json
       }
       update_account_customer_balance: {
         Args: { p_glide_row_id: string }
@@ -2359,9 +2780,38 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: number
       }
+      xdelo_get_product_matching_config: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
+      xdelo_process_caption_workflow: {
+        Args: {
+          p_message_id: string
+          p_correlation_id: string
+          p_force?: boolean
+        }
+        Returns: Json
+      }
+      xdelo_sync_media_group_content: {
+        Args: {
+          p_source_message_id: string
+          p_media_group_id: string
+          p_correlation_id?: string
+          p_force_sync?: boolean
+          p_sync_edit_history?: boolean
+        }
+        Returns: Json
+      }
+      xdelo_update_product_matching_config: {
+        Args: { p_config: Json }
+        Returns: Json
+      }
     }
     Enums: {
       account_type: "Customer" | "Vendor" | "Customer & Vendor"
+      approval_status: "pending" | "approved" | "rejected" | "auto_matched"
+      confidence_level: "high" | "medium" | "low"
+      match_type: "exact" | "fuzzy" | "manual" | "auto"
       message_operation_type:
         | "message_create"
         | "message_update"
@@ -2508,6 +2958,9 @@ export const Constants = {
   public: {
     Enums: {
       account_type: ["Customer", "Vendor", "Customer & Vendor"],
+      approval_status: ["pending", "approved", "rejected", "auto_matched"],
+      confidence_level: ["high", "medium", "low"],
+      match_type: ["exact", "fuzzy", "manual", "auto"],
       message_operation_type: [
         "message_create",
         "message_update",
