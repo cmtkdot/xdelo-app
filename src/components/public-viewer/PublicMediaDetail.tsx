@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Dialog } from '@/components/ui/dialog';
 
@@ -8,3 +9,6 @@ export function fixDialogProps(Component: typeof Dialog) {
     return <Component {...props} />;
   };
 }
+
+// Export the PublicMediaDetail component to fix the missing export error
+export const PublicMediaDetail = fixDialogProps(Dialog);

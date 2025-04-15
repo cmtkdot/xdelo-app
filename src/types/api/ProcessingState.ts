@@ -1,5 +1,12 @@
 
 /**
- * A standardized enum for message processing states across the application
+ * Enum for message processing states
  */
-export type ProcessingState = 'pending' | 'processing' | 'completed' | 'error' | 'initialized';
+export type ProcessingState = 
+  | 'initialized' 
+  | 'pending' 
+  | 'processing' 
+  | 'completed' 
+  | 'error'
+  | 'no_caption'
+  | 'pending_analysis';

@@ -36,8 +36,8 @@ export function GalleryToolbar({
   
   const { 
     processingMessageIds,
-    fixContentDispositionForMessage,
     reuploadMediaFromTelegram,
+    fixContentDispositionForMessage,
     repairMediaBatch
   } = useMediaUtils();
   
@@ -57,10 +57,10 @@ export function GalleryToolbar({
     }
   };
 
-  // Generic function to process repair actions and show processing state
-  const handleRepairAction = async (action: (id: string) => Promise<any>, id: string) => {
-    if (processingMessageIds[id]) return;
-    await action(id);
+  // Generic function to process media operations
+  const handleMediaAction = async (action: (messageId: string) => Promise<any>, messageId: string) => {
+    if (processingMessageIds[messageId]) return;
+    await action(messageId);
   };
 
   return (
@@ -115,7 +115,7 @@ export function GalleryToolbar({
               variant="outline" 
               size="sm"
               disabled={isProcessingAny}
-              onClick={() => currentMedia && handleRepairAction(fixContentDispositionForMessage, currentMedia.id)}
+              onClick={() => currentMedia && handleMediaAction(fixContentDispositionForMessage, currentMedia.id)}
               className="flex items-center gap-1"
             >
               <FileSearch className="h-4 w-4" />
@@ -126,7 +126,7 @@ export function GalleryToolbar({
               variant="outline" 
               size="sm"
               disabled={isProcessingAny}
-              onClick={() => currentMedia && handleRepairAction(reuploadMediaFromTelegram, currentMedia.id)}
+              onClick={() => currentMedia && handleMediaAction(id => reuploadMediaFromTelegram(id), currentMedia.id)}
               className="flex items-center gap-1"
             >
               <RefreshCcw className="h-4 w-4" />

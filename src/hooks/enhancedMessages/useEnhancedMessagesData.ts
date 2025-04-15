@@ -1,3 +1,4 @@
+
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Message, ProcessingState } from '@/types';
@@ -64,16 +65,19 @@ export function useEnhancedMessagesData({
         
         console.info(`Retrieved ${data.length} messages from database`);
         
-        // Map the data to ensure required fields have values
-        // Define RawMessage as a partial of Message to avoid using 'any'
-        type RawMessage = Partial<Message> & Record<string, unknown>;
-        
-        const validMessages: Message[] = data.map((rawMessage: RawMessage): Message => ({
+        // Define our own strongly-typed message conversion function
+        const convertToMessage = (rawMessage: any): Message => ({
           id: rawMessage.id || `missing-id-${Date.now()}-${Math.random().toString(36).substring(2)}`,
           file_unique_id: rawMessage.file_unique_id || `missing-file-id-${Date.now()}`,
           public_url: rawMessage.public_url || '/placeholder.svg',
+          // Ensure processing_state is a valid ProcessingState
+          processing_state: rawMessage.processing_state as ProcessingState,
+          // Copy all other properties
           ...rawMessage
-        }));
+        });
+        
+        // Use our conversion function
+        const validMessages: Message[] = data.map(convertToMessage);
         
         // Process grouped messages if requested
         if (grouped) {

@@ -2419,9 +2419,17 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: Json
       }
+      admin_get_media_sync_cron_status: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
       admin_restart_media_sync_cron: {
         Args: Record<PropertyKey, never>
         Returns: Json
+      }
+      analyze_messages: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
       }
       approve_product_from_queue: {
         Args: { p_queue_id: string; p_product_id: string; p_user_id?: string }

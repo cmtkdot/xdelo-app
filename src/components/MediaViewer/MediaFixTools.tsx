@@ -15,7 +15,7 @@ export function MediaFixTools({ message, onEdit }: MediaFixToolsProps) {
   const isLoading = processingMessageIds[message.id];
 
   const handleReupload = async () => {
-    await reuploadMediaFromTelegram(message.id);
+    await reuploadMediaFromTelegram(message);
   };
 
   const handleDownload = () => {

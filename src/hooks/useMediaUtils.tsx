@@ -1,6 +1,6 @@
 
 import { useState, useCallback } from "react";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@/hooks/useToast";
 import { supabase } from "@/integrations/supabase/client";
 import { Message } from "@/types/entities/Message";
 
@@ -21,8 +21,10 @@ export function useMediaUtils() {
   /**
    * Re-upload media from Telegram
    */
-  const reuploadMediaFromTelegram = useCallback(async (message: Message): Promise<ReuploadResponse> => {
-    if (!message.id) {
+  const reuploadMediaFromTelegram = useCallback(async (message: Message | string): Promise<ReuploadResponse> => {
+    const messageId = typeof message === 'string' ? message : message.id;
+    
+    if (!messageId) {
       toast({
         title: "Error",
         description: "Message ID is required",
@@ -33,11 +35,12 @@ export function useMediaUtils() {
 
     try {
       // Mark as processing
-      setProcessingMessageIds(prev => ({ ...prev, [message.id]: true }));
+      setProcessingMessageIds(prev => ({ ...prev, [messageId]: true }));
 
       // Call the Supabase function to reupload the media
-      const { data, error } = await supabase.rpc('admin_reupload_media_from_telegram', {
-        p_message_id: message.id
+      // Using any for now to bypass type issues with RPC functions
+      const { data, error } = await supabase.rpc('admin_reupload_media_from_telegram' as any, {
+        p_message_id: messageId
       });
 
       if (error) {
@@ -80,7 +83,7 @@ export function useMediaUtils() {
       // Clear processing state
       setProcessingMessageIds(prev => {
         const newState = { ...prev };
-        delete newState[message.id];
+        delete newState[messageId];
         return newState;
       });
     }
@@ -101,7 +104,8 @@ export function useMediaUtils() {
 
     try {
       // Call the Supabase function to fix media group captions
-      const { data, error } = await supabase.rpc('admin_fix_media_group_captions', {
+      // Using any for now to bypass type issues with RPC functions
+      const { data, error } = await supabase.rpc('admin_fix_media_group_captions' as any, {
         p_media_group_id: mediaGroupId
       });
 
@@ -144,9 +148,222 @@ export function useMediaUtils() {
     }
   }, [toast]);
 
+  /**
+   * Fix content disposition for a message
+   */
+  const fixContentDispositionForMessage = useCallback(async (messageId: string): Promise<ReuploadResponse> => {
+    if (!messageId) {
+      toast({
+        title: "Error",
+        description: "Message ID is required",
+        variant: "destructive",
+      });
+      return { success: false, message: "Message ID is required" };
+    }
+
+    try {
+      setProcessingMessageIds(prev => ({ ...prev, [messageId]: true }));
+
+      // Call the Supabase function to fix content disposition
+      // Using any for now to bypass type issues with RPC functions
+      const { data, error } = await supabase.rpc('admin_fix_content_disposition' as any, {
+        p_message_id: messageId
+      });
+
+      if (error) {
+        console.error("Error fixing content disposition:", error);
+        toast({
+          title: "Fix Content Disposition Failed",
+          description: error.message,
+          variant: "destructive",
+        });
+        return { success: false, message: error.message };
+      }
+
+      // Handle the response data properly with type assertion
+      const response = data as ReuploadResponse;
+      
+      if (response && response.success) {
+        toast({
+          title: "Content Disposition Fixed",
+          description: response.message || "Content disposition has been fixed.",
+        });
+        return { success: true, message: response.message, data: response.data };
+      } else {
+        toast({
+          title: "Fix Content Disposition Failed",
+          description: response.message || "Failed to fix content disposition.",
+          variant: "destructive",
+        });
+        return { success: false, message: response.message };
+      }
+    } catch (error) {
+      console.error("Exception during content disposition fix:", error);
+      const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+      toast({
+        title: "Fix Content Disposition Error",
+        description: errorMessage,
+        variant: "destructive",
+      });
+      return { success: false, message: errorMessage };
+    } finally {
+      setProcessingMessageIds(prev => {
+        const newState = { ...prev };
+        delete newState[messageId];
+        return newState;
+      });
+    }
+  }, [toast]);
+
+  /**
+   * Repair a batch of media items
+   */
+  const repairMediaBatch = useCallback(async (messageIds: string[]): Promise<ReuploadResponse> => {
+    if (!messageIds.length) {
+      toast({
+        title: "Error",
+        description: "No messages selected for repair",
+        variant: "destructive",
+      });
+      return { success: false, message: "No messages selected for repair" };
+    }
+
+    try {
+      // Mark all as processing
+      const processingIds = messageIds.reduce<Record<string, boolean>>((acc, id) => {
+        acc[id] = true;
+        return acc;
+      }, {});
+      
+      setProcessingMessageIds(prev => ({ ...prev, ...processingIds }));
+
+      // Call the Supabase function to repair batch
+      // Using any for now to bypass type issues with RPC functions
+      const { data, error } = await supabase.rpc('admin_repair_media_batch' as any, {
+        p_message_ids: messageIds
+      });
+
+      if (error) {
+        console.error("Error repairing media batch:", error);
+        toast({
+          title: "Batch Repair Failed",
+          description: error.message,
+          variant: "destructive",
+        });
+        return { success: false, message: error.message };
+      }
+
+      // Handle the response data properly with type assertion
+      const response = data as ReuploadResponse;
+      
+      if (response && response.success) {
+        toast({
+          title: "Batch Repair Successful",
+          description: response.message || `Repaired ${messageIds.length} messages.`,
+        });
+        return { success: true, message: response.message, data: response.data };
+      } else {
+        toast({
+          title: "Batch Repair Failed",
+          description: response.message || "Failed to repair media batch.",
+          variant: "destructive",
+        });
+        return { success: false, message: response.message };
+      }
+    } catch (error) {
+      console.error("Exception during batch repair:", error);
+      const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+      toast({
+        title: "Batch Repair Error",
+        description: errorMessage,
+        variant: "destructive",
+      });
+      return { success: false, message: errorMessage };
+    } finally {
+      // Clear all processing states
+      setProcessingMessageIds(prev => {
+        const newState = { ...prev };
+        messageIds.forEach(id => {
+          delete newState[id];
+        });
+        return newState;
+      });
+    }
+  }, [toast]);
+
+  /**
+   * Sync message caption
+   */
+  const syncMessageCaption = useCallback(async ({ messageId }: { messageId: string }): Promise<ReuploadResponse> => {
+    if (!messageId) {
+      toast({
+        title: "Error",
+        description: "Message ID is required",
+        variant: "destructive",
+      });
+      return { success: false, message: "Message ID is required" };
+    }
+
+    try {
+      setProcessingMessageIds(prev => ({ ...prev, [messageId]: true }));
+
+      // Call the Supabase function to sync caption
+      // Using any for now to bypass type issues with RPC functions
+      const { data, error } = await supabase.rpc('sync_message_caption' as any, {
+        p_message_id: messageId
+      });
+
+      if (error) {
+        console.error("Error syncing message caption:", error);
+        toast({
+          title: "Caption Sync Failed",
+          description: error.message,
+          variant: "destructive",
+        });
+        return { success: false, message: error.message };
+      }
+
+      // Handle the response data properly with type assertion
+      const response = data as ReuploadResponse;
+      
+      if (response && response.success) {
+        toast({
+          title: "Caption Sync Successful",
+          description: response.message || "Message caption has been synced.",
+        });
+        return { success: true, message: response.message, data: response.data };
+      } else {
+        toast({
+          title: "Caption Sync Failed",
+          description: response.message || "Failed to sync message caption.",
+          variant: "destructive",
+        });
+        return { success: false, message: response.message };
+      }
+    } catch (error) {
+      console.error("Exception during caption sync:", error);
+      const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+      toast({
+        title: "Caption Sync Error",
+        description: errorMessage,
+        variant: "destructive",
+      });
+      return { success: false, message: errorMessage };
+    } finally {
+      setProcessingMessageIds(prev => {
+        const newState = { ...prev };
+        delete newState[messageId];
+        return newState;
+      });
+    }
+  }, [toast]);
+
   return {
     reuploadMediaFromTelegram,
     fixMediaGroupCaptions,
+    fixContentDispositionForMessage,
+    repairMediaBatch,
+    syncMessageCaption,
     processingMessageIds
   };
 }

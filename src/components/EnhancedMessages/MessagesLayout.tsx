@@ -7,7 +7,7 @@ import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { MessageAnalyticsPanel } from './MessageAnalyticsPanel';
 import { MessageDetailsPanel } from './MessageDetailsPanel';
 import { useMessagesStore } from '@/hooks/useMessagesStore';
-import { useMessageAnalytics } from '@/hooks/useMessageAnalytics';
+import { useMessageAnalytics, defaultAnalyticsData } from '@/hooks/useMessageAnalytics';
 import { useIsMobile } from '@/hooks/useMobile';
 import { cn } from '@/lib/utils';
 
@@ -23,7 +23,7 @@ export function MessagesLayout({
   analyticsOpen 
 }: MessagesLayoutProps) {
   const { selectedMessage, setDetailsOpen, setAnalyticsOpen } = useMessagesStore();
-  const { data: analyticsData, isLoading: analyticsLoading } = useMessageAnalytics();
+  const { data: analyticsData, loading: analyticsLoading } = useMessageAnalytics();
   const isMobile = useIsMobile();
 
   const handleEdit = (message: any) => {
@@ -63,7 +63,7 @@ export function MessagesLayout({
               <Skeleton className="h-32 w-full" />
             </div>
           ) : (
-            <MessageAnalyticsPanel data={analyticsData} />
+            <MessageAnalyticsPanel data={analyticsData || defaultAnalyticsData} />
           )}
         </div>
       )}
@@ -90,7 +90,7 @@ export function MessagesLayout({
             </div>
           ) : (
             <div className="max-h-[40vh] overflow-y-auto">
-              <MessageAnalyticsPanel data={analyticsData} />
+              <MessageAnalyticsPanel data={analyticsData || defaultAnalyticsData} />
             </div>
           )}
         </div>
