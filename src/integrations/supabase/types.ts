@@ -27,6 +27,42 @@ export type Database = {
         }
         Relationships: []
       }
+      auto_match_logs: {
+        Row: {
+          batch_id: string | null
+          details: Json | null
+          errors: Json | null
+          exact_matches: number | null
+          high_confidence_matches: number | null
+          id: string
+          matches_found: number | null
+          messages_processed: number | null
+          run_timestamp: string
+        }
+        Insert: {
+          batch_id?: string | null
+          details?: Json | null
+          errors?: Json | null
+          exact_matches?: number | null
+          high_confidence_matches?: number | null
+          id?: string
+          matches_found?: number | null
+          messages_processed?: number | null
+          run_timestamp?: string
+        }
+        Update: {
+          batch_id?: string | null
+          details?: Json | null
+          errors?: Json | null
+          exact_matches?: number | null
+          high_confidence_matches?: number | null
+          id?: string
+          matches_found?: number | null
+          messages_processed?: number | null
+          run_timestamp?: string
+        }
+        Relationships: []
+      }
       deleted_messages: {
         Row: {
           analyzed_content: Json | null
@@ -97,7 +133,7 @@ export type Database = {
           customer_balance: number | null
           date_added_client: string | null
           email_of_who_added: string | null
-          glide_row_id: string | null
+          glide_row_id: string
           id: string
           photo: string | null
           updated_at: string | null
@@ -112,7 +148,7 @@ export type Database = {
           customer_balance?: number | null
           date_added_client?: string | null
           email_of_who_added?: string | null
-          glide_row_id?: string | null
+          glide_row_id: string
           id?: string
           photo?: string | null
           updated_at?: string | null
@@ -127,7 +163,7 @@ export type Database = {
           customer_balance?: number | null
           date_added_client?: string | null
           email_of_who_added?: string | null
-          glide_row_id?: string | null
+          glide_row_id?: string
           id?: string
           photo?: string | null
           updated_at?: string | null
@@ -219,9 +255,9 @@ export type Database = {
           id: string
           payment_amount: number | null
           payment_note: string | null
+          payment_type: string | null
           rowid_accounts: string | null
           rowid_invoices: string | null
-          type_of_payment: string | null
           updated_at: string | null
         }
         Insert: {
@@ -232,9 +268,9 @@ export type Database = {
           id?: string
           payment_amount?: number | null
           payment_note?: string | null
+          payment_type?: string | null
           rowid_accounts?: string | null
           rowid_invoices?: string | null
-          type_of_payment?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -245,9 +281,9 @@ export type Database = {
           id?: string
           payment_amount?: number | null
           payment_note?: string | null
+          payment_type?: string | null
           rowid_accounts?: string | null
           rowid_invoices?: string | null
-          type_of_payment?: string | null
           updated_at?: string | null
         }
         Relationships: []
@@ -260,10 +296,10 @@ export type Database = {
           id: string
           line_total: number | null
           product_name_display: string | null
-          product_sale_note: string | null
           qty_sold: number | null
           rowid_estimates: string | null
           rowid_products: string | null
+          sale_note: string | null
           sale_product_name: string | null
           selling_price: number | null
           total_stock_after_sell: number | null
@@ -276,10 +312,10 @@ export type Database = {
           id?: string
           line_total?: number | null
           product_name_display?: string | null
-          product_sale_note?: string | null
           qty_sold?: number | null
           rowid_estimates?: string | null
           rowid_products?: string | null
+          sale_note?: string | null
           sale_product_name?: string | null
           selling_price?: number | null
           total_stock_after_sell?: number | null
@@ -292,10 +328,10 @@ export type Database = {
           id?: string
           line_total?: number | null
           product_name_display?: string | null
-          product_sale_note?: string | null
           qty_sold?: number | null
           rowid_estimates?: string | null
           rowid_products?: string | null
+          sale_note?: string | null
           sale_product_name?: string | null
           selling_price?: number | null
           total_stock_after_sell?: number | null
@@ -305,17 +341,18 @@ export type Database = {
       }
       gl_estimates: {
         Row: {
-          add_note: boolean | null
           balance: number | null
           created_at: string | null
-          date_invoice_created_date: string | null
+          date_invoice_created: string | null
           estimate_date: string | null
           estimate_uid: string | null
           glide_pdf_url: string | null
-          glide_pdf_url2: string | null
+          glide_pdf_url_secondary: string | null
           glide_row_id: string
           id: string
-          is_a_sample: boolean | null
+          is_invoice_created: boolean | null
+          is_note_added: boolean | null
+          is_sample: boolean | null
           notes: string | null
           rowid_accounts: string | null
           rowid_invoices: string | null
@@ -324,20 +361,20 @@ export type Database = {
           total_amount: number | null
           total_credits: number | null
           updated_at: string | null
-          valid_final_create_invoice_clicked: boolean | null
         }
         Insert: {
-          add_note?: boolean | null
           balance?: number | null
           created_at?: string | null
-          date_invoice_created_date?: string | null
+          date_invoice_created?: string | null
           estimate_date?: string | null
           estimate_uid?: string | null
           glide_pdf_url?: string | null
-          glide_pdf_url2?: string | null
+          glide_pdf_url_secondary?: string | null
           glide_row_id: string
           id?: string
-          is_a_sample?: boolean | null
+          is_invoice_created?: boolean | null
+          is_note_added?: boolean | null
+          is_sample?: boolean | null
           notes?: string | null
           rowid_accounts?: string | null
           rowid_invoices?: string | null
@@ -346,20 +383,20 @@ export type Database = {
           total_amount?: number | null
           total_credits?: number | null
           updated_at?: string | null
-          valid_final_create_invoice_clicked?: boolean | null
         }
         Update: {
-          add_note?: boolean | null
           balance?: number | null
           created_at?: string | null
-          date_invoice_created_date?: string | null
+          date_invoice_created?: string | null
           estimate_date?: string | null
           estimate_uid?: string | null
           glide_pdf_url?: string | null
-          glide_pdf_url2?: string | null
+          glide_pdf_url_secondary?: string | null
           glide_row_id?: string
           id?: string
-          is_a_sample?: boolean | null
+          is_invoice_created?: boolean | null
+          is_note_added?: boolean | null
+          is_sample?: boolean | null
           notes?: string | null
           rowid_accounts?: string | null
           rowid_invoices?: string | null
@@ -368,7 +405,6 @@ export type Database = {
           total_amount?: number | null
           total_credits?: number | null
           updated_at?: string | null
-          valid_final_create_invoice_clicked?: boolean | null
         }
         Relationships: []
       }
@@ -446,11 +482,11 @@ export type Database = {
           id: string
           line_total: number | null
           product_name_display: string | null
-          product_sale_note: string | null
           qty_sold: number | null
           renamed_product_name: string | null
           rowid_invoices: string | null
           rowid_products: string | null
+          sale_note: string | null
           selling_price: number | null
           updated_at: string | null
           user_email_of_added: string | null
@@ -462,11 +498,11 @@ export type Database = {
           id?: string
           line_total?: number | null
           product_name_display?: string | null
-          product_sale_note?: string | null
           qty_sold?: number | null
           renamed_product_name?: string | null
           rowid_invoices?: string | null
           rowid_products?: string | null
+          sale_note?: string | null
           selling_price?: number | null
           updated_at?: string | null
           user_email_of_added?: string | null
@@ -478,11 +514,11 @@ export type Database = {
           id?: string
           line_total?: number | null
           product_name_display?: string | null
-          product_sale_note?: string | null
           qty_sold?: number | null
           renamed_product_name?: string | null
           rowid_invoices?: string | null
           rowid_products?: string | null
+          sale_note?: string | null
           selling_price?: number | null
           updated_at?: string | null
           user_email_of_added?: string | null
@@ -494,14 +530,14 @@ export type Database = {
           balance: number | null
           created_at: string | null
           created_timestamp: string | null
-          doc_glideforeverlink: string | null
+          date_of_invoice: string | null
+          glide_pdf_url: string | null
           glide_row_id: string
           id: string
-          invoice_order_date: string | null
           invoice_uid: string | null
+          is_processed: boolean | null
           notes: string | null
           payment_status: string | null
-          processed: string | null
           rowid_accounts: string | null
           submitted_timestamp: string | null
           supabase_pdf_url: string | null
@@ -514,14 +550,14 @@ export type Database = {
           balance?: number | null
           created_at?: string | null
           created_timestamp?: string | null
-          doc_glideforeverlink?: string | null
+          date_of_invoice?: string | null
+          glide_pdf_url?: string | null
           glide_row_id: string
           id?: string
-          invoice_order_date?: string | null
           invoice_uid?: string | null
+          is_processed?: boolean | null
           notes?: string | null
           payment_status?: string | null
-          processed?: string | null
           rowid_accounts?: string | null
           submitted_timestamp?: string | null
           supabase_pdf_url?: string | null
@@ -534,14 +570,14 @@ export type Database = {
           balance?: number | null
           created_at?: string | null
           created_timestamp?: string | null
-          doc_glideforeverlink?: string | null
+          date_of_invoice?: string | null
+          glide_pdf_url?: string | null
           glide_row_id?: string
           id?: string
-          invoice_order_date?: string | null
           invoice_uid?: string | null
+          is_processed?: boolean | null
           notes?: string | null
           payment_status?: string | null
-          processed?: string | null
           rowid_accounts?: string | null
           submitted_timestamp?: string | null
           supabase_pdf_url?: string | null
@@ -599,29 +635,67 @@ export type Database = {
           },
         ]
       }
+      gl_pdf_generation_queue: {
+        Row: {
+          attempts: number | null
+          created_at: string | null
+          document_id: string
+          document_type: string
+          error_message: string | null
+          id: string
+          priority: boolean | null
+          processed_at: string | null
+          success: boolean | null
+        }
+        Insert: {
+          attempts?: number | null
+          created_at?: string | null
+          document_id: string
+          document_type: string
+          error_message?: string | null
+          id?: string
+          priority?: boolean | null
+          processed_at?: string | null
+          success?: boolean | null
+        }
+        Update: {
+          attempts?: number | null
+          created_at?: string | null
+          document_id?: string
+          document_type?: string
+          error_message?: string | null
+          id?: string
+          priority?: boolean | null
+          processed_at?: string | null
+          success?: boolean | null
+        }
+        Relationships: []
+      }
       gl_products: {
         Row: {
           category: string | null
           cost: number | null
           created_at: string | null
+          date_of_purchase: string | null
           date_timestamp_subm: string | null
           display_name: string | null
           email_email_of_user_who_added_product: string | null
-          fronted: boolean | null
           glide_row_id: string
           id: string
-          miscellaneous_items: boolean | null
+          is_fronted: boolean | null
+          is_miscellaneous: boolean | null
+          is_sample: boolean | null
+          is_sample_or_fronted: boolean | null
           new_product_name: string | null
-          po_po_date: string | null
-          po_poui_dfrom_add_prod: string | null
+          po_date: string | null
           product_image1: string | null
-          product_purchase_date: string | null
-          purchase_notes: string | null
+          public_url_image: string | null
+          public_url_video: string | null
+          purchase_note: string | null
+          purchase_order_uid: string | null
           rowid_accounts: string | null
           rowid_purchase_orders: string | null
           rowid_vendor_payments: string | null
-          samples: boolean | null
-          samples_or_fronted: boolean | null
           terms_for_fronted_product: string | null
           total_cost: number | null
           total_qty_purchased: number | null
@@ -633,24 +707,26 @@ export type Database = {
           category?: string | null
           cost?: number | null
           created_at?: string | null
+          date_of_purchase?: string | null
           date_timestamp_subm?: string | null
           display_name?: string | null
           email_email_of_user_who_added_product?: string | null
-          fronted?: boolean | null
           glide_row_id: string
           id?: string
-          miscellaneous_items?: boolean | null
+          is_fronted?: boolean | null
+          is_miscellaneous?: boolean | null
+          is_sample?: boolean | null
+          is_sample_or_fronted?: boolean | null
           new_product_name?: string | null
-          po_po_date?: string | null
-          po_poui_dfrom_add_prod?: string | null
+          po_date?: string | null
           product_image1?: string | null
-          product_purchase_date?: string | null
-          purchase_notes?: string | null
+          public_url_image?: string | null
+          public_url_video?: string | null
+          purchase_note?: string | null
+          purchase_order_uid?: string | null
           rowid_accounts?: string | null
           rowid_purchase_orders?: string | null
           rowid_vendor_payments?: string | null
-          samples?: boolean | null
-          samples_or_fronted?: boolean | null
           terms_for_fronted_product?: string | null
           total_cost?: number | null
           total_qty_purchased?: number | null
@@ -662,24 +738,26 @@ export type Database = {
           category?: string | null
           cost?: number | null
           created_at?: string | null
+          date_of_purchase?: string | null
           date_timestamp_subm?: string | null
           display_name?: string | null
           email_email_of_user_who_added_product?: string | null
-          fronted?: boolean | null
           glide_row_id?: string
           id?: string
-          miscellaneous_items?: boolean | null
+          is_fronted?: boolean | null
+          is_miscellaneous?: boolean | null
+          is_sample?: boolean | null
+          is_sample_or_fronted?: boolean | null
           new_product_name?: string | null
-          po_po_date?: string | null
-          po_poui_dfrom_add_prod?: string | null
+          po_date?: string | null
           product_image1?: string | null
-          product_purchase_date?: string | null
-          purchase_notes?: string | null
+          public_url_image?: string | null
+          public_url_video?: string | null
+          purchase_note?: string | null
+          purchase_order_uid?: string | null
           rowid_accounts?: string | null
           rowid_purchase_orders?: string | null
           rowid_vendor_payments?: string | null
-          samples?: boolean | null
-          samples_or_fronted?: boolean | null
           terms_for_fronted_product?: string | null
           total_cost?: number | null
           total_qty_purchased?: number | null
@@ -694,11 +772,11 @@ export type Database = {
           balance: number | null
           created_at: string | null
           date_payment_date_mddyyyy: string | null
-          docs_shortlink: string | null
+          glide_pdf_url: string | null
+          glide_pdf_url_secondary: string | null
           glide_row_id: string
           id: string
           payment_status: string | null
-          pdf_link: string | null
           po_date: string | null
           product_count: number | null
           purchase_order_uid: string | null
@@ -712,11 +790,11 @@ export type Database = {
           balance?: number | null
           created_at?: string | null
           date_payment_date_mddyyyy?: string | null
-          docs_shortlink?: string | null
+          glide_pdf_url?: string | null
+          glide_pdf_url_secondary?: string | null
           glide_row_id: string
           id?: string
           payment_status?: string | null
-          pdf_link?: string | null
           po_date?: string | null
           product_count?: number | null
           purchase_order_uid?: string | null
@@ -730,11 +808,11 @@ export type Database = {
           balance?: number | null
           created_at?: string | null
           date_payment_date_mddyyyy?: string | null
-          docs_shortlink?: string | null
+          glide_pdf_url?: string | null
+          glide_pdf_url_secondary?: string | null
           glide_row_id?: string
           id?: string
           payment_status?: string | null
-          pdf_link?: string | null
           po_date?: string | null
           product_count?: number | null
           purchase_order_uid?: string | null
@@ -754,14 +832,14 @@ export type Database = {
           drop_off_location_uid: string | null
           glide_row_id: string
           id: string
-          receiver_receiver_address: string | null
-          receiver_receiver_name: string | null
+          receiver_address: string | null
+          receiver_name: string | null
           receiver_state: string | null
           rowid_accounts: string | null
           rowid_invoices: string | null
-          sender_sender_address: string | null
-          sender_sender_name_company: string | null
-          sender_sender_phone: string | null
+          sender_address: string | null
+          sender_name_company: string | null
+          sender_phone: string | null
           ship_date: string | null
           tp_id: string | null
           tracking_number: string | null
@@ -774,14 +852,14 @@ export type Database = {
           drop_off_location_uid?: string | null
           glide_row_id: string
           id?: string
-          receiver_receiver_address?: string | null
-          receiver_receiver_name?: string | null
+          receiver_address?: string | null
+          receiver_name?: string | null
           receiver_state?: string | null
           rowid_accounts?: string | null
           rowid_invoices?: string | null
-          sender_sender_address?: string | null
-          sender_sender_name_company?: string | null
-          sender_sender_phone?: string | null
+          sender_address?: string | null
+          sender_name_company?: string | null
+          sender_phone?: string | null
           ship_date?: string | null
           tp_id?: string | null
           tracking_number?: string | null
@@ -794,14 +872,14 @@ export type Database = {
           drop_off_location_uid?: string | null
           glide_row_id?: string
           id?: string
-          receiver_receiver_address?: string | null
-          receiver_receiver_name?: string | null
+          receiver_address?: string | null
+          receiver_name?: string | null
           receiver_state?: string | null
           rowid_accounts?: string | null
           rowid_invoices?: string | null
-          sender_sender_address?: string | null
-          sender_sender_name_company?: string | null
-          sender_sender_phone?: string | null
+          sender_address?: string | null
+          sender_name_company?: string | null
+          sender_phone?: string | null
           ship_date?: string | null
           tp_id?: string | null
           tracking_number?: string | null
@@ -909,7 +987,7 @@ export type Database = {
           rowid_products: string | null
           rowid_purchase_orders: string | null
           updated_at: string | null
-          vendor_purchase_note: string | null
+          vendor_note: string | null
         }
         Insert: {
           created_at?: string | null
@@ -922,7 +1000,7 @@ export type Database = {
           rowid_products?: string | null
           rowid_purchase_orders?: string | null
           updated_at?: string | null
-          vendor_purchase_note?: string | null
+          vendor_note?: string | null
         }
         Update: {
           created_at?: string | null
@@ -935,9 +1013,98 @@ export type Database = {
           rowid_products?: string | null
           rowid_purchase_orders?: string | null
           updated_at?: string | null
-          vendor_purchase_note?: string | null
+          vendor_note?: string | null
         }
         Relationships: []
+      }
+      match_logs: {
+        Row: {
+          confidence: number
+          created_at: string | null
+          id: string
+          match_criteria: Json | null
+          match_date: string | null
+          message_id: string
+          product_id: string
+        }
+        Insert: {
+          confidence: number
+          created_at?: string | null
+          id?: string
+          match_criteria?: Json | null
+          match_date?: string | null
+          message_id: string
+          product_id: string
+        }
+        Update: {
+          confidence?: number
+          created_at?: string | null
+          id?: string
+          match_criteria?: Json | null
+          match_date?: string | null
+          message_id?: string
+          product_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "match_logs_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "match_logs_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "gl_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      media_sync_metrics: {
+        Row: {
+          created_at: string
+          error_message: string | null
+          id: string
+          media_group_id: string
+          messages_updated: number
+          processing_time_ms: number | null
+          source_message_id: string | null
+          sync_success: boolean
+          sync_type: string
+        }
+        Insert: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          media_group_id: string
+          messages_updated?: number
+          processing_time_ms?: number | null
+          source_message_id?: string | null
+          sync_success: boolean
+          sync_type: string
+        }
+        Update: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          media_group_id?: string
+          messages_updated?: number
+          processing_time_ms?: number | null
+          source_message_id?: string | null
+          sync_success?: boolean
+          sync_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_media_sync_metrics_source_message"
+            columns: ["source_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       messages: {
         Row: {
@@ -1027,6 +1194,7 @@ export type Database = {
           public_url: string | null
           purchase_date: string | null
           purchase_order_uid: string | null
+          raw_content: string | null
           redownload_attempts: number | null
           redownload_completed_at: string | null
           redownload_flagged_at: string | null
@@ -1037,6 +1205,7 @@ export type Database = {
           storage_path: string | null
           storage_path_standardized: boolean | null
           sync_attempt: number | null
+          sync_source: string | null
           telegram_data: Json | null
           telegram_message_id: number | null
           text: string | null
@@ -1134,6 +1303,7 @@ export type Database = {
           public_url?: string | null
           purchase_date?: string | null
           purchase_order_uid?: string | null
+          raw_content?: string | null
           redownload_attempts?: number | null
           redownload_completed_at?: string | null
           redownload_flagged_at?: string | null
@@ -1144,6 +1314,7 @@ export type Database = {
           storage_path?: string | null
           storage_path_standardized?: boolean | null
           sync_attempt?: number | null
+          sync_source?: string | null
           telegram_data?: Json | null
           telegram_message_id?: number | null
           text?: string | null
@@ -1241,6 +1412,7 @@ export type Database = {
           public_url?: string | null
           purchase_date?: string | null
           purchase_order_uid?: string | null
+          raw_content?: string | null
           redownload_attempts?: number | null
           redownload_completed_at?: string | null
           redownload_flagged_at?: string | null
@@ -1251,6 +1423,7 @@ export type Database = {
           storage_path?: string | null
           storage_path_standardized?: boolean | null
           sync_attempt?: number | null
+          sync_source?: string | null
           telegram_data?: Json | null
           telegram_message_id?: number | null
           text?: string | null
@@ -1339,7 +1512,7 @@ export type Database = {
           processing_correlation_id: string | null
           processing_error: string | null
           processing_started_at: string | null
-          processing_state: Database["public"]["Enums"]["processing_state_type"]
+          processing_state: string
           product_code: string | null
           product_name: string | null
           product_quantity: number | null
@@ -1378,7 +1551,7 @@ export type Database = {
           processing_correlation_id?: string | null
           processing_error?: string | null
           processing_started_at?: string | null
-          processing_state?: Database["public"]["Enums"]["processing_state_type"]
+          processing_state: string
           product_code?: string | null
           product_name?: string | null
           product_quantity?: number | null
@@ -1417,7 +1590,7 @@ export type Database = {
           processing_correlation_id?: string | null
           processing_error?: string | null
           processing_started_at?: string | null
-          processing_state?: Database["public"]["Enums"]["processing_state_type"]
+          processing_state?: string
           product_code?: string | null
           product_name?: string | null
           product_quantity?: number | null
@@ -1509,6 +1682,27 @@ export type Database = {
         }
         Relationships: []
       }
+      pdf_url_backup: {
+        Row: {
+          document_uid: string | null
+          id: string | null
+          supabase_pdf_url: string | null
+          table_name: string | null
+        }
+        Insert: {
+          document_uid?: string | null
+          id?: string | null
+          supabase_pdf_url?: string | null
+          table_name?: string | null
+        }
+        Update: {
+          document_uid?: string | null
+          id?: string | null
+          supabase_pdf_url?: string | null
+          table_name?: string | null
+        }
+        Relationships: []
+      }
       product_approval_queue: {
         Row: {
           analyzed_content: Json | null
@@ -1568,7 +1762,7 @@ export type Database = {
           {
             foreignKeyName: "product_approval_queue_message_id_fkey"
             columns: ["message_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "messages"
             referencedColumns: ["id"]
           },
@@ -1681,20 +1875,6 @@ export type Database = {
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "gl_products"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "product_matches_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "gl_unpaid_inventory"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "product_matches_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "mv_product_vendor_details"
             referencedColumns: ["id"]
           },
         ]
@@ -1866,6 +2046,7 @@ export type Database = {
           id: string
           name: string
           retry_count: number | null
+          supabase_table: string | null
           timeout_seconds: number | null
           updated_at: string | null
         }
@@ -1880,6 +2061,7 @@ export type Database = {
           id?: string
           name: string
           retry_count?: number | null
+          supabase_table?: string | null
           timeout_seconds?: number | null
           updated_at?: string | null
         }
@@ -1894,10 +2076,40 @@ export type Database = {
           id?: string
           name?: string
           retry_count?: number | null
+          supabase_table?: string | null
           timeout_seconds?: number | null
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "webhook_config_supabase_table_fkey"
+            columns: ["supabase_table"]
+            isOneToOne: true
+            referencedRelation: "gl_mapping_status"
+            referencedColumns: ["supabase_table"]
+          },
+          {
+            foreignKeyName: "webhook_config_supabase_table_fkey"
+            columns: ["supabase_table"]
+            isOneToOne: true
+            referencedRelation: "gl_mappings"
+            referencedColumns: ["supabase_table"]
+          },
+          {
+            foreignKeyName: "webhook_config_supabase_table_fkey"
+            columns: ["supabase_table"]
+            isOneToOne: true
+            referencedRelation: "gl_product_sync_stats"
+            referencedColumns: ["supabase_table"]
+          },
+          {
+            foreignKeyName: "webhook_config_supabase_table_fkey"
+            columns: ["supabase_table"]
+            isOneToOne: true
+            referencedRelation: "gl_recent_logs"
+            referencedColumns: ["supabase_table"]
+          },
+        ]
       }
       webhook_implementation_details: {
         Row: {
@@ -2002,108 +2214,83 @@ export type Database = {
           },
         ]
       }
+      webhook_logs: {
+        Row: {
+          created_at: string | null
+          entity_id: string | null
+          entity_type: string
+          error_message: string | null
+          event_type: string
+          feature: string
+          id: string
+          request_payload: Json | null
+          response_payload: Json | null
+          status_code: number | null
+          success: boolean | null
+        }
+        Insert: {
+          created_at?: string | null
+          entity_id?: string | null
+          entity_type: string
+          error_message?: string | null
+          event_type: string
+          feature: string
+          id?: string
+          request_payload?: Json | null
+          response_payload?: Json | null
+          status_code?: number | null
+          success?: boolean | null
+        }
+        Update: {
+          created_at?: string | null
+          entity_id?: string | null
+          entity_type?: string
+          error_message?: string | null
+          event_type?: string
+          feature?: string
+          id?: string
+          request_payload?: Json | null
+          response_payload?: Json | null
+          status_code?: number | null
+          success?: boolean | null
+        }
+        Relationships: []
+      }
+      workflow_memory: {
+        Row: {
+          created_at: string | null
+          entity_id: string
+          entity_type: string
+          feature: string
+          id: string
+          memory_data: Json
+          updated_at: string | null
+          workflow_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          entity_id: string
+          entity_type: string
+          feature: string
+          id?: string
+          memory_data?: Json
+          updated_at?: string | null
+          workflow_id: string
+        }
+        Update: {
+          created_at?: string | null
+          entity_id?: string
+          entity_type?: string
+          feature?: string
+          id?: string
+          memory_data?: Json
+          updated_at?: string | null
+          workflow_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
-      balance_sheet_view: {
-        Row: {
-          accounts_payable: number | null
-          accounts_receivable: number | null
-          balance_sheet_date: string | null
-          current_ratio: number | null
-          customer_payments_in_transit: number | null
-          debt_ratio: number | null
-          debt_to_equity_ratio: number | null
-          intangible_assets: number | null
-          inventory_value: number | null
-          long_term_debt: number | null
-          owner_contributions: number | null
-          owner_withdrawals: number | null
-          property_and_equipment: number | null
-          retained_earnings: number | null
-          total_assets: number | null
-          total_current_assets: number | null
-          total_current_liabilities: number | null
-          total_equity: number | null
-          total_liabilities: number | null
-          total_liabilities_and_equity: number | null
-          total_non_current_assets: number | null
-          total_non_current_liabilities: number | null
-          unpaid_purchase_orders: number | null
-          working_capital: number | null
-        }
-        Relationships: []
-      }
-      budget_variance_analysis_view: {
-        Row: {
-          budget_amount: number | null
-          comparison_period_end: string | null
-          comparison_period_start: string | null
-          current_amount: number | null
-          current_period_end: string | null
-          current_period_start: string | null
-          metric: string | null
-          performance: string | null
-          variance_amount: number | null
-          variance_percent: number | null
-        }
-        Relationships: []
-      }
-      cash_flow_statement_view: {
-        Row: {
-          beginning_cash_balance: number | null
-          change_in_accounts_payable: number | null
-          change_in_accounts_receivable: number | null
-          change_in_inventory: number | null
-          customer_payments_received: number | null
-          end_date: string | null
-          ending_cash_balance: number | null
-          expenses_paid: number | null
-          loan_proceeds: number | null
-          loan_repayments: number | null
-          net_cash_from_financing_activities: number | null
-          net_cash_from_investing_activities: number | null
-          net_cash_from_operating_activities: number | null
-          net_change_in_cash: number | null
-          owner_contributions: number | null
-          owner_withdrawals: number | null
-          purchase_of_equipment: number | null
-          sale_of_investments: number | null
-          start_date: string | null
-          vendor_payments_made: number | null
-        }
-        Relationships: []
-      }
-      financial_ratios_view: {
-        Row: {
-          accounts_receivable_turnover: number | null
-          current_accounts_payable: number | null
-          current_accounts_receivable: number | null
-          current_assets: number | null
-          current_inventory: number | null
-          current_liabilities: number | null
-          current_period_cogs: number | null
-          current_period_expenses: number | null
-          current_period_gross_profit: number | null
-          current_period_net_profit: number | null
-          current_period_revenue: number | null
-          current_ratio: number | null
-          gross_profit_growth_pct: number | null
-          gross_profit_margin_pct: number | null
-          inventory_turnover: number | null
-          net_profit_growth_pct: number | null
-          net_profit_margin_pct: number | null
-          period_end_date: string | null
-          period_start_date: string | null
-          previous_period_cogs: number | null
-          previous_period_expenses: number | null
-          previous_period_gross_profit: number | null
-          previous_period_net_profit: number | null
-          previous_period_revenue: number | null
-          quick_ratio: number | null
-          revenue_growth_pct: number | null
-        }
-        Relationships: []
-      }
       gl_mapping_status: {
         Row: {
           app_name: string | null
@@ -2130,21 +2317,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      gl_order_fulfillment: {
-        Row: {
-          customer_name: string | null
-          has_shipping: boolean | null
-          invoice_amount: number | null
-          invoice_id: string | null
-          invoice_rowid: string | null
-          payment_status: string | null
-          products: string | null
-          ship_date: string | null
-          total_items: number | null
-          tracking_number: string | null
-        }
-        Relationships: []
       }
       gl_product_sync_stats: {
         Row: {
@@ -2201,149 +2373,30 @@ export type Database = {
         }
         Relationships: []
       }
-      gl_unpaid_inventory: {
+      media_sync_operations_view: {
         Row: {
-          category: string | null
-          cost: number | null
           created_at: string | null
-          date_timestamp_subm: string | null
-          display_name: string | null
-          email_email_of_user_who_added_product: string | null
-          fronted: boolean | null
-          glide_row_id: string | null
-          id: string | null
-          miscellaneous_items: boolean | null
-          new_product_name: string | null
-          po_po_date: string | null
-          po_poui_dfrom_add_prod: string | null
-          product_image1: string | null
-          product_purchase_date: string | null
-          purchase_notes: string | null
-          rowid_accounts: string | null
-          rowid_purchase_orders: string | null
-          rowid_vendor_payments: string | null
-          samples: boolean | null
-          samples_or_fronted: boolean | null
-          terms_for_fronted_product: string | null
-          total_qty_purchased: number | null
-          total_units_behind_sample: number | null
-          unpaid_type: string | null
-          unpaid_value: number | null
-          updated_at: string | null
-          vendor_name: string | null
-          vendor_product_name: string | null
+          error_message: string | null
+          media_group_id: string | null
+          messages_updated: number | null
+          metric_id: string | null
+          processing_time_ms: number | null
+          source_caption: string | null
+          source_chat_id: number | null
+          source_message_id: string | null
+          source_telegram_message_id: number | null
+          sync_success: boolean | null
+          sync_type: string | null
         }
-        Relationships: []
-      }
-      mv_invoice_customer_details: {
-        Row: {
-          balance: number | null
-          created_at: string | null
-          created_timestamp: string | null
-          customer: Json | null
-          customer_id: string | null
-          customer_name: string | null
-          customer_uid: string | null
-          doc_glideforeverlink: string | null
-          glide_row_id: string | null
-          id: string | null
-          invoice_order_date: string | null
-          line_item_count: number | null
-          line_items_total: number | null
-          notes: string | null
-          payment_status: string | null
-          payments_total: number | null
-          rowid_accounts: string | null
-          submitted_timestamp: string | null
-          total_amount: number | null
-          total_paid: number | null
-          updated_at: string | null
-          user_email: string | null
-        }
-        Relationships: []
-      }
-      mv_product_vendor_details: {
-        Row: {
-          category: string | null
-          cost: number | null
-          created_at: string | null
-          date_timestamp_subm: string | null
-          display_name: string | null
-          email_email_of_user_who_added_product: string | null
-          fronted: boolean | null
-          glide_row_id: string | null
-          id: string | null
-          miscellaneous_items: boolean | null
-          new_product_name: string | null
-          po_date: string | null
-          po_number: string | null
-          po_po_date: string | null
-          po_poui_dfrom_add_prod: string | null
-          po_status: string | null
-          product_image1: string | null
-          product_purchase_date: string | null
-          purchase_notes: string | null
-          rowid_accounts: string | null
-          rowid_purchase_orders: string | null
-          rowid_vendor_payments: string | null
-          samples: boolean | null
-          samples_or_fronted: boolean | null
-          terms_for_fronted_product: string | null
-          total_qty_purchased: number | null
-          total_units_behind_sample: number | null
-          updated_at: string | null
-          vendor: Json | null
-          vendor_glide_id: string | null
-          vendor_id: string | null
-          vendor_name: string | null
-          vendor_product_name: string | null
-          vendor_uid: string | null
-        }
-        Relationships: []
-      }
-      mv_purchase_order_vendor_details: {
-        Row: {
-          balance: number | null
-          created_at: string | null
-          date_payment_date_mddyyyy: string | null
-          docs_shortlink: string | null
-          glide_row_id: string | null
-          id: string | null
-          payment_status: string | null
-          payments_total: number | null
-          pdf_link: string | null
-          po_date: string | null
-          product_count: number | null
-          product_count_calc: number | null
-          products_total: number | null
-          purchase_order_uid: string | null
-          rowid_accounts: string | null
-          total_amount: number | null
-          total_paid: number | null
-          updated_at: string | null
-          vendor: Json | null
-          vendor_id: string | null
-          vendor_name: string | null
-          vendor_uid: string | null
-        }
-        Relationships: []
-      }
-      profitability_analysis_view: {
-        Row: {
-          analysis_type: string | null
-          current_receivable_balance: number | null
-          entity_category: string | null
-          entity_id: string | null
-          entity_name: string | null
-          gross_profit: number | null
-          gross_profit_margin_pct: number | null
-          invoice_count: string | null
-          product_count: string | null
-          total_cost: number | null
-          total_quantity_sold: number | null
-          total_revenue: number | null
-        }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fk_media_sync_metrics_source_message"
+            columns: ["source_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       webhook_integration_checklist: {
         Row: {
@@ -2362,8 +2415,20 @@ export type Database = {
       }
     }
     Functions: {
+      admin_fix_missing_media_sync_relations: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
+      admin_restart_media_sync_cron: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
       approve_product_from_queue: {
         Args: { p_queue_id: string; p_product_id: string; p_user_id?: string }
+        Returns: Json
+      }
+      associate_messages_with_products: {
+        Args: Record<PropertyKey, never>
         Returns: Json
       }
       backfill_all_vendor_balances: {
@@ -2374,6 +2439,18 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
+      batch_link_messages_to_product: {
+        Args: {
+          p_message_ids: string[]
+          p_product_id: string
+          p_confidence?: number
+        }
+        Returns: Json
+      }
+      batch_update_product_media_urls: {
+        Args: { p_product_ids?: string[]; p_limit?: number }
+        Returns: Json
+      }
       calculate_customer_balance_for_account: {
         Args: { p_glide_row_id: string }
         Returns: number
@@ -2381,6 +2458,14 @@ export type Database = {
       calculate_vendor_balance_for_account: {
         Args: { p_glide_row_id: string }
         Returns: number
+      }
+      call_pdf_edge_function: {
+        Args: {
+          p_document_type: string
+          p_document_id: string
+          p_force_regenerate?: boolean
+        }
+        Returns: Json
       }
       debug_media_message_errors: {
         Args: { p_correlation_id?: string }
@@ -2430,8 +2515,18 @@ export type Database = {
         Args: { p_table_name: string; p_document_type: string }
         Returns: Json
       }
+      get_pending_pdf_generation_items: {
+        Args: { p_limit?: number }
+        Returns: {
+          id: string
+          document_type: string
+          document_id: string
+        }[]
+      }
       get_potential_product_matches: {
-        Args: { p_message_id: string; p_limit?: number; p_min_score?: number }
+        Args:
+          | { p_message_id: string; p_limit?: number; p_min_score?: number }
+          | { p_message_id: string; p_min_score?: number; p_limit?: number }
         Returns: Json
       }
       get_product_approval_queue: {
@@ -2448,8 +2543,14 @@ export type Database = {
           table_name: string
         }[]
       }
+      get_standardized_pdf_path: {
+        Args:
+          | { p_document_type: string; p_document_id: string }
+          | { document_type: string; document_id: string }
+        Returns: string
+      }
       get_supabase_function_url: {
-        Args: Record<PropertyKey, never>
+        Args: Record<PropertyKey, never> | { p_function_name?: string }
         Returns: string
       }
       get_table_columns: {
@@ -2537,7 +2638,7 @@ export type Database = {
           po_count: number
           total_purchase_amount: number
           total_payments_made: number
-          total_purchase_balance: number
+          pending_purchase_amount: number
         }[]
       }
       gl_get_recent_transactions: {
@@ -2624,6 +2725,26 @@ export type Database = {
         Args: { p_mapping_id: string }
         Returns: string
       }
+      gtrgm_compress: {
+        Args: { "": unknown }
+        Returns: unknown
+      }
+      gtrgm_decompress: {
+        Args: { "": unknown }
+        Returns: unknown
+      }
+      gtrgm_in: {
+        Args: { "": unknown }
+        Returns: unknown
+      }
+      gtrgm_options: {
+        Args: { "": unknown }
+        Returns: undefined
+      }
+      gtrgm_out: {
+        Args: { "": unknown }
+        Returns: unknown
+      }
       handle_media_message: {
         Args: {
           p_telegram_message_id: number
@@ -2651,11 +2772,50 @@ export type Database = {
         Args: { account_type: string }
         Returns: boolean
       }
+      link_message_to_product: {
+        Args: {
+          p_message_id: string
+          p_product_id: string
+          p_confidence?: number
+        }
+        Returns: Json
+      }
+      log_auto_match_results: {
+        Args: {
+          p_messages_processed: number
+          p_matches_found: number
+          p_exact_matches: number
+          p_high_confidence_matches: number
+          p_errors?: Json
+          p_details?: Json
+        }
+        Returns: string
+      }
+      log_media_sync_metrics: {
+        Args: {
+          p_sync_type: string
+          p_media_group_id: string
+          p_source_message_id: string
+          p_messages_updated: number
+          p_sync_success: boolean
+          p_error_message?: string
+          p_processing_time_ms?: number
+        }
+        Returns: string
+      }
       log_pdf_generation_failure: {
         Args: {
           p_document_type: string
           p_document_id: string
           p_error_message: string
+        }
+        Returns: undefined
+      }
+      mark_pdf_queue_item_processed: {
+        Args: {
+          p_queue_id: string
+          p_success: boolean
+          p_error_message?: string
         }
         Returns: undefined
       }
@@ -2672,6 +2832,16 @@ export type Database = {
           p_ai_reasoning?: string
         }
         Returns: Json
+      }
+      process_pdf_generation_queue: {
+        Args:
+          | { p_batch_size?: number; p_process_priority_only?: boolean }
+          | Record<PropertyKey, never>
+        Returns: number
+      }
+      process_pdf_queue: {
+        Args: { p_limit?: number }
+        Returns: number
       }
       refresh_all_materialized_views: {
         Args: Record<PropertyKey, never>
@@ -2693,6 +2863,20 @@ export type Database = {
         Args: { p_document_type: string; p_document_id: string }
         Returns: undefined
       }
+      retry_auto_match_processor: {
+        Args:
+          | Record<PropertyKey, never>
+          | {
+              p_force_recheck?: boolean
+              p_batch_size?: number
+              p_debug?: boolean
+            }
+        Returns: Json
+      }
+      scheduled_process_pdf_queue: {
+        Args: { p_limit?: number }
+        Returns: number
+      }
       send_product_matching_webhook: {
         Args: {
           p_message_id: string
@@ -2700,6 +2884,48 @@ export type Database = {
           p_confidence_level: Database["public"]["Enums"]["confidence_level"]
         }
         Returns: Json
+      }
+      set_limit: {
+        Args: { "": number }
+        Returns: number
+      }
+      set_service_role_key: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      show_limit: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
+      show_trgm: {
+        Args: { "": string }
+        Returns: string[]
+      }
+      standardize_existing_pdf_urls: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      sync_media_group_captions: {
+        Args: {
+          p_media_group_id: string
+          p_exclude_message_id: string
+          p_caption: string
+          p_caption_data: Json
+          p_processing_state?: string
+        }
+        Returns: string[]
+      }
+      trigger_auto_match_processor: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
+      trigger_missing_pdf_generation: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
+      trigger_pdf_scan: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
       }
       update_account_customer_balance: {
         Args: { p_glide_row_id: string }
@@ -2733,6 +2959,10 @@ export type Database = {
       update_po_totals: {
         Args: { po_id: string }
         Returns: undefined
+      }
+      update_product_media_urls: {
+        Args: { p_product_id: string }
+        Returns: Json
       }
       upsert_media_message: {
         Args: {
@@ -2775,6 +3005,18 @@ export type Database = {
           p_correlation_id?: string
         }
         Returns: string
+      }
+      x_sync_media_group_analyzed_content: {
+        Args: {
+          p_media_group_id: string
+          p_source_message_id: string
+          p_analyzed_content: Json
+        }
+        Returns: number
+      }
+      x_sync_media_q5_cron_wrapper: {
+        Args: Record<PropertyKey, never>
+        Returns: number
       }
       x_sync_pending_media_groups: {
         Args: Record<PropertyKey, never>
@@ -2836,6 +3078,14 @@ export type Database = {
         | "completed"
         | "error"
         | "no_caption"
+        | "pending_analysis"
+      task_priority: "low" | "medium" | "high" | "urgent"
+      task_status:
+        | "not_started"
+        | "in_progress"
+        | "blocked"
+        | "completed"
+        | "cancelled"
       telegram_chat_type:
         | "private"
         | "group"
@@ -2987,6 +3237,15 @@ export const Constants = {
         "completed",
         "error",
         "no_caption",
+        "pending_analysis",
+      ],
+      task_priority: ["low", "medium", "high", "urgent"],
+      task_status: [
+        "not_started",
+        "in_progress",
+        "blocked",
+        "completed",
+        "cancelled",
       ],
       telegram_chat_type: [
         "private",

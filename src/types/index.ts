@@ -1,19 +1,52 @@
 
-// Export core types
-export * from './GlobalTypes';
-
-// Export entity types
+// Export all type definitions
 export * from './entities/Message';
-export * from './entities/Product';
-export * from './entities/MediaItem';
-
-// Export API types
-export * from './api/SupabaseTypes';
+export * from './entities/ProductMatching';
+export * from './utils/AnalyzedContent';
+export * from './ProductMatching';
 export * from './api/ProcessingState';
 
-// Export additional types
+// Match result type from product matching library
+export interface MatchResult {
+  isMatch: boolean;
+  score: number;
+  productId?: string;
+  product_id?: string;
+  message_id?: string;
+  confidence?: number;
+  match_fields?: string[];
+  match_date?: string;
+  matchType?: string;
+  details?: Record<string, any>;
+  matches?: Record<string, { value: string; score: number }>;
+  matchCriteria?: {
+    nameMatch?: boolean;
+    vendorMatch?: boolean;
+    dateMatch?: boolean;
+  };
+}
 
-export * from './utils/AnalyzedContent';
-
-// Note: MessagesTypes is deprecated as its exports are now consolidated
-// in the appropriate entity files
+// Batch match result
+export interface BatchMatchResult {
+  success: boolean;
+  totalProcessed?: number;
+  matchedCount?: number;
+  unmatchedCount?: number;
+  failedCount?: number;
+  averageConfidence?: number;
+  results: Array<{
+    messageId: string;
+    success: boolean;
+    matched: boolean;
+    confidence?: number;
+    productId?: string;
+    error?: string;
+  }>;
+  summary?: {
+    total: number;
+    matched: number;
+    unmatched: number;
+    failed: number;
+  };
+  error?: string;
+}

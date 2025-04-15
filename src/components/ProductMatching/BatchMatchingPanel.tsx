@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,7 +11,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { BatchProcessingTable } from "./BatchProcessingTable";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { AnalyzedContent } from "@/types/utils/AnalyzedContent";
+import { BatchResults, ProcessingMessage } from "@/types/ProductMatching";
 import { Database } from "@/integrations/supabase/database.types";
 
 type GlProduct = Database['public']['Tables']['gl_products']['Row']; 
@@ -75,8 +76,8 @@ export const BatchMatchingPanel = () => {
         return {
           id: msg.id,
           productName: msg.product_name || productName,
-          vendorUid: msg.vendorUid || vendorUid,
-          purchaseDate: msg.purchaseDate || purchaseDate,
+          vendorUid: msg.vendor_uid || vendorUid,
+          purchaseDate: msg.purchase_date || purchaseDate,
           status: 'processing' as const,
           processingStartedAt: new Date().toISOString(),
         };

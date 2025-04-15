@@ -6,19 +6,17 @@ import { MatchResult } from "./index";
  * Interface for batch processing results
  */
 export interface BatchResults {
-  success: boolean;
-  results: Array<{
-    success: boolean;
-    bestMatch: MatchResult | null;
-    matches?: MatchResult[];
+  success?: boolean;
+  total: number;
+  matched: number;
+  unmatched: number;
+  failed: number;
+  averageConfidence?: number;
+  topMatches?: Array<{
+    messageId: string;
+    productName: string;
+    confidence: number;
   }>;
-  summary: {
-    total: number;
-    matched: number;
-    unmatched: number;
-    failed: number;
-  };
-  error?: string;
 }
 
 /**
@@ -26,24 +24,16 @@ export interface BatchResults {
  */
 export interface ProcessingMessage {
   id: string;
-  caption: string;
-  analyzed_content: Json;
-  vendor_uid: string;
-  product_name: string;
-  purchase_date: string;
+  caption?: string;
+  productName?: string;
+  vendorUid?: string;
+  purchaseDate?: string;
+  status: 'processing' | 'matched' | 'unmatched' | 'error';
+  processingStartedAt?: string;
+  processingCompletedAt?: string;
+  matchConfidence?: number;
+  matchedProductId?: string;
+  matchedProductName?: string;
+  errorMessage?: string;
 }
 
-/**
- * Interface for GL Products
- */
-export interface GlProduct {
-  id: string;
-  glide_id: string;
-  new_product_name: string;
-  vendor_product_name: string;
-  vendor_uid: string;
-  product_purchase_date: string;
-  created_at: string;
-  updated_at: string;
-  product_name_display: string;
-}
