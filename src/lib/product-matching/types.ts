@@ -73,6 +73,11 @@ export interface MatchLogMetadata {
 }
 
 /**
+ * Re-export MatchResult from types
+ */
+export { MatchResult };
+
+/**
  * Interface for batch matching results
  */
 export interface BatchMatchResult {

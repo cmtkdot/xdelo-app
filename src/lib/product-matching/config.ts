@@ -40,10 +40,13 @@ export async function updateMatchingConfig(
     // Validate the configuration
     validateConfig(mergedConfig);
     
+    // For RPC calls, we need to cast to any to avoid type issues
+    const configForRpc = mergedConfig as any;
+    
     // Update configuration in Supabase
     const { data, error } = await supabase
       .rpc('xdelo_update_product_matching_config', {
-        p_config: mergedConfig
+        p_config: configForRpc
       });
     
     if (error) {
@@ -56,7 +59,8 @@ export async function updateMatchingConfig(
       return mergedConfig;
     }
     
-    return data as ProductMatchingConfig;
+    // Cast the data to ProductMatchingConfig
+    return data as unknown as ProductMatchingConfig;
   } catch (err) {
     console.error("Error updating product matching configuration:", err);
     throw err;
@@ -144,7 +148,6 @@ function mergeWithDefaults(
     },
     
     algorithm: {
-      useFuzzySearch: partialConfig.algorithm?.useFuzzySearch ?? DEFAULT_CONFIG.algorithm.useFuzzySearch,
       useJaroWinkler: partialConfig.algorithm?.useJaroWinkler ?? DEFAULT_CONFIG.algorithm.useJaroWinkler,
       useLevenshtein: partialConfig.algorithm?.useLevenshtein ?? DEFAULT_CONFIG.algorithm.useLevenshtein
     }

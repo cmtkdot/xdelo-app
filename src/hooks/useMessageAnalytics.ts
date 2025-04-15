@@ -1,182 +1,182 @@
 
-import { useQuery } from '@tanstack/react-query';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { ProcessingState } from '@/types';
-import { format, subWeeks, subMonths } from 'date-fns';
+import { DbMessage, ProcessingState } from '@/types/GlobalTypes';
 
-interface MessageStatistics {
+interface AnalyticsData {
   totalMessages: number;
-  mediaTypes: {
-    images: number;
-    videos: number;
-    documents: number;
-    other: number;
-  };
-  processingStates: {
-    completed: number;
-    error: number;
-    processing: number;
-    pending: number;
-    initialized: number;
-  };
-  mediaGroups: {
-    total: number;
-    averageSize: number;
-    maxSize: number;
-  };
-  vendorStats: {
-    totalVendors: number;
-    topVendors: Array<{ name: string; count: number }>;
-  };
-  timePeriods: {
-    today: number;
-    thisWeek: number;
-    thisMonth: number;
-    older: number;
-  };
+  messagesWithCaption: number;
+  messagesWithProduct: number;
+  pendingMessages: number;
+  processingMessages: number;
+  errorMessages: number;
+  completedMessages: number;
+  messagesWithProductName: number;
+  messagesWithVendorUid: number;
+  messagesWithPurchaseDate: number;
+  matchedProducts: number;
+  unmatchedProducts: number;
+  latestMessages: DbMessage[];
+  messagesByState: Record<ProcessingState, number>;
+  messagesWithImagesByState: Record<ProcessingState, number>;
 }
 
 export function useMessageAnalytics() {
-  return useQuery({
-    queryKey: ['message-analytics'],
-    queryFn: async (): Promise<MessageStatistics> => {
-      // Fetch messages for analysis
-      const { data: messages, error } = await supabase
-        .from('messages')
-        .select('*');
-        
-      if (error) throw error;
-      
-      // Initialize stats object
-      const stats: MessageStatistics = {
-        totalMessages: 0,
-        mediaTypes: { images: 0, videos: 0, documents: 0, other: 0 },
-        processingStates: { 
-          completed: 0, 
-          error: 0, 
-          processing: 0, 
-          pending: 0, 
-          initialized: 0 
-        },
-        mediaGroups: { total: 0, averageSize: 0, maxSize: 0 },
-        vendorStats: { totalVendors: 0, topVendors: [] },
-        timePeriods: { today: 0, thisWeek: 0, thisMonth: 0, older: 0 }
-      };
-      
-      if (!messages || !Array.isArray(messages)) {
-        return stats;
-      }
-      
-      // Set total messages
-      stats.totalMessages = messages.length;
-      
-      // For time calculations
-      const now = new Date();
-      const today = format(now, 'yyyy-MM-dd');
-      const oneWeekAgo = subWeeks(now, 1);
-      const oneMonthAgo = subMonths(now, 1);
-      
-      // Define a type for database messages to avoid using 'any'
-      type DbMessage = {
-        id: string;
-        media_group_id?: string;
-        mime_type?: string;
-        processing_state?: ProcessingState;
-        created_at?: string;
-        analyzed_content?: Record<string, unknown>;
-        [key: string]: unknown;
-      };
-      
-      // Media group tracking
-      const mediaGroups = new Map<string, DbMessage[]>();
-      
-      // Vendor tracking
-      const vendors = new Map<string, number>();
-      
-      // Process each message
-      messages.forEach((message: DbMessage) => {
-        // Media type stats
-        if (message.mime_type) {
-          if (message.mime_type.startsWith('image/')) {
-            stats.mediaTypes.images++;
-          } else if (message.mime_type.startsWith('video/')) {
-            stats.mediaTypes.videos++;
-          } else if (message.mime_type.startsWith('application/')) {
-            stats.mediaTypes.documents++;
-          } else {
-            stats.mediaTypes.other++;
-          }
-        } else {
-          stats.mediaTypes.other++;
-        }
-        
-        // Processing state stats
-        if (message.processing_state) {
-          const state = message.processing_state as ProcessingState;
-          stats.processingStates[state]++;
-        }
-        
-        // Media group stats
-        if (message.media_group_id) {
-          const group = mediaGroups.get(message.media_group_id) || [];
-          group.push(message);
-          mediaGroups.set(message.media_group_id, group);
-        }
-        
-        // Vendor stats
-        if (message.analyzed_content?.vendor_uid) {
-          const vendor = message.analyzed_content.vendor_uid;
-          vendors.set(vendor, (vendors.get(vendor) || 0) + 1);
-        }
-        
-        // Time period stats
-        if (message.created_at) {
-          const createdDate = new Date(message.created_at);
-          const createdDateStr = format(createdDate, 'yyyy-MM-dd');
-          
-          if (createdDateStr === today) {
-            stats.timePeriods.today++;
-          }
-          
-          if (createdDate >= oneWeekAgo) {
-            stats.timePeriods.thisWeek++;
-          } else if (createdDate >= oneMonthAgo) {
-            stats.timePeriods.thisMonth++;
-          } else {
-            stats.timePeriods.older++;
-          }
-        }
-      });
-      
-      // Process media group stats
-      stats.mediaGroups.total = mediaGroups.size;
-      
-      let totalGroupSize = 0;
-      let maxGroupSize = 0;
-      
-      mediaGroups.forEach(group => {
-        const size = group.length;
-        totalGroupSize += size;
-        maxGroupSize = Math.max(maxGroupSize, size);
-      });
-      
-      stats.mediaGroups.averageSize = mediaGroups.size > 0 
-        ? Math.round((totalGroupSize / mediaGroups.size) * 10) / 10 
-        : 0;
-      stats.mediaGroups.maxSize = maxGroupSize;
-      
-      // Process vendor stats
-      stats.vendorStats.totalVendors = vendors.size;
-      
-      // Convert vendor map to array and sort by count (highest first)
-      stats.vendorStats.topVendors = Array.from(vendors.entries())
-        .map(([name, count]) => ({ name, count }))
-        .sort((a, b) => b.count - a.count)
-        .slice(0, 10);
-      
-      return stats;
+  const [data, setData] = useState<AnalyticsData>({
+    totalMessages: 0,
+    messagesWithCaption: 0,
+    messagesWithProduct: 0,
+    pendingMessages: 0,
+    processingMessages: 0,
+    errorMessages: 0,
+    completedMessages: 0,
+    messagesWithProductName: 0,
+    messagesWithVendorUid: 0,
+    messagesWithPurchaseDate: 0,
+    matchedProducts: 0,
+    unmatchedProducts: 0,
+    latestMessages: [],
+    messagesByState: {
+      initialized: 0,
+      pending: 0,
+      processing: 0,
+      completed: 0,
+      error: 0
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    refetchOnWindowFocus: false,
+    messagesWithImagesByState: {
+      initialized: 0,
+      pending: 0,
+      processing: 0,
+      completed: 0,
+      error: 0
+    }
   });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchAnalytics = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Get total message count
+      const { count: totalCount, error: countError } = await supabase
+        .from('messages')
+        .select('*', { count: 'exact', head: true });
+
+      if (countError) throw new Error(countError.message);
+
+      // Get messages with caption
+      const { count: captionCount, error: captionError } = await supabase
+        .from('messages')
+        .select('*', { count: 'exact', head: true })
+        .not('caption', 'is', null);
+
+      if (captionError) throw new Error(captionError.message);
+
+      // Get counts by processing state
+      const { data: stateCountsData, error: stateError } = await supabase
+        .from('messages')
+        .select('processing_state, count')
+        .group('processing_state');
+
+      if (stateError) throw new Error(stateError.message);
+
+      // Get messages with product information
+      const { count: productCount, error: productError } = await supabase
+        .from('messages')
+        .select('*', { count: 'exact', head: true })
+        .not('analyzed_content->product_name', 'is', null);
+
+      if (productError) throw new Error(productError.message);
+
+      // Get messages with vendor UID
+      const { count: vendorCount, error: vendorError } = await supabase
+        .from('messages')
+        .select('*', { count: 'exact', head: true })
+        .not('analyzed_content->vendor_uid', 'is', null);
+
+      if (vendorError) throw new Error(vendorError.message);
+
+      // Get messages with purchase date
+      const { count: dateCount, error: dateError } = await supabase
+        .from('messages')
+        .select('*', { count: 'exact', head: true })
+        .not('analyzed_content->purchase_date', 'is', null);
+
+      if (dateError) throw new Error(dateError.message);
+
+      // Get matched and unmatched products
+      const { count: matchedCount, error: matchedError } = await supabase
+        .from('messages')
+        .select('*', { count: 'exact', head: true })
+        .not('glide_row_id', 'is', null);
+
+      if (matchedError) throw new Error(matchedError.message);
+
+      // Get latest messages for preview
+      const { data: latestMessages, error: latestError } = await supabase
+        .from('messages')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      if (latestError) throw new Error(latestError.message);
+
+      // Process the state counts
+      const messagesByState: Record<ProcessingState, number> = {
+        initialized: 0,
+        pending: 0,
+        processing: 0,
+        completed: 0,
+        error: 0
+      };
+
+      // Process state counts safely with valid state values only
+      stateCountsData?.forEach((item) => {
+        const state = item.processing_state as string;
+        // Only add counts for valid ProcessingState values
+        if (state in messagesByState) {
+          const count = typeof item.count === 'number' ? item.count : parseInt(String(item.count), 10);
+          messagesByState[state as ProcessingState] = count;
+        }
+      });
+
+      // Populate analytics data
+      setData({
+        totalMessages: totalCount || 0,
+        messagesWithCaption: captionCount || 0,
+        messagesWithProduct: productCount || 0,
+        pendingMessages: messagesByState.pending || 0,
+        processingMessages: messagesByState.processing || 0,
+        errorMessages: messagesByState.error || 0,
+        completedMessages: messagesByState.completed || 0,
+        messagesWithProductName: productCount || 0,
+        messagesWithVendorUid: vendorCount || 0,
+        messagesWithPurchaseDate: dateCount || 0,
+        matchedProducts: matchedCount || 0,
+        unmatchedProducts: (productCount || 0) - (matchedCount || 0),
+        latestMessages: latestMessages || [],
+        messagesByState,
+        // This is a simplification - in a real app you'd have a separate query
+        messagesWithImagesByState: { ...messagesByState }
+      });
+    } catch (err) {
+      console.error('Error fetching analytics:', err);
+      setError(err instanceof Error ? err.message : 'Unknown error occurred');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchAnalytics();
+  }, [fetchAnalytics]);
+
+  return {
+    data,
+    loading,
+    error,
+    refresh: fetchAnalytics
+  };
 }

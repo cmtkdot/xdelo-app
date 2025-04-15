@@ -3,8 +3,10 @@
 export * from './entities/Message';
 export * from './entities/ProductMatching';
 export * from './utils/AnalyzedContent';
-export * from './ProductMatching';
 export * from './api/ProcessingState';
+
+// Re-export GlProduct from the appropriate file
+export * from './GlProducts';
 
 // Match result type from product matching library
 export interface MatchResult {
@@ -49,4 +51,19 @@ export interface BatchMatchResult {
     failed: number;
   };
   error?: string;
+}
+
+// Add MediaItem export to fix missing exports
+export interface MediaItem {
+  id: string;
+  url: string;
+  type: 'image' | 'video' | 'audio' | 'document' | 'unknown';
+  thumbnail?: string;
+  title?: string;
+  description?: string;
+  mimeType?: string;
+  fileSize?: number;
+  width?: number;
+  height?: number;
+  duration?: number;
 }

@@ -49,7 +49,7 @@ const MediaThumbnails = React.memo(({ items, currentIndex, onSelect }: MediaThum
               {/* Simple thumbnail component optimized for performance */}
               <div className="w-full h-full">
                 <img
-                  src={item.public_url || item.thumbnail_url || '/placeholder-image.svg'}
+                  src={item.public_url || '/placeholder-image.svg'}
                   alt={`Thumbnail ${idx + 1}`}
                   className="w-full h-full object-cover"
                   loading="lazy"
@@ -165,7 +165,9 @@ export function PublicEnhancedMediaDetail({
     
     const a = document.createElement('a');
     a.href = currentMessage.public_url;
-    a.download = `${currentMessage.file_unique_id || 'media'}.${currentMessage.extension || 'jpg'}`;
+    const extension = currentMessage.mime_type ? 
+      `.${currentMessage.mime_type.split('/')[1] || 'jpg'}` : '.jpg';
+    a.download = `${currentMessage.file_unique_id || 'media'}${extension}`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -205,9 +207,15 @@ export function PublicEnhancedMediaDetail({
   // If no message is available, show nothing
   if (!currentMessage) return null;
   
+  // Get analyzed content values safely
+  const vendorName = currentMessage.analyzed_content?.vendor_uid || '';
+  const purchasePrice = currentMessage.analyzed_content?.unit_price || 
+                       currentMessage.analyzed_content?.total_price || '';
+  const purchaseDate = currentMessage.analyzed_content?.purchase_date || '';
+  
   return (
     <>
-      <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()} className="overflow-hidden">
+      <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
         {/* Use the shadcn Dialog with a modern dark overlay */}
         <DialogContent className="sm:max-w-[95vw] md:max-w-6xl p-0 gap-0 max-h-[90vh] w-full h-full overflow-hidden">
           <DialogTitle>
@@ -324,9 +332,9 @@ export function PublicEnhancedMediaDetail({
               {/* Product information with card styling */}
               {(
                 currentMessage.product_name || 
-                currentMessage.vendor ||
-                currentMessage.purchase_price ||
-                currentMessage.purchase_date
+                vendorName ||
+                purchasePrice ||
+                purchaseDate
               ) && (
                 <div className="bg-muted/40 rounded-lg p-3 border border-border/5">
                   <h3 className="text-sm font-medium mb-2 flex items-center gap-1.5">
@@ -341,27 +349,27 @@ export function PublicEnhancedMediaDetail({
                       </div>
                     )}
                     
-                    {currentMessage.vendor && (
+                    {vendorName && (
                       <div className="flex justify-between items-center text-sm">
                         <span className="text-muted-foreground">Vendor</span>
-                        <span className="font-medium">{currentMessage.vendor}</span>
+                        <span className="font-medium">{vendorName}</span>
                       </div>
                     )}
                     
-                    {currentMessage.purchase_price && (
+                    {purchasePrice && (
                       <div className="flex justify-between items-center text-sm">
                         <span className="text-muted-foreground">Price</span>
                         <Badge variant="outline" className="font-medium">
-                          ${currentMessage.purchase_price}
+                          ${purchasePrice}
                         </Badge>
                       </div>
                     )}
                     
-                    {currentMessage.purchase_date && (
+                    {purchaseDate && (
                       <div className="flex justify-between items-center text-sm">
                         <span className="text-muted-foreground">Purchase Date</span>
                         <span className="font-medium">
-                          {format(new Date(currentMessage.purchase_date), 'PP')}
+                          {format(new Date(purchaseDate), 'PP')}
                         </span>
                       </div>
                     )}
@@ -412,22 +420,7 @@ export function PublicEnhancedMediaDetail({
                 </div>
               </div>
               
-              {/* Tags section with modern styling */}
-              {currentMessage.tags && currentMessage.tags.length > 0 && (
-                <div className="bg-muted/40 rounded-lg p-3 border border-border/5">
-                  <h3 className="text-sm font-medium mb-2 flex items-center gap-1.5">
-                    <Hash className="h-3.5 w-3.5 text-primary/70" />
-                    <span>Tags</span>
-                  </h3>
-                  <div className="flex flex-wrap gap-1.5">
-                    {currentMessage.tags.map((tag, index) => (
-                      <Badge key={index} variant="secondary" className="text-xs">
-                        {tag}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              )}
+              {/* Tags section with modern styling - removed since tags property doesn't exist on Message */}
               
               <div className="flex flex-wrap gap-2 pt-2">
                 <Button 
