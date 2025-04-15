@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Dialog } from '@/components/ui/dialog';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 
 // Function to fix the Dialog component - only change part of the file
 export function fixDialogProps(Component: typeof Dialog) {

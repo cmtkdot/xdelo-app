@@ -1,10 +1,5 @@
-
 import { Json } from '@/integrations/supabase/types';
-
-/**
- * A standardized enum for message processing states across the application
- */
-export type ProcessingState = 'pending' | 'processing' | 'completed' | 'error' | 'initialized';
+import { ProcessingState } from '@/types/api/ProcessingState';
 
 /**
  * Comprehensive Message interface containing all possible properties

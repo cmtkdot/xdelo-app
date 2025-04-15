@@ -7,7 +7,12 @@ import type { Database } from '@/integrations/supabase/database.types';
 // Define the analytics data type
 export interface AnalyticsData {
   totalMessages: number;
-  mediaTypes: Record<string, number>;
+  mediaTypes: {
+    images: number;
+    videos: number;
+    documents: number;
+    other: number;
+  };
   processingStates: Record<string, number>;
   mediaGroups: {
     total: number;
@@ -28,7 +33,12 @@ export interface AnalyticsData {
 
 export const defaultAnalyticsData: AnalyticsData = {
   totalMessages: 0,
-  mediaTypes: {},
+  mediaTypes: {
+    images: 0,
+    videos: 0,
+    documents: 0,
+    other: 0
+  },
   processingStates: {},
   mediaGroups: {
     total: 0,
@@ -76,8 +86,14 @@ export function useMessageAnalytics() {
       const messages = messagesData as DbMessage[];
       const totalMessages = messages.length;
       
-      // Process media types
-      const mediaTypes: Record<string, number> = {};
+      // Initialize media types with zeros
+      const mediaTypes = {
+        images: 0,
+        videos: 0,
+        documents: 0,
+        other: 0
+      };
+      
       // Process processing states
       const processingStates: Record<string, number> = {};
       
@@ -105,7 +121,15 @@ export function useMessageAnalytics() {
       messages.forEach((message) => {
         // Media type counts
         const mediaType = message.mime_type || 'unknown';
-        mediaTypes[mediaType] = (mediaTypes[mediaType] || 0) + 1;
+        if (mediaType.startsWith('image/')) {
+          mediaTypes.images++;
+        } else if (mediaType.startsWith('video/')) {
+          mediaTypes.videos++;
+        } else if (mediaType.startsWith('application/')) {
+          mediaTypes.documents++;
+        } else {
+          mediaTypes.other++;
+        }
         
         // Processing state counts
         const state = message.processing_state || 'unknown';

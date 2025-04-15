@@ -1,6 +1,6 @@
 
 import { supabase } from "@/integrations/supabase/client";
-import { useToast as useToastHook } from "@/hooks/useToast";
+import { useToast } from "@/hooks/useToast";
 
 interface SyncResult {
   success: boolean;
@@ -26,8 +26,7 @@ export async function syncMediaGroup(mediaGroupId: string, sourceMessageId: stri
 
   try {
     // Call the RPC function to sync the media group
-    // Using any type temporarily to bypass TypeScript errors
-    const { data, error } = await supabase.rpc<SyncResult>('sync_media_group_captions' as any, {
+    const { data, error } = await supabase.rpc('sync_media_group_captions', {
       p_media_group_id: mediaGroupId,
       p_source_message_id: sourceMessageId
     });
@@ -40,8 +39,12 @@ export async function syncMediaGroup(mediaGroupId: string, sourceMessageId: stri
       };
     }
 
-    // Type cast the result to SyncResult
-    const result: SyncResult = (data as any) || { success: true, message: "Media group synced successfully" };
+    // Type cast the result to SyncResult or create a default response
+    const result: SyncResult = data || { 
+      success: true, 
+      message: "Media group synced successfully" 
+    };
+    
     return result;
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
@@ -59,8 +62,7 @@ export async function syncMediaGroup(mediaGroupId: string, sourceMessageId: stri
  */
 export async function syncAllMediaGroups(): Promise<SyncResult> {
   try {
-    // Using any type temporarily to bypass TypeScript errors
-    const { data, error } = await supabase.rpc<SyncResult>('sync_all_media_groups' as any);
+    const { data, error } = await supabase.rpc('sync_all_media_groups');
 
     if (error) {
       console.error("Error syncing all media groups:", error);
@@ -70,11 +72,12 @@ export async function syncAllMediaGroups(): Promise<SyncResult> {
       };
     }
 
-    // Type cast the result to SyncResult
-    const result: SyncResult = (data as any) || { 
+    // Type cast the result to SyncResult or create a default response
+    const result: SyncResult = data || { 
       success: true, 
       message: "All media groups synced successfully" 
     };
+    
     return result;
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
@@ -91,11 +94,8 @@ export async function syncAllMediaGroups(): Promise<SyncResult> {
  * @param result The result of the sync operation
  */
 export function showSyncResult(result: SyncResult): void {
-  // Get toast from a separate component since useToast is a hook and can't be used directly here
-  const toast = (message: { title: string; description: string; variant?: "default" | "destructive" }) => {
-    console.log(message);
-    // In a real implementation, you'd need to pass the toast function from a component
-  };
+  // Using imported useToast hook
+  const { toast } = useToast();
 
   if (result.success) {
     const updatedCount = result.updated_count || 0;

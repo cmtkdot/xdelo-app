@@ -1,5 +1,5 @@
 
-import { MatchResult } from "@/types";
+import type { MatchResult } from "@/types";
 
 /**
  * Default product matching configuration
@@ -73,9 +73,9 @@ export interface MatchLogMetadata {
 }
 
 /**
- * Re-export MatchResult from types
+ * Re-export MatchResult type from types
  */
-export { MatchResult };
+export type { MatchResult };
 
 /**
  * Interface for batch matching results

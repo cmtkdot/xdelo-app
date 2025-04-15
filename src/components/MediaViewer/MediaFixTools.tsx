@@ -2,7 +2,7 @@
 import React from 'react';
 import { Button } from "@/components/ui/button";
 import { FileDown, RefreshCcw, FileEdit } from "lucide-react";
-import { Message } from "@/types/MessagesTypes";
+import { Message } from "@/types/entities/Message";
 import { useMediaUtils } from '@/hooks/useMediaUtils';
 
 interface MediaFixToolsProps {

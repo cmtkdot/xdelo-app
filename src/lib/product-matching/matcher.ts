@@ -1,20 +1,21 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { SupabaseClient } from "@supabase/supabase-js";
 import { calculateStringSimilarity } from "./similarity";
 import { logEvent, LogEventType } from "@/lib/logUtils";
-import { Database } from "@/integrations/supabase/database.types";
 import { BatchMatchResult, MatchLogMetadata, MatchResult, MatchableProduct, ProductMatchingConfig } from "./types";
 import { AnalyzedContent } from "@/types";
 import { fetchMatchingConfig } from "./config";
 
-type GlProductRow = Database['public']['Tables']['gl_products']['Row'];
+// Define a more flexible type for supabase client to avoid type errors
+type FlexibleSupabaseClient = SupabaseClient<any, "public", any>;
 
 /**
  * Find matches for a message by ID
  */
 export async function findMatches(
   messageId: string,
-  supabaseClient: SupabaseClient<Database> = supabase,
+  supabaseClient: FlexibleSupabaseClient = supabase,
   customConfig?: ProductMatchingConfig
 ): Promise<{
   success: boolean;
@@ -84,7 +85,7 @@ export async function findMatches(
     }
 
     // Cast the database result to our MatchableProduct type
-    const matchableProducts: MatchableProduct[] = (products as GlProductRow[]).map(p => ({
+    const matchableProducts: MatchableProduct[] = (products as any[]).map(p => ({
       id: p.id,
       new_product_name: p.new_product_name || '',
       vendor_product_name: p.vendor_product_name || '',
@@ -273,7 +274,7 @@ export function matchProductsToMessage(
  */
 export async function matchProduct(
   messageId: string, 
-  supabaseClient: SupabaseClient<Database> = supabase
+  supabaseClient: FlexibleSupabaseClient = supabase
 ): Promise<{
   success: boolean;
   data?: {
@@ -325,7 +326,7 @@ export async function matchProduct(
  */
 export async function batchMatchProducts(
   messageIds: string[],
-  supabaseClient: SupabaseClient<Database> = supabase
+  supabaseClient: FlexibleSupabaseClient = supabase
 ): Promise<BatchMatchResult> {
   try {
     const config = await fetchMatchingConfig();
@@ -424,7 +425,13 @@ export async function batchMatchProducts(
       results: [],
       // For backward compatibility
       success: false,
-      error: error instanceof Error ? error.message : String(error)
+      error: error instanceof Error ? error.message : String(error),
+      summary: {
+        total: messageIds.length,
+        matched: 0,
+        unmatched: 0,
+        failed: messageIds.length
+      }
     };
   }
 }
