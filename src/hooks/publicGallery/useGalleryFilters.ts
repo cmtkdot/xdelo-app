@@ -1,4 +1,3 @@
-
 import { useState, useMemo } from 'react';
 import { Message } from '@/types';
 import { isVideoMessage } from '@/utils/mediaUtils';
@@ -46,11 +45,11 @@ export function useGalleryFilters({
     return result;
   }, [messages, filter, searchTerm]);
 
-  // Group messages by media_group_id
+  // Group messages by media_group_id, selecting a representative thumbnail
   const mediaGroups = useMemo(() => {
     const groups: Record<string, Message[]> = {};
     
-    // Group messages by media_group_id or individually
+    // Step 1: Group messages by media_group_id
     filteredMessages.forEach(message => {
       if (message.media_group_id) {
         groups[message.media_group_id] = groups[message.media_group_id] || [];
@@ -61,9 +60,30 @@ export function useGalleryFilters({
       }
     });
     
-    // Convert record to array of arrays
+    // Step 2: For the "all" filter, only take the first image or video from each group
+    // For other filters, keep all matching media items
+    if (filter === 'all') {
+      // Process groups to pick representative thumbnails
+      const groupsWithThumbnails: Record<string, Message[]> = {};
+      
+      Object.entries(groups).forEach(([groupId, messages]) => {
+        // First try to find an image as the representative thumbnail
+        const thumbnail = messages.find(m => m.mime_type?.startsWith('image/')) || messages[0];
+        
+        if (thumbnail) {
+          // Keep all messages in the group (for proper detail viewing) but only show one in the grid
+          groupsWithThumbnails[groupId] = messages;
+          // Mark the thumbnail message as the representative for this group
+          thumbnail.isGroupThumbnail = true;
+        }
+      });
+      
+      return Object.values(groupsWithThumbnails);
+    }
+    
+    // For specific media types (images/videos), return all matching messages by group
     return Object.values(groups);
-  }, [filteredMessages]);
+  }, [filteredMessages, filter]);
 
   return {
     filter,

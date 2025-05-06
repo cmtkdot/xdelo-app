@@ -7,7 +7,7 @@ import { GalleryFilters } from "@/components/PublicGallery/GalleryFilters";
 import { EmptyState } from "@/components/PublicGallery/EmptyState";
 import { LoadMoreButton } from "@/components/PublicGallery/LoadMoreButton";
 import { GalleryTableView } from "@/components/PublicGallery/GalleryTableView";
-import { PublicMediaViewer, PublicMediaCard, usePublicViewer } from "@/components/public-viewer";
+import { PublicMediaViewer, PublicMediaCard } from "@/components/public-viewer";
 import { useTelegramOperations } from "@/hooks/useTelegramOperations";
 import { usePublicGallery } from "@/hooks/usePublicGallery";
 import { useDebounce } from "@/hooks/useDebounce";
@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { getMainMediaFromGroup } from "@/utils/mediaUtils";
 
 const PublicGallery = () => {
   const isMobile = useIsMobile();
@@ -78,17 +79,37 @@ const PublicGallery = () => {
     setSearchTerm(debouncedSearch);
   }, [debouncedSearch, setSearchTerm]);
   
-  // Use the public viewer hook with enhanced performance
-  const {
-    isOpen,
-    currentGroup,
-    hasNext,
-    hasPrevious,
-    openViewer,
-    closeViewer,
-    goToNextGroup,
-    goToPreviousGroup,
-  } = usePublicViewer(mediaGroups);
+  // State for media viewer
+  const [isViewerOpen, setIsViewerOpen] = useState(false);
+  const [currentGroupIndex, setCurrentGroupIndex] = useState(0);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  
+  // Computed properties for media viewer navigation
+  const hasNextGroup = currentGroupIndex < mediaGroups.length - 1;
+  const hasPreviousGroup = currentGroupIndex > 0;
+  const currentGroup = mediaGroups[currentGroupIndex] || [];
+
+  // Function to open the viewer with a specific group and image
+  const openViewer = (groupIndex: number, imageIndex: number = 0) => {
+    setCurrentGroupIndex(groupIndex);
+    setCurrentImageIndex(imageIndex);
+    setIsViewerOpen(true);
+  };
+
+  // Navigation functions for the media viewer
+  const goToNextGroup = () => {
+    if (hasNextGroup) {
+      setCurrentGroupIndex(currentGroupIndex + 1);
+      setCurrentImageIndex(0);
+    }
+  };
+
+  const goToPreviousGroup = () => {
+    if (hasPreviousGroup) {
+      setCurrentGroupIndex(currentGroupIndex - 1);
+      setCurrentImageIndex(0);
+    }
+  };
 
   // Function to find and open the correct group based on clicked item
   const handleMediaClick = (message: Message) => {
@@ -102,8 +123,8 @@ const PublicGallery = () => {
       // Find index of this message within its group
       const messageIndex = group.findIndex(item => item.id === message.id);
       
-      // Open viewer with this group and position it at the clicked message
-      openViewer(group, messageIndex);
+      // Open viewer with this group
+      openViewer(groupIndex, messageIndex >= 0 ? messageIndex : 0);
     }
   };
 
@@ -277,18 +298,35 @@ const PublicGallery = () => {
                     </div>
                   </div>
                 }>
-                  {filteredMessages.map(message => (
-                    <PublicMediaCard 
-                      key={message.id} 
-                      message={message} 
-                      onClick={() => handleMediaClick(message)}
-                      className="transform transition-transform hover:scale-[1.02] focus:scale-[1.02] will-change-transform"
-                    />
-                  ))}
+                  {mediaGroups.map((group, groupIndex) => {
+                    // In "all" filter mode, only show the representative thumbnail
+                    // In specific filter modes, show all items that match the filter
+                    const thumbnailMedia = filter === 'all' 
+                      ? group.find(m => m.isGroupThumbnail) || getMainMediaFromGroup(group) || group[0]
+                      : group[0];
+                    
+                    if (!thumbnailMedia) return null;
+                    
+                    return (
+                      <div key={thumbnailMedia.id} className="group-card">
+                        <PublicMediaCard 
+                          key={thumbnailMedia.id} 
+                          message={thumbnailMedia}
+                          onClick={() => handleMediaClick(thumbnailMedia)}
+                          className="transform transition-transform hover:scale-[1.02] focus:scale-[1.02] will-change-transform"
+                        />
+                        {filter === 'all' && group.length > 1 && (
+                          <div className="absolute top-1 right-1 z-10 bg-black/70 text-white text-xs px-1.5 py-0.5 rounded-md">
+                            {group.length}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </Suspense>
               </div>
 
-              {filteredMessages.length === 0 && <EmptyState />}
+              {mediaGroups.length === 0 && <EmptyState />}
 
               <LoadMoreButton 
                 onClick={loadMore} 
@@ -304,19 +342,17 @@ const PublicGallery = () => {
             />
           )}
 
-          {/* Public Media Viewer - Optimized with Suspense and lazy loading */}
-          <Suspense fallback={null}>
-            <PublicMediaViewer
-              isOpen={isOpen}
-              onClose={closeViewer}
-              currentGroup={currentGroup}
-              onPrevious={goToPreviousGroup}
-              onNext={goToNextGroup}
-              hasPrevious={hasPrevious}
-              hasNext={hasNext}
-              onDelete={handleDeleteMessage}
-            />
-          </Suspense>
+          {/* Public Media Viewer */}
+          <PublicMediaViewer
+            isOpen={isViewerOpen}
+            onClose={() => setIsViewerOpen(false)}
+            currentGroup={currentGroup}
+            onPrevious={goToPreviousGroup}
+            onNext={goToNextGroup}
+            hasPrevious={hasPreviousGroup}
+            hasNext={hasNextGroup}
+            onDelete={handleDeleteMessage}
+          />
         </>
       )}
     </div>

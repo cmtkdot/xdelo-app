@@ -162,27 +162,6 @@ export type Database = {
           },
         ]
       }
-      documents: {
-        Row: {
-          content: string | null
-          embedding: string | null
-          id: number
-          metadata: Json | null
-        }
-        Insert: {
-          content?: string | null
-          embedding?: string | null
-          id?: number
-          metadata?: Json | null
-        }
-        Update: {
-          content?: string | null
-          embedding?: string | null
-          id?: number
-          metadata?: Json | null
-        }
-        Relationships: []
-      }
       gl_account_invoice_junction: {
         Row: {
           account_glide_row_id: string
@@ -258,6 +237,13 @@ export type Database = {
             referencedRelation: "gl_invoices"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "gl_account_invoice_junction_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "v_invoice_payment_days"
+            referencedColumns: ["invoice_id"]
+          },
         ]
       }
       gl_accounts: {
@@ -319,7 +305,6 @@ export type Database = {
           api_key: string
           app_id: string
           app_name: string | null
-          app_uuid: string | null
           created_at: string | null
           id: string
           last_sync: string | null
@@ -330,7 +315,6 @@ export type Database = {
           api_key: string
           app_id: string
           app_name?: string | null
-          app_uuid?: string | null
           created_at?: string | null
           id?: string
           last_sync?: string | null
@@ -341,22 +325,13 @@ export type Database = {
           api_key?: string
           app_id?: string
           app_name?: string | null
-          app_uuid?: string | null
           created_at?: string | null
           id?: string
           last_sync?: string | null
           settings?: Json | null
           status?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "fk_app_uuid"
-            columns: ["app_uuid"]
-            isOneToOne: false
-            referencedRelation: "apps"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       gl_customer_credits: {
         Row: {
@@ -467,6 +442,13 @@ export type Database = {
             referencedRelation: "gl_invoices"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "fk_invoice_id"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "v_invoice_payment_days"
+            referencedColumns: ["invoice_id"]
+          },
         ]
       }
       gl_customer_payments: {
@@ -482,6 +464,7 @@ export type Database = {
           payment_amount: number | null
           payment_document_type: string | null
           payment_note: string | null
+          payment_number: string | null
           payment_type: string | null
           rowid_accounts: string | null
           rowid_invoices: string | null
@@ -499,6 +482,7 @@ export type Database = {
           payment_amount?: number | null
           payment_document_type?: string | null
           payment_note?: string | null
+          payment_number?: string | null
           payment_type?: string | null
           rowid_accounts?: string | null
           rowid_invoices?: string | null
@@ -516,6 +500,7 @@ export type Database = {
           payment_amount?: number | null
           payment_document_type?: string | null
           payment_note?: string | null
+          payment_number?: string | null
           payment_type?: string | null
           rowid_accounts?: string | null
           rowid_invoices?: string | null
@@ -523,76 +508,6 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "fk_account_id"
-            columns: ["account_id"]
-            isOneToOne: false
-            referencedRelation: "gl_account_invoice_relations"
-            referencedColumns: ["account_id"]
-          },
-          {
-            foreignKeyName: "fk_account_id"
-            columns: ["account_id"]
-            isOneToOne: false
-            referencedRelation: "gl_accounts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_account_id"
-            columns: ["account_id"]
-            isOneToOne: false
-            referencedRelation: "mv_account_finance_summary"
-            referencedColumns: ["account_id"]
-          },
-          {
-            foreignKeyName: "fk_account_id"
-            columns: ["account_id"]
-            isOneToOne: false
-            referencedRelation: "mv_customer_aging"
-            referencedColumns: ["account_id"]
-          },
-          {
-            foreignKeyName: "fk_account_id"
-            columns: ["account_id"]
-            isOneToOne: false
-            referencedRelation: "mv_vendor_aging"
-            referencedColumns: ["account_id"]
-          },
-          {
-            foreignKeyName: "fk_customer_payments_account"
-            columns: ["account_id"]
-            isOneToOne: false
-            referencedRelation: "gl_account_invoice_relations"
-            referencedColumns: ["account_id"]
-          },
-          {
-            foreignKeyName: "fk_customer_payments_account"
-            columns: ["account_id"]
-            isOneToOne: false
-            referencedRelation: "gl_accounts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_customer_payments_account"
-            columns: ["account_id"]
-            isOneToOne: false
-            referencedRelation: "mv_account_finance_summary"
-            referencedColumns: ["account_id"]
-          },
-          {
-            foreignKeyName: "fk_customer_payments_account"
-            columns: ["account_id"]
-            isOneToOne: false
-            referencedRelation: "mv_customer_aging"
-            referencedColumns: ["account_id"]
-          },
-          {
-            foreignKeyName: "fk_customer_payments_account"
-            columns: ["account_id"]
-            isOneToOne: false
-            referencedRelation: "mv_vendor_aging"
-            referencedColumns: ["account_id"]
-          },
-          {
             foreignKeyName: "fk_customer_payments_invoice"
             columns: ["invoice_id"]
             isOneToOne: false
@@ -605,6 +520,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "gl_invoices"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_customer_payments_invoice"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "v_invoice_payment_days"
+            referencedColumns: ["invoice_id"]
           },
           {
             foreignKeyName: "fk_invoice_id"
@@ -621,39 +543,11 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "fk_payment_account"
-            columns: ["account_id"]
+            foreignKeyName: "fk_invoice_id"
+            columns: ["invoice_id"]
             isOneToOne: false
-            referencedRelation: "gl_account_invoice_relations"
-            referencedColumns: ["account_id"]
-          },
-          {
-            foreignKeyName: "fk_payment_account"
-            columns: ["account_id"]
-            isOneToOne: false
-            referencedRelation: "gl_accounts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_payment_account"
-            columns: ["account_id"]
-            isOneToOne: false
-            referencedRelation: "mv_account_finance_summary"
-            referencedColumns: ["account_id"]
-          },
-          {
-            foreignKeyName: "fk_payment_account"
-            columns: ["account_id"]
-            isOneToOne: false
-            referencedRelation: "mv_customer_aging"
-            referencedColumns: ["account_id"]
-          },
-          {
-            foreignKeyName: "fk_payment_account"
-            columns: ["account_id"]
-            isOneToOne: false
-            referencedRelation: "mv_vendor_aging"
-            referencedColumns: ["account_id"]
+            referencedRelation: "v_invoice_payment_days"
+            referencedColumns: ["invoice_id"]
           },
           {
             foreignKeyName: "fk_payment_invoice"
@@ -668,6 +562,48 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "gl_invoices"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_payment_invoice"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "v_invoice_payment_days"
+            referencedColumns: ["invoice_id"]
+          },
+          {
+            foreignKeyName: "gl_customer_payments_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "gl_account_invoice_relations"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "gl_customer_payments_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "gl_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gl_customer_payments_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "mv_account_finance_summary"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "gl_customer_payments_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "mv_customer_aging"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "gl_customer_payments_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "mv_vendor_aging"
+            referencedColumns: ["account_id"]
           },
         ]
       }
@@ -756,6 +692,13 @@ export type Database = {
             referencedColumns: ["product_id"]
           },
           {
+            foreignKeyName: "fk_product_id"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_product_inventory_uuid"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "gl_estimate_lines_estimate_id_fkey"
             columns: ["estimate_id"]
             isOneToOne: false
@@ -789,6 +732,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "product_sales"
             referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "gl_estimate_lines_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_product_inventory_uuid"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -879,6 +829,41 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "estimate_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "gl_account_invoice_relations"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "estimate_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "gl_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "estimate_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "mv_account_finance_summary"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "estimate_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "mv_customer_aging"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "estimate_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "mv_vendor_aging"
+            referencedColumns: ["account_id"]
+          },
+          {
             foreignKeyName: "fk_account_id"
             columns: ["account_id"]
             isOneToOne: false
@@ -928,6 +913,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "fk_invoice_id"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "v_invoice_payment_days"
+            referencedColumns: ["invoice_id"]
+          },
+          {
             foreignKeyName: "gl_estimates_account_id_fkey"
             columns: ["account_id"]
             isOneToOne: false
@@ -975,6 +967,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "gl_invoices"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gl_estimates_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "v_invoice_payment_days"
+            referencedColumns: ["invoice_id"]
           },
         ]
       }
@@ -1078,15 +1077,7 @@ export type Database = {
           total_amount?: number | null
           updated_at?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "fk_category_id"
-            columns: ["category_id"]
-            isOneToOne: false
-            referencedRelation: "gl_expense_categories"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       gl_invoice_lines: {
         Row: {
@@ -1173,6 +1164,13 @@ export type Database = {
             referencedColumns: ["product_id"]
           },
           {
+            foreignKeyName: "fk_invoice_line_product"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_product_inventory_uuid"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "fk_product_id"
             columns: ["product_id"]
             isOneToOne: false
@@ -1199,6 +1197,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "product_sales"
             referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "fk_product_id"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_product_inventory_uuid"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "gl_invoice_lines_invoice_id_fkey"
@@ -1215,6 +1220,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "gl_invoice_lines_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "v_invoice_payment_days"
+            referencedColumns: ["invoice_id"]
+          },
+          {
             foreignKeyName: "gl_invoice_lines_product_id_fkey"
             columns: ["product_id"]
             isOneToOne: false
@@ -1241,6 +1253,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "product_sales"
             referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "gl_invoice_lines_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_product_inventory_uuid"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -1325,105 +1344,70 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "fk_account_id"
+            foreignKeyName: "gl_invoices_account_id_fkey"
             columns: ["account_id"]
             isOneToOne: false
             referencedRelation: "gl_account_invoice_relations"
             referencedColumns: ["account_id"]
           },
           {
-            foreignKeyName: "fk_account_id"
+            foreignKeyName: "gl_invoices_account_id_fkey"
             columns: ["account_id"]
             isOneToOne: false
             referencedRelation: "gl_accounts"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "fk_account_id"
+            foreignKeyName: "gl_invoices_account_id_fkey"
             columns: ["account_id"]
             isOneToOne: false
             referencedRelation: "mv_account_finance_summary"
             referencedColumns: ["account_id"]
           },
           {
-            foreignKeyName: "fk_account_id"
+            foreignKeyName: "gl_invoices_account_id_fkey"
             columns: ["account_id"]
             isOneToOne: false
             referencedRelation: "mv_customer_aging"
             referencedColumns: ["account_id"]
           },
           {
-            foreignKeyName: "fk_account_id"
+            foreignKeyName: "gl_invoices_account_id_fkey"
             columns: ["account_id"]
             isOneToOne: false
             referencedRelation: "mv_vendor_aging"
             referencedColumns: ["account_id"]
           },
           {
-            foreignKeyName: "fk_invoice_account"
+            foreignKeyName: "invoice_account_id_fkey"
             columns: ["account_id"]
             isOneToOne: false
             referencedRelation: "gl_account_invoice_relations"
             referencedColumns: ["account_id"]
           },
           {
-            foreignKeyName: "fk_invoice_account"
+            foreignKeyName: "invoice_account_id_fkey"
             columns: ["account_id"]
             isOneToOne: false
             referencedRelation: "gl_accounts"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "fk_invoice_account"
+            foreignKeyName: "invoice_account_id_fkey"
             columns: ["account_id"]
             isOneToOne: false
             referencedRelation: "mv_account_finance_summary"
             referencedColumns: ["account_id"]
           },
           {
-            foreignKeyName: "fk_invoice_account"
+            foreignKeyName: "invoice_account_id_fkey"
             columns: ["account_id"]
             isOneToOne: false
             referencedRelation: "mv_customer_aging"
             referencedColumns: ["account_id"]
           },
           {
-            foreignKeyName: "fk_invoice_account"
-            columns: ["account_id"]
-            isOneToOne: false
-            referencedRelation: "mv_vendor_aging"
-            referencedColumns: ["account_id"]
-          },
-          {
-            foreignKeyName: "gl_invoices_account_id_fkey"
-            columns: ["account_id"]
-            isOneToOne: false
-            referencedRelation: "gl_account_invoice_relations"
-            referencedColumns: ["account_id"]
-          },
-          {
-            foreignKeyName: "gl_invoices_account_id_fkey"
-            columns: ["account_id"]
-            isOneToOne: false
-            referencedRelation: "gl_accounts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "gl_invoices_account_id_fkey"
-            columns: ["account_id"]
-            isOneToOne: false
-            referencedRelation: "mv_account_finance_summary"
-            referencedColumns: ["account_id"]
-          },
-          {
-            foreignKeyName: "gl_invoices_account_id_fkey"
-            columns: ["account_id"]
-            isOneToOne: false
-            referencedRelation: "mv_customer_aging"
-            referencedColumns: ["account_id"]
-          },
-          {
-            foreignKeyName: "gl_invoices_account_id_fkey"
+            foreignKeyName: "invoice_account_id_fkey"
             columns: ["account_id"]
             isOneToOne: false
             referencedRelation: "mv_vendor_aging"
@@ -1485,60 +1469,6 @@ export type Database = {
           },
         ]
       }
-      gl_payments: {
-        Row: {
-          amount: number | null
-          created_at: string | null
-          glide_row_id: string | null
-          id: string
-          invoice_id: string | null
-          notes: string | null
-          payment_date: string | null
-          payment_method: string | null
-          reference_number: string | null
-          updated_at: string | null
-        }
-        Insert: {
-          amount?: number | null
-          created_at?: string | null
-          glide_row_id?: string | null
-          id?: string
-          invoice_id?: string | null
-          notes?: string | null
-          payment_date?: string | null
-          payment_method?: string | null
-          reference_number?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          amount?: number | null
-          created_at?: string | null
-          glide_row_id?: string | null
-          id?: string
-          invoice_id?: string | null
-          notes?: string | null
-          payment_date?: string | null
-          payment_method?: string | null
-          reference_number?: string | null
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "gl_payments_invoice_id_fkey"
-            columns: ["invoice_id"]
-            isOneToOne: false
-            referencedRelation: "gl_account_invoice_relations"
-            referencedColumns: ["invoice_id"]
-          },
-          {
-            foreignKeyName: "gl_payments_invoice_id_fkey"
-            columns: ["invoice_id"]
-            isOneToOne: false
-            referencedRelation: "gl_invoices"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       gl_pdf_generation_queue: {
         Row: {
           attempts: number | null
@@ -1590,11 +1520,9 @@ export type Database = {
           is_miscellaneous: boolean | null
           is_sample: boolean | null
           is_sample_or_fronted: boolean | null
-          name: string | null
           new_product_name: string | null
           new_product_sku: string | null
           po_date: string | null
-          price: number | null
           product_image1: string | null
           product_sku: string | null
           public_url_photo: string | null
@@ -1605,7 +1533,6 @@ export type Database = {
           rowid_accounts: string | null
           rowid_purchase_orders: string | null
           rowid_vendor_payments: string | null
-          sku: string | null
           supabase_pdf_url: string | null
           terms_for_fronted_product: string | null
           total_cost: number | null
@@ -1631,11 +1558,9 @@ export type Database = {
           is_miscellaneous?: boolean | null
           is_sample?: boolean | null
           is_sample_or_fronted?: boolean | null
-          name?: string | null
           new_product_name?: string | null
           new_product_sku?: string | null
           po_date?: string | null
-          price?: number | null
           product_image1?: string | null
           product_sku?: string | null
           public_url_photo?: string | null
@@ -1646,7 +1571,6 @@ export type Database = {
           rowid_accounts?: string | null
           rowid_purchase_orders?: string | null
           rowid_vendor_payments?: string | null
-          sku?: string | null
           supabase_pdf_url?: string | null
           terms_for_fronted_product?: string | null
           total_cost?: number | null
@@ -1672,11 +1596,9 @@ export type Database = {
           is_miscellaneous?: boolean | null
           is_sample?: boolean | null
           is_sample_or_fronted?: boolean | null
-          name?: string | null
           new_product_name?: string | null
           new_product_sku?: string | null
           po_date?: string | null
-          price?: number | null
           product_image1?: string | null
           product_sku?: string | null
           public_url_photo?: string | null
@@ -1687,7 +1609,6 @@ export type Database = {
           rowid_accounts?: string | null
           rowid_purchase_orders?: string | null
           rowid_vendor_payments?: string | null
-          sku?: string | null
           supabase_pdf_url?: string | null
           terms_for_fronted_product?: string | null
           total_cost?: number | null
@@ -1705,6 +1626,13 @@ export type Database = {
             columns: ["purchase_order_id"]
             isOneToOne: false
             referencedRelation: "gl_purchase_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gl_products_purchase_order_id_fkey"
+            columns: ["purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "gl_purchase_orders_extended"
             referencedColumns: ["id"]
           },
           {
@@ -1749,6 +1677,13 @@ export type Database = {
             referencedRelation: "gl_vendor_payments"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "gl_products_vendor_payment_id_fkey"
+            columns: ["vendor_payment_id"]
+            isOneToOne: false
+            referencedRelation: "gl_vendor_payments_extended"
+            referencedColumns: ["id"]
+          },
         ]
       }
       gl_purchase_orders: {
@@ -1762,6 +1697,7 @@ export type Database = {
           id: string
           payment_status: string | null
           po_date: string | null
+          po_number: string | null
           product_count: number | null
           purchase_order_uid: string | null
           rowid_accounts: string | null
@@ -1781,6 +1717,7 @@ export type Database = {
           id?: string
           payment_status?: string | null
           po_date?: string | null
+          po_number?: string | null
           product_count?: number | null
           purchase_order_uid?: string | null
           rowid_accounts?: string | null
@@ -1800,6 +1737,7 @@ export type Database = {
           id?: string
           payment_status?: string | null
           po_date?: string | null
+          po_number?: string | null
           product_count?: number | null
           purchase_order_uid?: string | null
           rowid_accounts?: string | null
@@ -1809,7 +1747,78 @@ export type Database = {
           updated_at?: string | null
           vendor_account_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "gl_purchase_orders_vendor_account_id_fkey"
+            columns: ["vendor_account_id"]
+            isOneToOne: false
+            referencedRelation: "gl_account_invoice_relations"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "gl_purchase_orders_vendor_account_id_fkey"
+            columns: ["vendor_account_id"]
+            isOneToOne: false
+            referencedRelation: "gl_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gl_purchase_orders_vendor_account_id_fkey"
+            columns: ["vendor_account_id"]
+            isOneToOne: false
+            referencedRelation: "mv_account_finance_summary"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "gl_purchase_orders_vendor_account_id_fkey"
+            columns: ["vendor_account_id"]
+            isOneToOne: false
+            referencedRelation: "mv_customer_aging"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "gl_purchase_orders_vendor_account_id_fkey"
+            columns: ["vendor_account_id"]
+            isOneToOne: false
+            referencedRelation: "mv_vendor_aging"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "purchase_order_account_id_fkey"
+            columns: ["vendor_account_id"]
+            isOneToOne: false
+            referencedRelation: "gl_account_invoice_relations"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "purchase_order_account_id_fkey"
+            columns: ["vendor_account_id"]
+            isOneToOne: false
+            referencedRelation: "gl_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_order_account_id_fkey"
+            columns: ["vendor_account_id"]
+            isOneToOne: false
+            referencedRelation: "mv_account_finance_summary"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "purchase_order_account_id_fkey"
+            columns: ["vendor_account_id"]
+            isOneToOne: false
+            referencedRelation: "mv_customer_aging"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "purchase_order_account_id_fkey"
+            columns: ["vendor_account_id"]
+            isOneToOne: false
+            referencedRelation: "mv_vendor_aging"
+            referencedColumns: ["account_id"]
+          },
+        ]
       }
       gl_shipping_records: {
         Row: {
@@ -1935,6 +1944,7 @@ export type Database = {
       gl_sync_logs: {
         Row: {
           completed_at: string | null
+          created_at: string
           id: string
           mapping_id: string | null
           message: string | null
@@ -1944,6 +1954,7 @@ export type Database = {
         }
         Insert: {
           completed_at?: string | null
+          created_at?: string
           id?: string
           mapping_id?: string | null
           message?: string | null
@@ -1953,6 +1964,7 @@ export type Database = {
         }
         Update: {
           completed_at?: string | null
+          created_at?: string
           id?: string
           mapping_id?: string | null
           message?: string | null
@@ -2016,41 +2028,6 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "fk_account_id"
-            columns: ["account_id"]
-            isOneToOne: false
-            referencedRelation: "gl_account_invoice_relations"
-            referencedColumns: ["account_id"]
-          },
-          {
-            foreignKeyName: "fk_account_id"
-            columns: ["account_id"]
-            isOneToOne: false
-            referencedRelation: "gl_accounts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_account_id"
-            columns: ["account_id"]
-            isOneToOne: false
-            referencedRelation: "mv_account_finance_summary"
-            referencedColumns: ["account_id"]
-          },
-          {
-            foreignKeyName: "fk_account_id"
-            columns: ["account_id"]
-            isOneToOne: false
-            referencedRelation: "mv_customer_aging"
-            referencedColumns: ["account_id"]
-          },
-          {
-            foreignKeyName: "fk_account_id"
-            columns: ["account_id"]
-            isOneToOne: false
-            referencedRelation: "mv_vendor_aging"
-            referencedColumns: ["account_id"]
-          },
-          {
             foreignKeyName: "fk_product_id"
             columns: ["product_id"]
             isOneToOne: false
@@ -2079,6 +2056,13 @@ export type Database = {
             referencedColumns: ["product_id"]
           },
           {
+            foreignKeyName: "fk_product_id"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_product_inventory_uuid"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "fk_purchase_order_id"
             columns: ["purchase_order_id"]
             isOneToOne: false
@@ -2086,53 +2070,46 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "fk_vendor_payments_account"
+            foreignKeyName: "fk_purchase_order_id"
+            columns: ["purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "gl_purchase_orders_extended"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gl_vendor_payments_account_id_fkey"
             columns: ["account_id"]
             isOneToOne: false
             referencedRelation: "gl_account_invoice_relations"
             referencedColumns: ["account_id"]
           },
           {
-            foreignKeyName: "fk_vendor_payments_account"
+            foreignKeyName: "gl_vendor_payments_account_id_fkey"
             columns: ["account_id"]
             isOneToOne: false
             referencedRelation: "gl_accounts"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "fk_vendor_payments_account"
+            foreignKeyName: "gl_vendor_payments_account_id_fkey"
             columns: ["account_id"]
             isOneToOne: false
             referencedRelation: "mv_account_finance_summary"
             referencedColumns: ["account_id"]
           },
           {
-            foreignKeyName: "fk_vendor_payments_account"
+            foreignKeyName: "gl_vendor_payments_account_id_fkey"
             columns: ["account_id"]
             isOneToOne: false
             referencedRelation: "mv_customer_aging"
             referencedColumns: ["account_id"]
           },
           {
-            foreignKeyName: "fk_vendor_payments_account"
+            foreignKeyName: "gl_vendor_payments_account_id_fkey"
             columns: ["account_id"]
             isOneToOne: false
             referencedRelation: "mv_vendor_aging"
             referencedColumns: ["account_id"]
-          },
-          {
-            foreignKeyName: "gl_vendor_payments_rowid_accounts_fkey"
-            columns: ["rowid_accounts"]
-            isOneToOne: false
-            referencedRelation: "gl_account_invoice_relations"
-            referencedColumns: ["account_glide_row_id"]
-          },
-          {
-            foreignKeyName: "gl_vendor_payments_rowid_accounts_fkey"
-            columns: ["rowid_accounts"]
-            isOneToOne: false
-            referencedRelation: "gl_accounts"
-            referencedColumns: ["glide_row_id"]
           },
         ]
       }
@@ -2248,6 +2225,13 @@ export type Database = {
             referencedRelation: "product_sales"
             referencedColumns: ["product_id"]
           },
+          {
+            foreignKeyName: "match_logs_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_product_inventory_uuid"
+            referencedColumns: ["id"]
+          },
         ]
       }
       messages: {
@@ -2302,6 +2286,7 @@ export type Database = {
           media_group_id: string | null
           media_group_sync: string | null
           media_type: string | null
+          media_urls: string | null
           message_caption_id: string | null
           message_data: Json | null
           message_date: string | null
@@ -2407,6 +2392,7 @@ export type Database = {
           media_group_id?: string | null
           media_group_sync?: string | null
           media_type?: string | null
+          media_urls?: string | null
           message_caption_id?: string | null
           message_data?: Json | null
           message_date?: string | null
@@ -2512,6 +2498,7 @@ export type Database = {
           media_group_id?: string | null
           media_group_sync?: string | null
           media_type?: string | null
+          media_urls?: string | null
           message_caption_id?: string | null
           message_data?: Json | null
           message_date?: string | null
@@ -2601,6 +2588,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "product_sales"
             referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "fk_product"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_product_inventory_uuid"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "messages_message_caption_id_fkey"
@@ -3299,6 +3293,180 @@ export type Database = {
           },
         ]
       }
+      gl_payments: {
+        Row: {
+          account_id: string | null
+          amount: number | null
+          created_at: string | null
+          date_of_payment: string | null
+          email_of_user: string | null
+          estimate_id: string | null
+          glide_row_id: string | null
+          id: string | null
+          invoice_id: string | null
+          notes: string | null
+          payment_amount: number | null
+          payment_date: string | null
+          payment_document_type: string | null
+          payment_method: string | null
+          payment_note: string | null
+          payment_number: string | null
+          payment_type: string | null
+          reference_number: string | null
+          rowid_accounts: string | null
+          rowid_invoices: string | null
+          source_type: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          account_id?: string | null
+          amount?: number | null
+          created_at?: string | null
+          date_of_payment?: string | null
+          email_of_user?: string | null
+          estimate_id?: string | null
+          glide_row_id?: string | null
+          id?: string | null
+          invoice_id?: string | null
+          notes?: string | null
+          payment_amount?: number | null
+          payment_date?: string | null
+          payment_document_type?: string | null
+          payment_method?: string | null
+          payment_note?: string | null
+          payment_number?: string | null
+          payment_type?: string | null
+          reference_number?: never
+          rowid_accounts?: string | null
+          rowid_invoices?: string | null
+          source_type?: never
+          updated_at?: string | null
+        }
+        Update: {
+          account_id?: string | null
+          amount?: number | null
+          created_at?: string | null
+          date_of_payment?: string | null
+          email_of_user?: string | null
+          estimate_id?: string | null
+          glide_row_id?: string | null
+          id?: string | null
+          invoice_id?: string | null
+          notes?: string | null
+          payment_amount?: number | null
+          payment_date?: string | null
+          payment_document_type?: string | null
+          payment_method?: string | null
+          payment_note?: string | null
+          payment_number?: string | null
+          payment_type?: string | null
+          reference_number?: never
+          rowid_accounts?: string | null
+          rowid_invoices?: string | null
+          source_type?: never
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_customer_payments_invoice"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "gl_account_invoice_relations"
+            referencedColumns: ["invoice_id"]
+          },
+          {
+            foreignKeyName: "fk_customer_payments_invoice"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "gl_invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_customer_payments_invoice"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "v_invoice_payment_days"
+            referencedColumns: ["invoice_id"]
+          },
+          {
+            foreignKeyName: "fk_invoice_id"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "gl_account_invoice_relations"
+            referencedColumns: ["invoice_id"]
+          },
+          {
+            foreignKeyName: "fk_invoice_id"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "gl_invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_invoice_id"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "v_invoice_payment_days"
+            referencedColumns: ["invoice_id"]
+          },
+          {
+            foreignKeyName: "fk_payment_invoice"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "gl_account_invoice_relations"
+            referencedColumns: ["invoice_id"]
+          },
+          {
+            foreignKeyName: "fk_payment_invoice"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "gl_invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_payment_invoice"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "v_invoice_payment_days"
+            referencedColumns: ["invoice_id"]
+          },
+          {
+            foreignKeyName: "gl_customer_payments_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "gl_account_invoice_relations"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "gl_customer_payments_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "gl_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gl_customer_payments_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "mv_account_finance_summary"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "gl_customer_payments_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "mv_customer_aging"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "gl_customer_payments_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "mv_vendor_aging"
+            referencedColumns: ["account_id"]
+          },
+        ]
+      }
       gl_product_sync_stats: {
         Row: {
           app_name: string | null
@@ -3326,6 +3494,222 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "gl_connections"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      gl_purchase_orders_extended: {
+        Row: {
+          account_id: string | null
+          balance: number | null
+          created_at: string | null
+          date: string | null
+          date_payment_date_mddyyyy: string | null
+          glide_pdf_url: string | null
+          glide_pdf_url_secondary: string | null
+          glide_row_id: string | null
+          id: string | null
+          number: string | null
+          payment_status: string | null
+          po_date: string | null
+          po_number: string | null
+          product_count: number | null
+          purchase_order_uid: string | null
+          rowid_accounts: string | null
+          status: string | null
+          supabase_pdf_url: string | null
+          total_amount: number | null
+          total_paid: number | null
+          updated_at: string | null
+          vendor_account_id: string | null
+        }
+        Insert: {
+          account_id?: string | null
+          balance?: number | null
+          created_at?: string | null
+          date?: string | null
+          date_payment_date_mddyyyy?: string | null
+          glide_pdf_url?: string | null
+          glide_pdf_url_secondary?: string | null
+          glide_row_id?: string | null
+          id?: string | null
+          number?: string | null
+          payment_status?: string | null
+          po_date?: string | null
+          po_number?: string | null
+          product_count?: number | null
+          purchase_order_uid?: string | null
+          rowid_accounts?: string | null
+          status?: string | null
+          supabase_pdf_url?: string | null
+          total_amount?: number | null
+          total_paid?: number | null
+          updated_at?: string | null
+          vendor_account_id?: string | null
+        }
+        Update: {
+          account_id?: string | null
+          balance?: number | null
+          created_at?: string | null
+          date?: string | null
+          date_payment_date_mddyyyy?: string | null
+          glide_pdf_url?: string | null
+          glide_pdf_url_secondary?: string | null
+          glide_row_id?: string | null
+          id?: string | null
+          number?: string | null
+          payment_status?: string | null
+          po_date?: string | null
+          po_number?: string | null
+          product_count?: number | null
+          purchase_order_uid?: string | null
+          rowid_accounts?: string | null
+          status?: string | null
+          supabase_pdf_url?: string | null
+          total_amount?: number | null
+          total_paid?: number | null
+          updated_at?: string | null
+          vendor_account_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gl_purchase_orders_vendor_account_id_fkey"
+            columns: ["vendor_account_id"]
+            isOneToOne: false
+            referencedRelation: "gl_account_invoice_relations"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "gl_purchase_orders_vendor_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "gl_account_invoice_relations"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "gl_purchase_orders_vendor_account_id_fkey"
+            columns: ["vendor_account_id"]
+            isOneToOne: false
+            referencedRelation: "gl_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gl_purchase_orders_vendor_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "gl_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gl_purchase_orders_vendor_account_id_fkey"
+            columns: ["vendor_account_id"]
+            isOneToOne: false
+            referencedRelation: "mv_account_finance_summary"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "gl_purchase_orders_vendor_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "mv_account_finance_summary"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "gl_purchase_orders_vendor_account_id_fkey"
+            columns: ["vendor_account_id"]
+            isOneToOne: false
+            referencedRelation: "mv_customer_aging"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "gl_purchase_orders_vendor_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "mv_customer_aging"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "gl_purchase_orders_vendor_account_id_fkey"
+            columns: ["vendor_account_id"]
+            isOneToOne: false
+            referencedRelation: "mv_vendor_aging"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "gl_purchase_orders_vendor_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "mv_vendor_aging"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "purchase_order_account_id_fkey"
+            columns: ["vendor_account_id"]
+            isOneToOne: false
+            referencedRelation: "gl_account_invoice_relations"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "purchase_order_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "gl_account_invoice_relations"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "purchase_order_account_id_fkey"
+            columns: ["vendor_account_id"]
+            isOneToOne: false
+            referencedRelation: "gl_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_order_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "gl_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_order_account_id_fkey"
+            columns: ["vendor_account_id"]
+            isOneToOne: false
+            referencedRelation: "mv_account_finance_summary"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "purchase_order_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "mv_account_finance_summary"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "purchase_order_account_id_fkey"
+            columns: ["vendor_account_id"]
+            isOneToOne: false
+            referencedRelation: "mv_customer_aging"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "purchase_order_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "mv_customer_aging"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "purchase_order_account_id_fkey"
+            columns: ["vendor_account_id"]
+            isOneToOne: false
+            referencedRelation: "mv_vendor_aging"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "purchase_order_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "mv_vendor_aging"
+            referencedColumns: ["account_id"]
           },
         ]
       }
@@ -3361,19 +3745,209 @@ export type Database = {
         }
         Relationships: []
       }
+      gl_unified_documents: {
+        Row: {
+          account_id: string | null
+          account_name: string | null
+          balance: number | null
+          client_type: string | null
+          created_at: string | null
+          document_date: string | null
+          document_number: string | null
+          document_type: string | null
+          glide_row_id: string | null
+          id: string | null
+          notes: string | null
+          payment_status: string | null
+          pdf_url: string | null
+          total_amount: number | null
+          total_paid: number | null
+          updated_at: string | null
+        }
+        Relationships: []
+      }
+      gl_vendor_payments_extended: {
+        Row: {
+          account_id: string | null
+          amount: number | null
+          created_at: string | null
+          date_of_payment: string | null
+          date_of_purchase_order: string | null
+          glide_row_id: string | null
+          id: string | null
+          notes: string | null
+          payment_amount: number | null
+          payment_date: string | null
+          payment_document_type: string | null
+          payment_note: string | null
+          product_id: string | null
+          purchase_order_id: string | null
+          rowid_accounts: string | null
+          rowid_products: string | null
+          rowid_purchase_orders: string | null
+          updated_at: string | null
+          vendor_note: string | null
+        }
+        Insert: {
+          account_id?: string | null
+          amount?: number | null
+          created_at?: string | null
+          date_of_payment?: string | null
+          date_of_purchase_order?: string | null
+          glide_row_id?: string | null
+          id?: string | null
+          notes?: string | null
+          payment_amount?: number | null
+          payment_date?: string | null
+          payment_document_type?: string | null
+          payment_note?: string | null
+          product_id?: string | null
+          purchase_order_id?: string | null
+          rowid_accounts?: string | null
+          rowid_products?: string | null
+          rowid_purchase_orders?: string | null
+          updated_at?: string | null
+          vendor_note?: string | null
+        }
+        Update: {
+          account_id?: string | null
+          amount?: number | null
+          created_at?: string | null
+          date_of_payment?: string | null
+          date_of_purchase_order?: string | null
+          glide_row_id?: string | null
+          id?: string | null
+          notes?: string | null
+          payment_amount?: number | null
+          payment_date?: string | null
+          payment_document_type?: string | null
+          payment_note?: string | null
+          product_id?: string | null
+          purchase_order_id?: string | null
+          rowid_accounts?: string | null
+          rowid_products?: string | null
+          rowid_purchase_orders?: string | null
+          updated_at?: string | null
+          vendor_note?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_product_id"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "gl_inventory_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_product_id"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "gl_products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_product_id"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "mv_product_sales_summary"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "fk_product_id"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "product_sales"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "fk_product_id"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_product_inventory_uuid"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_purchase_order_id"
+            columns: ["purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "gl_purchase_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_purchase_order_id"
+            columns: ["purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "gl_purchase_orders_extended"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gl_vendor_payments_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "gl_account_invoice_relations"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "gl_vendor_payments_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "gl_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gl_vendor_payments_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "mv_account_finance_summary"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "gl_vendor_payments_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "mv_customer_aging"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "gl_vendor_payments_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "mv_vendor_aging"
+            referencedColumns: ["account_id"]
+          },
+        ]
+      }
       mv_account_finance_summary: {
         Row: {
           account_id: string | null
           account_name: string | null
+          avg_days_to_pay: number | null
           client_type: string | null
+          invoices_count: number | null
+          net_account_balance: number | null
+          open_estimate_value: number | null
           open_invoices_count: number | null
           open_pos_count: number | null
           outstanding_customer_balance: number | null
           outstanding_vendor_balance: number | null
+          pos_count: number | null
+          total_credits_issued: number | null
+          total_estimate_value: number | null
           total_invoiced: number | null
           total_paid_vendor: number | null
           total_purchased: number | null
           total_received: number | null
+        }
+        Relationships: []
+      }
+      mv_category_sales_summary: {
+        Row: {
+          category: string | null
+          profit_margin_percentage: number | null
+          total_cost_of_goods_sold: number | null
+          total_profit: number | null
+          total_qty_sold: number | null
+          total_revenue: number | null
         }
         Relationships: []
       }
@@ -3444,6 +4018,161 @@ export type Database = {
         }
         Relationships: []
       }
+      v_invoice_payment_days: {
+        Row: {
+          customer_id: string | null
+          date_of_invoice: string | null
+          days_to_pay: number | null
+          invoice_id: string | null
+          last_payment_date: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gl_invoices_account_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "gl_account_invoice_relations"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "gl_invoices_account_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "gl_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gl_invoices_account_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "mv_account_finance_summary"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "gl_invoices_account_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "mv_customer_aging"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "gl_invoices_account_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "mv_vendor_aging"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "invoice_account_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "gl_account_invoice_relations"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "invoice_account_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "gl_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_account_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "mv_account_finance_summary"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "invoice_account_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "mv_customer_aging"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "invoice_account_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "mv_vendor_aging"
+            referencedColumns: ["account_id"]
+          },
+        ]
+      }
+      v_product_inventory_uuid: {
+        Row: {
+          category: string | null
+          days_in_inventory: number | null
+          days_since_last_sale: number | null
+          id: string | null
+          inventory_turnover_rate: number | null
+          margin_percentage: number | null
+          product_name: string | null
+          product_sku: string | null
+          public_url_image: string | null
+          public_url_video: string | null
+          purchase_order_id: string | null
+          qty_available: number | null
+          qty_committed: number | null
+          qty_in_stock: number | null
+          qty_sold: number | null
+          total_profit: number | null
+          total_revenue: number | null
+          vendor_account_id: string | null
+          vendor_name: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gl_products_purchase_order_id_fkey"
+            columns: ["purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "gl_purchase_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gl_products_purchase_order_id_fkey"
+            columns: ["purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "gl_purchase_orders_extended"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gl_products_vendor_account_id_fkey"
+            columns: ["vendor_account_id"]
+            isOneToOne: false
+            referencedRelation: "gl_account_invoice_relations"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "gl_products_vendor_account_id_fkey"
+            columns: ["vendor_account_id"]
+            isOneToOne: false
+            referencedRelation: "gl_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gl_products_vendor_account_id_fkey"
+            columns: ["vendor_account_id"]
+            isOneToOne: false
+            referencedRelation: "mv_account_finance_summary"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "gl_products_vendor_account_id_fkey"
+            columns: ["vendor_account_id"]
+            isOneToOne: false
+            referencedRelation: "mv_customer_aging"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "gl_products_vendor_account_id_fkey"
+            columns: ["vendor_account_id"]
+            isOneToOne: false
+            referencedRelation: "mv_vendor_aging"
+            referencedColumns: ["account_id"]
+          },
+        ]
+      }
     }
     Functions: {
       audit_glide_uuid_relationships: {
@@ -3456,10 +4185,6 @@ export type Database = {
           missing_rowid_count: number
           total_records: number
         }[]
-      }
-      binary_quantize: {
-        Args: { "": string } | { "": unknown }
-        Returns: unknown
       }
       create_invoice_from_estimate: {
         Args: { estimate_id: string }
@@ -3516,6 +4241,12 @@ export type Database = {
           confidence: number
         }[]
       }
+      get_public_tables: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          table_name: string
+        }[]
+      }
       gl_find_dual_id_inconsistencies: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -3549,15 +4280,8 @@ export type Database = {
         }[]
       }
       gl_get_business_stats: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          total_revenue: number
-          total_expenses: number
-          profit: number
-          customer_count: number
-          vendor_count: number
-          invoice_count: number
-        }[]
+        Args: { start_date?: string; end_date?: string }
+        Returns: Json
       }
       gl_get_estimate_metrics: {
         Args: Record<PropertyKey, never>
@@ -3591,6 +4315,14 @@ export type Database = {
           total: number
         }[]
       }
+      gl_get_financial_metrics: {
+        Args: {
+          start_date?: string
+          end_date?: string
+          compare_with_previous?: boolean
+        }
+        Returns: Json
+      }
       gl_get_invoice_metrics: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -3605,13 +4337,8 @@ export type Database = {
         }[]
       }
       gl_get_monthly_revenue: {
-        Args: { months_back?: number }
-        Returns: {
-          month: string
-          revenue: number
-          expenses: number
-          profit: number
-        }[]
+        Args: { months_back?: number; start_date?: string; end_date?: string }
+        Returns: Json
       }
       gl_get_payment_metrics: {
         Args: { days_back?: number }
@@ -3622,68 +4349,21 @@ export type Database = {
           net_amount: number
         }[]
       }
+      gl_get_quick_contacts: {
+        Args:
+          | { contact_limit?: number }
+          | { limit_count?: number; start_date?: string; end_date?: string }
+        Returns: Json
+      }
       gl_get_recent_transactions: {
-        Args: { days_back?: number; limit_count?: number }
-        Returns: {
-          id: string
-          transaction_date: string
-          description: string
-          account_name: string
-          amount: number
-          transaction_type: string
-        }[]
-      }
-      gtrgm_compress: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      gtrgm_decompress: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      gtrgm_in: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      gtrgm_options: {
-        Args: { "": unknown }
-        Returns: undefined
-      }
-      gtrgm_out: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      halfvec_avg: {
-        Args: { "": number[] }
-        Returns: unknown
-      }
-      halfvec_out: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      halfvec_send: {
-        Args: { "": unknown }
-        Returns: string
-      }
-      halfvec_typmod_in: {
-        Args: { "": unknown[] }
-        Returns: number
-      }
-      hnsw_bit_support: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      hnsw_halfvec_support: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      hnsw_sparsevec_support: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      hnswhandler: {
-        Args: { "": unknown }
-        Returns: unknown
+        Args: {
+          days_back?: number
+          limit_count?: number
+          start_date?: string
+          end_date?: string
+          transaction_type?: string
+        }
+        Returns: Json
       }
       identify_orphaned_records: {
         Args: Record<PropertyKey, never>
@@ -3693,26 +4373,6 @@ export type Database = {
           orphaned_count: number
           sample_rowids: string[]
         }[]
-      }
-      ivfflat_bit_support: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      ivfflat_halfvec_support: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      ivfflathandler: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      l2_norm: {
-        Args: { "": unknown } | { "": unknown }
-        Returns: number
-      }
-      l2_normalize: {
-        Args: { "": string } | { "": unknown } | { "": unknown }
-        Returns: string
       }
       log_pdf_generation_failure: {
         Args: {
@@ -3726,15 +4386,6 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
-      match_documents: {
-        Args: { query_embedding: string; match_count?: number; filter?: Json }
-        Returns: {
-          id: number
-          content: string
-          metadata: Json
-          similarity: number
-        }[]
-      }
       refresh_financial_views: {
         Args: Record<PropertyKey, never>
         Returns: undefined
@@ -3743,40 +4394,8 @@ export type Database = {
         Args: { p_document_type: string; p_document_id: string }
         Returns: undefined
       }
-      run_sync_media_group_captions: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
-      set_limit: {
-        Args: { "": number }
-        Returns: number
-      }
-      show_limit: {
-        Args: Record<PropertyKey, never>
-        Returns: number
-      }
-      show_trgm: {
-        Args: { "": string }
-        Returns: string[]
-      }
-      sparsevec_out: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      sparsevec_send: {
-        Args: { "": unknown }
-        Returns: string
-      }
-      sparsevec_typmod_in: {
-        Args: { "": unknown[] }
-        Returns: number
-      }
       standardize_existing_pdf_urls: {
         Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
-      sync_media_group_captions: {
-        Args: { p_media_group_id: string }
         Returns: undefined
       }
       update_account_customer_balance: {
@@ -3809,7 +4428,6 @@ export type Database = {
           p_old_analyzed_content?: Json
           p_processing_error?: string
           p_processing_state?: string
-          p_public_url?: string
           p_storage_path?: string
           p_telegram_message_id?: number
           p_user_id?: number
@@ -3833,29 +4451,13 @@ export type Database = {
           updated: boolean
         }[]
       }
-      vector_avg: {
-        Args: { "": number[] }
-        Returns: string
+      x_run_sync_media_group_captions: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
       }
-      vector_dims: {
-        Args: { "": string } | { "": unknown }
-        Returns: number
-      }
-      vector_norm: {
-        Args: { "": string }
-        Returns: number
-      }
-      vector_out: {
-        Args: { "": string }
-        Returns: unknown
-      }
-      vector_send: {
-        Args: { "": string }
-        Returns: string
-      }
-      vector_typmod_in: {
-        Args: { "": unknown[] }
-        Returns: number
+      x_sync_media_group_captions: {
+        Args: { p_media_group_id: string }
+        Returns: undefined
       }
     }
     Enums: {
