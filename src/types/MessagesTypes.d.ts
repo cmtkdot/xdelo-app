@@ -89,6 +89,7 @@ export interface Message {
   
   // UI-specific flags to track state in components
   isGroupThumbnail?: boolean;
+  media_group_sync?: string | boolean;
 }
 
 export interface MessageApiResponse {
