@@ -1,103 +1,81 @@
-
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Message } from '@/types';
 import { useGalleryData } from './publicGallery/useGalleryData';
 import { useGalleryFilters } from './publicGallery/useGalleryFilters';
-import { useGalleryPagination } from './publicGallery/useGalleryPagination';
+import { ProcessingState } from '@/types/api/ProcessingState';
 
 interface UsePublicGalleryProps {
   itemsPerPage?: number;
-  initialFilter?: string;
-  initialVendorFilter?: string[];
-  initialDateField?: 'purchase_date' | 'created_at';
-  initialSortOrder?: 'asc' | 'desc';
 }
 
 export function usePublicGallery({
-  itemsPerPage = 16,
-  initialFilter = 'all',
-  initialVendorFilter = [],
-  initialDateField = 'created_at',
-  initialSortOrder = 'desc'
+  itemsPerPage = 16
 }: UsePublicGalleryProps = {}) {
-  const [vendorFilter, setVendorFilter] = useState<string[]>(initialVendorFilter);
-  const [dateField, setDateField] = useState<'purchase_date' | 'created_at'>(initialDateField);
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>(initialSortOrder);
+  const [filter, setFilter] = useState<string>('');
+  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [vendorFilter, setVendorFilter] = useState<string[]>([]);
+  const [processingState, setProcessingState] = useState<ProcessingState | ''>('');
+  const [dateRange, setDateRange] = useState<{ from: string; to: string }>({ from: '', to: '' });
+  const [dateField, setDateField] = useState<'purchase_date' | 'created_at'>('created_at');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
-  // Use our separate hooks
-  const { 
-    messages, 
-    isLoading, 
-    isLoadingMore, 
-    hasMoreItems, 
-    vendors, 
-    fetchMessages, 
-    deleteMessage 
+  const {
+    messages,
+    vendors,
+    isLoading,
+    isLoadingMore,
+    hasMoreItems,
+    currentPage,
+    setPage,
+    loadMore,
+    fetchMessages,
+    deleteMessage
   } = useGalleryData({
     itemsPerPage,
     vendorFilter,
-    dateField,
-    sortOrder
-  });
-
-  const {
-    filter,
-    setFilter,
     searchTerm,
-    setSearchTerm,
-    filteredMessages,
-    mediaGroups
-  } = useGalleryFilters({
-    messages,
-    initialFilter
+    dateRange,
+    dateField,
+    sortOrder,
+    processingState: processingState as ProcessingState,
   });
 
-  const {
-    currentPage,
-    loadMore,
-    resetPagination
-  } = useGalleryPagination({
-    fetchMessages
+  const { filteredMessages, mediaGroups } = useGalleryFilters({
+    messages,
+    filter,
   });
 
   // Reset page when filter changes
   useEffect(() => {
-    resetPagination();
-  }, [filter, vendorFilter, dateField, sortOrder, resetPagination]);
+    setPage(1);
+  }, [filter, vendorFilter, dateRange, dateField, sortOrder, setPage]);
 
   return {
-    // Data
     messages,
     filteredMessages,
     mediaGroups,
-    vendors,
-    
-    // Loading states
-    isLoading,
-    isLoadingMore,
-    hasMoreItems,
-    
-    // Filter controls
     filter,
     setFilter,
-    searchTerm,
+    searchTerm, 
     setSearchTerm,
     vendorFilter,
     setVendorFilter,
+    vendors,
+    dateRange,
+    setDateRange,
     dateField,
     setDateField,
     sortOrder,
     setSortOrder,
-    
-    // Pagination
+    processingState,
+    setProcessingState,
+    isLoading,
+    isLoadingMore,
+    hasMoreItems,
     currentPage,
     loadMore,
-    
-    // Operations
+    setPage,
     fetchMessages,
     deleteMessage
   };
 }
-
-// Missing import
-import { useState } from 'react';

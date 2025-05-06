@@ -1,25 +1,14 @@
-import React from "react";
 import {
-  LayoutDashboard,
-  MessageSquare,
-  Package,
-  // Settings removed
-  Music,
-  GalleryHorizontal,
-  Users,
-  GitPullRequest,
-  PanelLeft,
-  PanelTopOpen,
-  FileText,
-  Home,
-  ImageIcon,
-  Table,
-  LucideIcon,
   Database,
-  Tags,
+  FileText,
+  GalleryHorizontal,
+  ImageIcon,
+  LayoutDashboard,
+  LucideIcon,
+  MessageSquare,
+  PanelLeft
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import React from "react";
 
 interface NavItem {
   name: string;
@@ -80,25 +69,6 @@ export const NavItems: React.FC<NavItemsProps> = ({
       isActive: currentPath === "/database",
     },
     {
-      title: "Products",
-      href: "/products",
-      icon: <Package size={20} />,
-      isActive: currentPath === "/products",
-    },
-    {
-      title: "Product Matching",
-      href: "/product-matching",
-      icon: <Tags size={20} />,
-      isActive: currentPath === "/product-matching",
-    },
-    {
-      title: "Table Demo",
-      href: "/table-demo",
-      icon: <Table size={20} />,
-      isActive: currentPath === "/table-demo",
-    },
-
-    {
       title: "AI Chat",
       href: "/ai-chat",
       icon: <FileText size={20} />,
@@ -113,11 +83,10 @@ export const NavItems: React.FC<NavItemsProps> = ({
         <button
           key={item.href}
           onClick={() => onNavigate(item.href)}
-          className={`w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors ${
-            item.isActive
-              ? "bg-primary text-primary-foreground"
-              : "hover:bg-muted"
-          }`}
+          className={`w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors ${item.isActive
+            ? "bg-primary text-primary-foreground"
+            : "hover:bg-muted"
+            }`}
         >
           {item.icon}
           {(isExpanded || isMobile) && <span>{item.title}</span>}

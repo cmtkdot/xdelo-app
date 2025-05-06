@@ -1,14 +1,19 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
-import { Message } from '@/types/entities/Message'
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
-import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { FileText, Hash, MessageSquare, Download, Trash2, ChevronLeft, ChevronRight, ShoppingCart } from 'lucide-react'
-import { format } from 'date-fns'
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { ErrorBoundary } from '@/components/ErrorBoundary/ErrorBoundary'
 import { EnhancedMediaDisplay } from '@/components/media-viewer/shared/EnhancedMediaDisplay'
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { Separator } from "@/components/ui/separator"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Message } from '@/types/entities/Message'
+import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
+import { format } from 'date-fns'
+import { Calendar, ChevronLeft, ChevronRight, Clipboard, Download, FileText, Info, MessageSquare, ShoppingBag, Trash2, X } from 'lucide-react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { toast } from 'sonner'
 
 // Component props interface
 export interface PublicEnhancedMediaDetailProps {
@@ -32,34 +37,37 @@ interface MediaThumbnailsProps {
 
 const MediaThumbnails = React.memo(({ items, currentIndex, onSelect }: MediaThumbnailsProps) => {
   return (
-    <div className="flex overflow-x-auto overscroll-x-contain gap-1 justify-center p-1 w-full sm:gap-2 scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-transparent touch-pan-x">
+    <div className="flex items-center justify-start w-full gap-1 p-1 overflow-x-auto scrollbar-thin scrollbar-track-transparent scrollbar-thumb-muted-foreground/30 touch-pan-x sm:gap-2">
       {items.map((item, idx) => {
         const isActive = idx === currentIndex;
+        const hasImage = Boolean(item.public_url && item.mime_type?.startsWith('image/'));
+        
         return (
           <button
             key={item.id}
-            className={`flex-shrink-0 w-12 h-12 sm:w-14 sm:h-14 relative rounded-md overflow-hidden border-2 transition-all ${
-              isActive ? 'border-primary scale-105 shadow-md z-10' : 'border-transparent opacity-80 hover:opacity-100'
-            }`}
+            className={`relative flex-shrink-0 w-14 h-14 sm:w-16 sm:h-16 rounded-md overflow-hidden border-2 transition-all
+              ${isActive ? 'border-primary scale-105 shadow-md z-10' : 'border-transparent opacity-80 hover:opacity-100'}`}
             onClick={() => onSelect(idx)}
             aria-label={`View media ${idx + 1} of ${items.length}`}
             aria-current={isActive ? 'true' : 'false'}
           >
-            <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
-              {/* Simple thumbnail component optimized for performance */}
-              <div className="w-full h-full">
+            <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+              {hasImage ? (
                 <img
-                  src={item.public_url || '/placeholder-image.svg'}
-                  alt={`Thumbnail ${idx + 1}`}
-                  className="w-full h-full object-cover"
+                  src={item.public_url}
+                  alt={item.caption || `Media ${idx + 1}`}
+                  className="object-cover w-full h-full"
                   loading="lazy"
                 />
-              </div>
-            </div>
-            <div className="absolute bottom-0 left-0 right-0 flex justify-center">
-              <span className="text-[10px] bg-black/60 text-white px-1 rounded-sm">
+              ) : (
+                <div className="flex items-center justify-center w-full h-full bg-muted-foreground/10">
+                  <FileText className="w-6 h-6 text-muted-foreground/50" />
+                </div>
+              )}
+              
+              <div className="absolute bottom-0 left-0 right-0 flex items-center justify-center p-0.5 text-[10px] font-medium bg-black/50 text-white">
                 {idx + 1}
-              </span>
+              </div>
             </div>
           </button>
         );
@@ -70,6 +78,7 @@ const MediaThumbnails = React.memo(({ items, currentIndex, onSelect }: MediaThum
 
 MediaThumbnails.displayName = 'MediaThumbnails';
 
+// Main component
 export function PublicEnhancedMediaDetail({
   isOpen,
   onClose,
@@ -81,111 +90,131 @@ export function PublicEnhancedMediaDetail({
   hasNext = false,
   onDelete,
 }: PublicEnhancedMediaDetailProps) {
-  // State management
-  const [currentIndex, setCurrentIndex] = useState(initialIndex || 0);
+  // Internal state
+  const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [activeTab, setActiveTab] = useState<string>("media");
 
-  // Get the current message from the group based on the index
-  const currentMessage = useMemo(() => {
-    if (currentGroup && currentGroup.length > 0) {
-      return currentGroup[currentIndex] || currentGroup[0];
+  // Update current index if initialIndex prop changes
+  useEffect(() => {
+    setCurrentIndex(initialIndex);
+  }, [initialIndex]);
+
+  // Ensure currentIndex is within bounds when currentGroup changes
+  useEffect(() => {
+    if (currentIndex >= currentGroup.length) {
+      setCurrentIndex(Math.max(0, currentGroup.length - 1));
     }
-    return null;
   }, [currentGroup, currentIndex]);
 
-  // Reset current index when the group changes
-  useEffect(() => {
-    if (initialIndex !== undefined && initialIndex >= 0 && initialIndex < currentGroup.length) {
-      setCurrentIndex(initialIndex);
-    } else {
-      setCurrentIndex(0);
-    }
-  }, [currentGroup, initialIndex]);
+  // Get current message
+  const currentMessage = useMemo(() => {
+    return currentGroup[currentIndex] || null;
+  }, [currentGroup, currentIndex]);
 
-  // Navigation logic
-  const canNavigatePrev = useMemo(() => {
-    // Either we have previous media in this group, or we have an onPrevious handler for inter-group navigation
-    return (currentIndex > 0) || (currentIndex === 0 && !!onPrevious && hasPrevious);
-  }, [currentIndex, onPrevious, hasPrevious]);
-
+  // Navigation flags
   const canNavigateNext = useMemo(() => {
-    // Either we have more media in this group, or we have an onNext handler for inter-group navigation
-    return (currentIndex < currentGroup.length - 1) || (currentIndex === currentGroup.length - 1 && !!onNext && hasNext);
-  }, [currentIndex, currentGroup, onNext, hasNext]);
+    return currentIndex < currentGroup.length - 1 || hasNext;
+  }, [currentIndex, currentGroup, hasNext]);
 
-  // Handle previous/next navigation with keyboard and touch events
-  const handlePrevious = useCallback(() => {
-    if (currentIndex > 0) {
-      // Navigate within this group
-      setCurrentIndex(prevIndex => prevIndex - 1);
-    } else if (onPrevious && hasPrevious) {
-      // Navigate to previous group
-      onPrevious();
-    }
-  }, [currentIndex, onPrevious, hasPrevious]);
+  const canNavigatePrev = useMemo(() => {
+    return currentIndex > 0 || hasPrevious;
+  }, [currentIndex, hasPrevious]);
 
+  // Handle next/previous navigation
   const handleNext = useCallback(() => {
     if (currentIndex < currentGroup.length - 1) {
-      // Navigate within this group
       setCurrentIndex(prevIndex => prevIndex + 1);
-    } else if (onNext && hasNext) {
-      // Navigate to next group
+    } else if (onNext) {
       onNext();
     }
-  }, [currentIndex, currentGroup, onNext, hasNext]);
+  }, [currentIndex, currentGroup, onNext]);
 
-  // Keyboard navigation handler
+  const handlePrevious = useCallback(() => {
+    if (currentIndex > 0) {
+      setCurrentIndex(prevIndex => prevIndex - 1);
+    } else if (onPrevious) {
+      onPrevious();
+    }
+  }, [currentIndex, onPrevious]);
+
+  // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!isOpen) return;
-      
-      if (e.key === 'ArrowLeft' && canNavigatePrev) {
-        handlePrevious();
-        e.preventDefault();
-      } else if (e.key === 'ArrowRight' && canNavigateNext) {
-        handleNext();
-        e.preventDefault();
-      } else if (e.key === 'Escape') {
-        onClose();
-        e.preventDefault();
+
+      switch (e.key) {
+        case 'ArrowRight':
+          if (canNavigateNext) handleNext();
+          break;
+        case 'ArrowLeft':
+          if (canNavigatePrev) handlePrevious();
+          break;
+        case 'Escape':
+          onClose();
+          break;
+        default:
+          break;
       }
     };
-    
+
     window.addEventListener('keydown', handleKeyDown);
-    
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [isOpen, canNavigatePrev, canNavigateNext, handlePrevious, handleNext, onClose]);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, canNavigateNext, canNavigatePrev, handleNext, handlePrevious, onClose]);
 
-  // Download the current media
-  const handleDownload = useCallback(() => {
-    if (!currentMessage || !currentMessage.public_url) return;
-    
-    const a = document.createElement('a');
-    a.href = currentMessage.public_url;
-    const extension = currentMessage.mime_type ? 
-      `.${currentMessage.mime_type.split('/')[1] || 'jpg'}` : '.jpg';
-    a.download = `${currentMessage.file_unique_id || 'media'}${extension}`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  }, [currentMessage]);
-
-  // Delete the current media
+  // Handlers
   const handleDeleteClick = useCallback(() => {
     setIsDeleteDialogOpen(true);
   }, []);
 
+  const handleDownload = useCallback(() => {
+    if (!currentMessage?.public_url) return;
+    
+    try {
+      const link = document.createElement('a');
+      link.href = currentMessage.public_url;
+      // Extract filename from URL or use message ID
+      const fileName = currentMessage.public_url.split('/').pop() || 
+                       `media-${currentMessage.id}.${currentMessage.mime_type?.split('/')[1] || 'file'}`;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error('Failed to download file:', error);
+      toast.error('Failed to download file');
+    }
+  }, [currentMessage]);
+
+  const handleCopyDetails = useCallback(() => {
+    if (!currentMessage) return;
+
+    try {
+      const details = [
+        currentMessage.product_name && `Product: ${currentMessage.product_name}`,
+        currentMessage.product_code && `Code: ${currentMessage.product_code}`,
+        currentMessage.vendor_uid && `Vendor: ${currentMessage.vendor_uid}`,
+        currentMessage.purchase_date && `Purchase: ${format(new Date(currentMessage.purchase_date), 'PP')}`,
+        currentMessage.caption && `\n${currentMessage.caption}`
+      ].filter(Boolean).join('\n');
+
+      navigator.clipboard.writeText(details);
+      toast.success('Details copied to clipboard');
+    } catch (error) {
+      console.error('Failed to copy details:', error);
+      toast.error('Failed to copy details');
+    }
+  }, [currentMessage]);
+
   const handleDelete = useCallback(async () => {
     if (!currentMessage || !onDelete) return;
-    
+
     try {
       setIsDeleting(true);
       await onDelete(currentMessage.id);
       setIsDeleteDialogOpen(false);
-      
+
       // If we deleted the last item in the group, close the dialog
       if (currentGroup.length === 1) {
         onClose();
@@ -199,6 +228,7 @@ export function PublicEnhancedMediaDetail({
       }
     } catch (error) {
       console.error('Failed to delete media:', error);
+      toast.error('Failed to delete media');
     } finally {
       setIsDeleting(false);
     }
@@ -206,251 +236,320 @@ export function PublicEnhancedMediaDetail({
 
   // If no message is available, show nothing
   if (!currentMessage) return null;
-  
-  // Get analyzed content values safely
-  const vendorName = currentMessage.analyzed_content?.vendor_uid || '';
-  const purchasePrice = currentMessage.analyzed_content?.unit_price || 
-                       currentMessage.analyzed_content?.total_price || '';
-  const purchaseDate = currentMessage.analyzed_content?.purchase_date || '';
-  
+
   return (
     <>
       <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-        {/* Use the shadcn Dialog with a modern dark overlay */}
-        <DialogContent className="sm:max-w-[95vw] md:max-w-6xl p-0 gap-0 max-h-[90vh] w-full h-full overflow-hidden">
-          <DialogTitle>
-            <VisuallyHidden>Media Details</VisuallyHidden>
-          </DialogTitle>
-          {/* Responsive layout: stacked on mobile, side-by-side on desktop */}
-          <div className="grid grid-cols-1 md:grid-cols-2 h-full max-h-[90vh] overflow-hidden">
-            {/* Details Panel - Full width on mobile, left column on desktop */}
-            <div className="bg-background/95 backdrop-blur-md overflow-y-auto order-2 md:order-1 max-h-[30vh] md:max-h-[90vh] border-t md:border-t-0 md:border-r">
-              <div className="p-2 sm:p-4 border-b flex justify-between items-center">
-                <div className="flex gap-2 items-center">
-                  <h2 className="text-base sm:text-lg font-medium">Media Details</h2>
-                  {currentMessage.product_name && (
-                    <span className="text-sm text-muted-foreground">
-                      {currentMessage.product_name}
-                    </span>
-                  )}
-                </div>
-                
-                {onDelete && (
-                  <Button
-                    variant="ghost" 
-                    size="sm"
-                    onClick={handleDeleteClick}
-                    className="flex items-center gap-1 text-destructive h-8 w-8 sm:w-auto sm:h-9 sm:px-3"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline text-xs sm:text-sm">Delete</span>
-                  </Button>
-                )}
-              </div>
+        <DialogContent className="sm:max-w-[calc(100vw-32px)] md:max-w-5xl p-0 gap-0 max-h-[85vh] overflow-hidden">
+          <div className="flex flex-col h-full md:flex-row md:min-h-[600px]">
+            {/* Media container */}
+            <div className="relative flex flex-col flex-1 md:w-3/5 md:h-[85vh] overflow-hidden border-b md:border-b-0 md:border-r">
+              {/* Close button in top-right corner */}
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="absolute right-2 top-2 z-30 w-8 h-8 rounded-full bg-background/50 hover:bg-background/70"
+                onClick={onClose}
+                aria-label="Close"
+              >
+                <X className="w-4 h-4" />
+              </Button>
               
-              {/* Media display - Full width on mobile, right column on desktop */}
-              <div className="flex-1 flex flex-col overflow-hidden order-1 md:order-2">
-                {/* Media navigation controls */}
+              {/* Media display area */}
+              <div className="relative flex items-center justify-center flex-1 bg-black/90">
+                {/* Navigation buttons */}
                 {canNavigatePrev && (
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="absolute left-2 top-1/2 transform -translate-y-1/2 z-20 rounded-full bg-background/50 hover:bg-background/70 transition-colors touch-action-none"
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute z-20 transition-colors transform -translate-y-1/2 rounded-full left-2 top-1/2 bg-background/50 hover:bg-background/70"
                     onClick={handlePrevious}
                     aria-label="Previous media"
                   >
-                    <ChevronLeft className="h-6 w-6 sm:h-8 sm:w-8" />
+                    <ChevronLeft className="w-5 h-5 sm:h-6 sm:w-6" />
                   </Button>
                 )}
-                
+
                 {canNavigateNext && (
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="absolute right-2 top-1/2 transform -translate-y-1/2 z-20 rounded-full bg-background/50 hover:bg-background/70 transition-colors touch-action-none"
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute z-20 transition-colors transform -translate-y-1/2 rounded-full right-2 top-1/2 bg-background/50 hover:bg-background/70"
                     onClick={handleNext}
                     aria-label="Next media"
                   >
-                    <ChevronRight className="h-6 w-6 sm:h-8 sm:w-8" />
+                    <ChevronRight className="w-5 h-5 sm:h-6 sm:w-6" />
                   </Button>
                 )}
-                <div className="relative flex-1 flex items-center justify-center bg-black/90 p-1 sm:p-2 md:p-4 overflow-hidden">
+
+                {/* Media display with error boundary */}
+                <ErrorBoundary
+                  fallback={
+                    <div className="flex flex-col items-center justify-center w-full h-full">
+                      <div className="p-4 rounded-md bg-muted/20">
+                        <span className="block mb-2 text-center">⚠️</span>
+                        <p className="text-sm text-center text-muted-foreground">
+                          Media could not be displayed
+                        </p>
+                      </div>
+                    </div>
+                  }
+                >
+                  <div className="w-full h-full flex items-center justify-center p-4">
+                    <EnhancedMediaDisplay
+                      message={currentMessage}
+                      className="max-w-full max-h-full rounded-md object-contain"
+                    />
+                  </div>
+                </ErrorBoundary>
+              </div>
+
+              {/* Thumbnails for media groups */}
+              {currentGroup.length > 1 && (
+                <div className="p-2 border-t bg-background/95 backdrop-blur-sm shrink-0">
                   <ErrorBoundary
                     fallback={
-                      <div className="flex flex-col items-center justify-center h-full w-full">
-                        <div className="bg-muted/20 p-4 rounded-md">
-                          <span className="block text-center mb-2">⚠️</span>
-                          <p className="text-sm text-muted-foreground text-center">
-                            {`Media ${currentIndex + 1} of ${currentGroup.length} could not be displayed`}
-                          </p>
-                        </div>
+                      <div className="p-2 text-xs text-center text-muted-foreground">
+                        {`${currentIndex + 1} of ${currentGroup.length}`}
                       </div>
                     }
                   >
-                    <EnhancedMediaDisplay 
-                      message={currentMessage}
-                      className="w-full h-full rounded-md"
+                    <MediaThumbnails
+                      items={currentGroup}
+                      currentIndex={currentIndex}
+                      onSelect={setCurrentIndex}
                     />
                   </ErrorBoundary>
                 </div>
-                
-                {/* Thumbnails for media groups */}
-                {currentGroup.length > 1 && (
-                  <div className="p-1 sm:p-2 bg-background/30 backdrop-blur-sm border-t border-border/10 shrink-0">
-                    <ErrorBoundary
-                      fallback={
-                        <div className="text-center text-xs text-muted-foreground p-2">
-                          {`${currentIndex + 1} of ${currentGroup.length}`}
-                        </div>
-                      }
-                    >
-                      {/* Thumbnail navigation - optimized to minimize renders */}
-                      <MediaThumbnails 
-                        items={currentGroup}
-                        currentIndex={currentIndex}
-                        onSelect={setCurrentIndex}
-                      />
-                    </ErrorBoundary>
-                  </div>
-                )}
-              </div>
+              )}
             </div>
-            
-            {/* Metadata Section */}
-            <div className="p-2 sm:p-4 space-y-3 sm:space-y-4">
-              {/* Caption section with card styling */}
-              {currentMessage.caption && (
-                <div className="bg-muted/40 rounded-lg p-3 border border-border/5">
-                  <h3 className="text-sm font-medium mb-2 flex items-center gap-1.5">
-                    <MessageSquare className="h-3.5 w-3.5 text-primary/70" />
-                    <span>Caption</span>
-                  </h3>
-                  <p className="text-sm whitespace-pre-wrap">{currentMessage.caption}</p>
-                </div>
-              )}
-              
-              {/* Product information with card styling */}
-              {(
-                currentMessage.product_name || 
-                vendorName ||
-                purchasePrice ||
-                purchaseDate
-              ) && (
-                <div className="bg-muted/40 rounded-lg p-3 border border-border/5">
-                  <h3 className="text-sm font-medium mb-2 flex items-center gap-1.5">
-                    <ShoppingCart className="h-3.5 w-3.5 text-primary/70" />
-                    <span>Product Info</span>
-                  </h3>
-                  <div className="space-y-2">
-                    {currentMessage.product_name && (
-                      <div className="flex justify-between items-center text-sm">
-                        <span className="text-muted-foreground">Product</span>
-                        <span className="font-medium">{currentMessage.product_name}</span>
-                      </div>
-                    )}
-                    
-                    {vendorName && (
-                      <div className="flex justify-between items-center text-sm">
-                        <span className="text-muted-foreground">Vendor</span>
-                        <span className="font-medium">{vendorName}</span>
-                      </div>
-                    )}
-                    
-                    {purchasePrice && (
-                      <div className="flex justify-between items-center text-sm">
-                        <span className="text-muted-foreground">Price</span>
-                        <Badge variant="outline" className="font-medium">
-                          ${purchasePrice}
-                        </Badge>
-                      </div>
-                    )}
-                    
-                    {purchaseDate && (
-                      <div className="flex justify-between items-center text-sm">
-                        <span className="text-muted-foreground">Purchase Date</span>
-                        <span className="font-medium">
-                          {format(new Date(purchaseDate), 'PP')}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-              
-              {/* File information section with modern card styling */}
-              <div className="bg-muted/40 rounded-lg p-3 border border-border/5">
-                <h3 className="text-sm font-medium mb-2 flex items-center gap-1.5">
-                  <FileText className="h-3.5 w-3.5 text-primary/70" />
-                  <span>File Info</span>
-                </h3>
-                <div className="space-y-2">
+
+            {/* Details panel */}
+            <div className="w-full md:w-2/5 h-full overflow-y-auto flex flex-col bg-background">
+              {/* Header with counter and actions */}
+              <div className="flex items-center justify-between px-4 py-2 border-b bg-muted/30">
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="text-xs font-normal">
+                    {currentIndex + 1} of {currentGroup.length}
+                  </Badge>
                   {currentMessage.mime_type && (
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-muted-foreground">Type</span>
-                      <span className="font-medium">{currentMessage.mime_type}</span>
-                    </div>
+                    <Badge variant="secondary" className="text-xs">
+                      {currentMessage.mime_type.split('/')[0]}
+                    </Badge>
+                  )}
+                </div>
+                
+                <div className="flex gap-1">
+                  {onDelete && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleDeleteClick}
+                      className="text-destructive h-8 w-8 p-0"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      <span className="sr-only">Delete</span>
+                    </Button>
                   )}
                   
-                  {currentMessage.file_size && (
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-muted-foreground">Size</span>
-                      <Badge variant="outline" className="font-medium">
-                        {(currentMessage.file_size / (1024 * 1024)).toFixed(2)} MB
-                      </Badge>
-                    </div>
-                  )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleDownload}
+                    className="h-8 w-8 p-0"
+                  >
+                    <Download className="h-4 w-4" />
+                    <span className="sr-only">Download</span>
+                  </Button>
                   
-                  {currentMessage.telegram_message_id && (
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-muted-foreground">Message ID</span>
-                      <span className="truncate max-w-[160px] font-mono text-xs bg-muted px-1.5 py-0.5 rounded">
-                        {currentMessage.telegram_message_id}
-                      </span>
-                    </div>
-                  )}
-                  
-                  {currentMessage.media_group_id && (
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-muted-foreground">Group</span>
-                      <span className="truncate max-w-[160px] font-mono text-xs bg-muted px-1.5 py-0.5 rounded">
-                        {currentMessage.media_group_id}
-                      </span>
-                    </div>
-                  )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleCopyDetails}
+                    className="h-8 w-8 p-0"
+                  >
+                    <Clipboard className="h-4 w-4" />
+                    <span className="sr-only">Copy Details</span>
+                  </Button>
                 </div>
               </div>
-              
-              {/* Tags section with modern styling - removed since tags property doesn't exist on Message */}
-              
-              <div className="flex flex-wrap gap-2 pt-2">
-                <Button 
-                  variant="secondary" 
-                  size="sm"
-                  onClick={handleDownload}
-                  className="flex items-center gap-1.5"
-                >
-                  <Download className="h-3.5 w-3.5" />
-                  <span>Download</span>
-                </Button>
+
+              {/* Tabs for mobile */}
+              <div className="p-4 overflow-y-auto">
+                <Tabs defaultValue="info" className="w-full">
+                  <TabsList className="w-full mb-4 grid grid-cols-3">
+                    <TabsTrigger value="info" className="text-xs">
+                      <Info className="w-3 h-3 mr-1" /> Info
+                    </TabsTrigger>
+                    <TabsTrigger value="product" className="text-xs">
+                      <ShoppingBag className="w-3 h-3 mr-1" /> Product
+                    </TabsTrigger>
+                    <TabsTrigger value="details" className="text-xs">
+                      <FileText className="w-3 h-3 mr-1" /> Details
+                    </TabsTrigger>
+                  </TabsList>
+                  
+                  {/* Info Tab - Basic Details */}
+                  <TabsContent value="info" className="space-y-4 mt-0">
+                    {/* Caption section */}
+                    {currentMessage.caption && (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-1.5 text-sm font-medium">
+                          <MessageSquare className="h-3.5 w-3.5 text-primary" />
+                          <span>Caption</span>
+                        </div>
+                        <div className="p-3 rounded-md bg-muted/30 border text-sm">
+                          <p className="whitespace-pre-wrap">{currentMessage.caption}</p>
+                        </div>
+                      </div>
+                    )}
+                  </TabsContent>
+                  
+                  {/* Product Tab - Product Information */}
+                  <TabsContent value="product" className="space-y-4 mt-0">
+                    {currentMessage.product_name || currentMessage.vendor_uid || currentMessage.product_code || currentMessage.purchase_date ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-1.5 text-sm font-medium">
+                          <ShoppingBag className="h-3.5 w-3.5 text-primary" />
+                          <span>Product Information</span>
+                        </div>
+                        <div className="rounded-md bg-muted/30 border divide-y">
+                          {currentMessage.product_name && (
+                            <div className="px-3 py-2 flex justify-between">
+                              <span className="text-xs text-muted-foreground">Product Name</span>
+                              <span className="text-sm font-medium">{currentMessage.product_name}</span>
+                            </div>
+                          )}
+                          
+                          {currentMessage.product_code && (
+                            <div className="px-3 py-2 flex justify-between">
+                              <span className="text-xs text-muted-foreground">Product Code</span>
+                              <span className="text-sm font-medium">{currentMessage.product_code}</span>
+                            </div>
+                          )}
+                          
+                          {currentMessage.vendor_uid && (
+                            <div className="px-3 py-2 flex justify-between">
+                              <span className="text-xs text-muted-foreground">Vendor</span>
+                              <span className="text-sm font-medium">{currentMessage.vendor_uid}</span>
+                            </div>
+                          )}
+                          
+                          {currentMessage.purchase_date && (
+                            <div className="px-3 py-2 flex justify-between">
+                              <span className="text-xs text-muted-foreground">Purchase Date</span>
+                              <div className="flex items-center gap-1">
+                                <Calendar className="h-3 w-3 text-muted-foreground" />
+                                <span className="text-sm font-medium">
+                                  {format(new Date(currentMessage.purchase_date), 'PP')}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-sm text-center text-muted-foreground py-4">
+                        No product information available
+                      </div>
+                    )}
+                  </TabsContent>
+                  
+                  {/* Details Tab - Technical Details */}
+                  <TabsContent value="details" className="space-y-4 mt-0">
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-1.5 text-sm font-medium">
+                        <FileText className="h-3.5 w-3.5 text-primary" />
+                        <span>File Information</span>
+                      </div>
+                      <div className="rounded-md bg-muted/30 border divide-y">
+                        {currentMessage.public_url && (
+                          <div className="px-3 py-2 flex justify-between">
+                            <span className="text-xs text-muted-foreground">Filename</span>
+                            <span className="text-sm font-medium truncate max-w-[180px]">
+                              {currentMessage.public_url.split('/').pop() || 'Unknown'}
+                            </span>
+                          </div>
+                        )}
+                      
+                        {currentMessage.mime_type && (
+                          <div className="px-3 py-2 flex justify-between">
+                            <span className="text-xs text-muted-foreground">MIME Type</span>
+                            <span className="text-sm font-medium">{currentMessage.mime_type}</span>
+                          </div>
+                        )}
+                        
+                        {currentMessage.file_size && (
+                          <div className="px-3 py-2 flex justify-between">
+                            <span className="text-xs text-muted-foreground">File Size</span>
+                            <Badge variant="outline" className="text-xs font-normal">
+                              {(currentMessage.file_size / (1024 * 1024)).toFixed(2)} MB
+                            </Badge>
+                          </div>
+                        )}
+                        
+                        {currentMessage.created_at && (
+                          <div className="px-3 py-2 flex justify-between">
+                            <span className="text-xs text-muted-foreground">Created</span>
+                            <span className="text-sm font-medium">
+                              {format(new Date(currentMessage.created_at), 'PPp')}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    
+                    {/* Technical IDs - Advanced Details */}
+                    <Accordion type="single" collapsible className="w-full">
+                      <AccordionItem value="advanced">
+                        <AccordionTrigger className="text-xs py-2">Advanced Details</AccordionTrigger>
+                        <AccordionContent className="space-y-1 text-xs">
+                          <div className="flex justify-between py-1">
+                            <span className="text-muted-foreground">ID</span>
+                            <span className="font-mono bg-muted/50 px-1 rounded">{currentMessage.id}</span>
+                          </div>
+                          
+                          {currentMessage.telegram_message_id && (
+                            <div className="flex justify-between py-1">
+                              <span className="text-muted-foreground">Telegram ID</span>
+                              <span className="font-mono bg-muted/50 px-1 rounded truncate max-w-[180px]">
+                                {currentMessage.telegram_message_id}
+                              </span>
+                            </div>
+                          )}
+                          
+                          {currentMessage.media_group_id && (
+                            <div className="flex justify-between py-1">
+                              <span className="text-muted-foreground">Group ID</span>
+                              <span className="font-mono bg-muted/50 px-1 rounded truncate max-w-[180px]">
+                                {currentMessage.media_group_id}
+                              </span>
+                            </div>
+                          )}
+                        </AccordionContent>
+                      </AccordionItem>
+                    </Accordion>
+                  </TabsContent>
+                </Tabs>
               </div>
             </div>
           </div>
         </DialogContent>
       </Dialog>
-      
+
       {/* Delete confirmation dialog */}
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure you want to delete this media?</AlertDialogTitle>
+            <AlertDialogTitle>Delete this media?</AlertDialogTitle>
             <AlertDialogDescription>
               This action cannot be undone. The media will be permanently deleted.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={handleDelete} 
+            <AlertDialogAction
+              onClick={handleDelete}
               disabled={isDeleting}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >

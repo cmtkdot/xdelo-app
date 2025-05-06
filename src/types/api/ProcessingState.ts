@@ -1,4 +1,3 @@
-
 /**
  * Enum for message processing states
  */
@@ -9,4 +8,5 @@ export type ProcessingState =
   | 'completed' 
   | 'error'
   | 'no_caption'
-  | 'pending_analysis';
+  | 'pending_analysis'
+  | 'edited';

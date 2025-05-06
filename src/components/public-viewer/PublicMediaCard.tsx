@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Message } from '@/types/entities/Message'
-import { Play, Eye, Pencil, Trash } from 'lucide-react'
+import { Play, Eye, Pencil, Trash, Image as ImageIcon, FileText } from 'lucide-react'
 import { useVideoThumbnail } from '@/hooks/useVideoThumbnail'
 import { isVideoMessage } from '@/utils/mediaUtils'
 import { ExpandableTabs } from '@/components/ui/expandable-tabs'
@@ -41,9 +41,17 @@ export function PublicMediaCard({ message, onClick }: PublicMediaCardProps) {
   const [isHovering, setIsHovering] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [imageError, setImageError] = useState(false);
   
   // Use the video thumbnail hook to generate thumbnails for videos
   const { thumbnailUrl, isLoading, generateThumbnail } = useVideoThumbnail(message)
+  
+  // Debug message data
+  useEffect(() => {
+    if (!message || !message.id) {
+      console.warn("PublicMediaCard received invalid message:", message);
+    }
+  }, [message]);
   
   // Auto-generate thumbnail for videos on component mount with debouncing
   useEffect(() => {
@@ -207,19 +215,75 @@ export function PublicMediaCard({ message, onClick }: PublicMediaCardProps) {
 
   return (
     <div 
-      className="group relative overflow-hidden rounded-lg bg-background border shadow-sm hover:shadow-lg transition-all duration-300 cursor-pointer hover:scale-[1.02]"
+      className={`relative group cursor-pointer overflow-hidden rounded-md aspect-square shadow-sm transition-all hover:shadow-md
+        ${isHovering ? 'ring-2 ring-primary' : 'hover:ring-1 hover:ring-primary/30'}`}
       onMouseEnter={() => setIsHovering(true)}
       onMouseLeave={() => setIsHovering(false)}
       onClick={handleClick}
-      role="button"
-      tabIndex={0}
-      aria-label={`View details for ${message.product_name || 'media item'}`}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          handleClick(e as unknown as React.MouseEvent)
-        }
-      }}
     >
+      {/* Loading overlay */}
+      {isLoading && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/20">
+          <div className="w-5 h-5 border-2 rounded-full border-primary border-l-transparent animate-spin"></div>
+        </div>
+      )}
+      
+      {/* Image */}
+      {!isVideo && message.public_url && !imageError && (
+        <img
+          src={message.public_url}
+          alt={message.caption || "Media"}
+          className="object-cover w-full h-full"
+          onError={() => setImageError(true)}
+          loading="lazy"
+        />
+      )}
+      
+      {/* Fallback if image fails to load */}
+      {!isVideo && (imageError || !message.public_url) && (
+        <div className="flex items-center justify-center w-full h-full bg-muted">
+          <ImageIcon className="w-10 h-10 text-muted-foreground" />
+        </div>
+      )}
+      
+      {/* Video */}
+      {isVideo && (
+        <>
+          {/* Video preview */}
+          <video
+            ref={videoRef}
+            src={message.public_url}
+            poster={thumbnailUrl}
+            muted
+            loop
+            playsInline
+            className="object-cover w-full h-full"
+            onError={() => setImageError(true)}
+          />
+          
+          {/* Thumbnail fallback */}
+          {(!message.public_url || imageError) && !thumbnailUrl && (
+            <div className="flex items-center justify-center w-full h-full bg-muted">
+              <Play className="w-10 h-10 text-muted-foreground" />
+            </div>
+          )}
+          
+          {/* Play button overlay */}
+          <div className="absolute inset-0 flex items-center justify-center bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="p-2 bg-black/50 rounded-full">
+              <Play className="w-6 h-6 text-white" fill="white" />
+            </div>
+          </div>
+        </>
+      )}
+      
+      {/* Caption overlay at bottom */}
+      {message.caption && (
+        <div className="absolute bottom-0 left-0 right-0 p-2 text-xs bg-black/60 text-white truncate opacity-0 group-hover:opacity-100 transition-opacity">
+          {message.caption}
+        </div>
+      )}
+      
       {/* Vendor UID Tag (Top Right) */}
       {message.vendor_uid && (
         <div className="absolute top-2 right-2 z-10">
@@ -236,79 +300,6 @@ export function PublicMediaCard({ message, onClick }: PublicMediaCardProps) {
         </div>
       </div>
 
-      {/* Media content */}
-      <div className="aspect-square overflow-hidden bg-muted/20">
-        {isVideo ? (
-          <div className="relative w-full h-full bg-black">
-            {/* Thumbnail image (shown while not hovering) */}
-            {!isHovering && (
-              <img
-                src={thumbnailUrl || message.public_url}
-                alt={message.product_name || "Video thumbnail"}
-                className="w-full h-full object-cover"
-                loading="lazy"
-                onError={(e) => {
-                  console.warn(`Error loading thumbnail for message: ${message.id}`);
-                  e.currentTarget.onerror = null; // Prevent infinite error loop
-                }}
-              />
-            )}
-            
-            {/* Autoplay video (plays on hover) */}
-            <video
-              ref={videoRef}
-              src={message.public_url}
-              poster={thumbnailUrl || undefined}
-              className={`w-full h-full object-cover ${isHovering ? 'opacity-100' : 'opacity-0 absolute inset-0'}`}
-              playsInline
-              muted
-              loop
-              preload="metadata"
-              onLoadedMetadata={() => {
-                // Once metadata is loaded, generate a thumbnail if we don't have one
-                if (!thumbnailUrl && !isLoading) {
-                  generateThumbnail();
-                }
-              }}
-              onError={() => {
-                console.warn(`Video playback error for message: ${message.id}`);
-                // Show the thumbnail with a play icon instead
-                setIsHovering(false);
-              }}
-            />
-            
-            {/* Video Play Overlay - only show when not hovering */}
-            {!isHovering && (
-              <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-t from-black/60 to-transparent pointer-events-none">
-                <div className="rounded-full bg-black/40 p-3 backdrop-blur-sm border border-white/20 transform group-hover:scale-110 transition-transform duration-300 shadow-xl">
-                  <Play className="h-8 w-8 text-white" fill="white" />
-                </div>
-              </div>
-            )}
-            
-
-            
-            {/* Duration badge if available */}
-            {message.duration && (
-              <div className="absolute bottom-2 right-2 bg-black/60 text-white text-xs px-1.5 py-0.5 rounded backdrop-blur-sm">
-                {formatDuration(message.duration)}
-              </div>
-            )}
-          </div>
-        ) : (
-          <img
-            src={message.public_url}
-            alt={message.product_name || "Image"}
-            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-            loading="lazy"
-            onError={(e) => {
-              console.warn(`Error loading image for message: ${message.id}`);
-              e.currentTarget.onerror = null; // Prevent infinite error loop
-            }}
-          />
-        )}
-      </div>
-      
       {/* Default State: Product Name and Date */}
       <div className="absolute inset-x-0 bottom-0 p-2 bg-black/60 backdrop-blur-sm">
         <div className="flex justify-between items-center">

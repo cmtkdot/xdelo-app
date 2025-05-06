@@ -1,7 +1,5 @@
-
-import React, { useState, useEffect, useCallback } from 'react';
 import { Message } from '@/types';
-import { useIsMobile } from '@/hooks/useMobile';
+import { useCallback, useEffect, useState } from 'react';
 import { EmptyList } from './list/EmptyList';
 import { MessageListItem } from './list/MessageListItem';
 
@@ -14,17 +12,16 @@ interface MessageListViewProps {
   selectedId?: string;
 }
 
-export function MessageListView({ 
-  messages, 
-  onSelect, 
+export function MessageListView({
+  messages,
+  onSelect,
   onView,
   onEdit,
   onDelete,
   selectedId
 }: MessageListViewProps) {
-  const isMobile = useIsMobile();
   const [mediaErrors, setMediaErrors] = useState<Record<string, boolean>>({});
-  
+
   // Handle media load error
   const handleMediaError = useCallback((messageId: string) => {
     console.log(`Media load error for message: ${messageId}`);
@@ -53,7 +50,6 @@ export function MessageListView({
           onEdit={onEdit}
           onDelete={onDelete}
           isSelected={selectedId === message.id}
-          isMobile={isMobile}
           hasError={!!mediaErrors[message.id]}
         />
       ))}

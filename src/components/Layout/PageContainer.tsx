@@ -1,12 +1,9 @@
-
-import React from "react";
-import { cn } from "@/lib/utils";
-import { useIsMobile } from '@/hooks/useMobile';
 import { useNavigation } from '@/components/Layout/NavigationProvider';
-import { useEffect } from 'react';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
-import { ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { ChevronLeft } from "lucide-react";
+import React, { useEffect } from "react";
 import { useNavigate } from 'react-router-dom';
 
 interface PageContainerProps {
@@ -18,22 +15,21 @@ interface PageContainerProps {
   showBackButton?: boolean;
 }
 
-export function PageContainer({ 
-  children, 
-  className, 
+export function PageContainer({
+  children,
+  className,
   noPadding = false,
   title,
   breadcrumbs,
   showBackButton
 }: PageContainerProps) {
-  const isMobile = useIsMobile();
   const { setTitle, setBreadcrumbs, setShowBackButton, isSidebarCollapsed } = useNavigation();
   const navigate = useNavigate();
-  
+
   const goBack = () => {
     navigate(-1);
   };
-  
+
   // Set navigation context values
   useEffect(() => {
     if (title) {
@@ -45,7 +41,7 @@ export function PageContainer({
     if (typeof showBackButton !== 'undefined') {
       setShowBackButton(showBackButton);
     }
-    
+
     // Cleanup
     return () => {
       setTitle('');
@@ -53,17 +49,17 @@ export function PageContainer({
       setShowBackButton(false);
     };
   }, [title, breadcrumbs, showBackButton, setTitle, setBreadcrumbs, setShowBackButton]);
-  
+
   return (
-    <div 
+    <div
       className={cn(
         "w-full h-full flex flex-col transition-all duration-300",
-        noPadding ? "" : isMobile ? "px-4 py-4" : "container px-4 py-6",
+        noPadding ? "" : "container px-4 py-6",
         className
       )}
     >
       {/* Page header with title and breadcrumbs */}
-      {(title || breadcrumbs?.length || showBackButton) && !isMobile && (
+      {(title || breadcrumbs?.length || showBackButton) && !isSidebarCollapsed && (
         <div className="mb-6 flex flex-col gap-2">
           {/* Breadcrumbs */}
           {breadcrumbs && breadcrumbs.length > 0 && (
@@ -87,13 +83,13 @@ export function PageContainer({
               </BreadcrumbList>
             </Breadcrumb>
           )}
-          
+
           {/* Title and back button */}
           <div className="flex items-center gap-3">
             {showBackButton && (
-              <Button 
-                variant="outline" 
-                size="icon" 
+              <Button
+                variant="outline"
+                size="icon"
                 onClick={goBack}
                 className="h-8 w-8"
               >
@@ -106,7 +102,7 @@ export function PageContainer({
           </div>
         </div>
       )}
-      
+
       {/* Page content */}
       <div className="flex-1">{children}</div>
     </div>

@@ -1,23 +1,20 @@
-
-import React from 'react';
-import { Eye, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Message } from '@/types';
+import { Eye, Pencil, Trash2 } from 'lucide-react';
+import React from 'react';
 
 interface ListItemActionsProps {
   message: Message;
   onView: () => void;  // Simplified to just a callback
   onEdit?: ((message: Message) => void) | undefined;
   onDelete?: ((message: Message) => void) | undefined;
-  isMobile: boolean;
 }
 
 export const ListItemActions: React.FC<ListItemActionsProps> = ({
   message,
   onView,
   onEdit,
-  onDelete,
-  isMobile
+  onDelete
 }) => {
   return (
     <div className="flex items-center gap-1 ml-auto">
@@ -33,7 +30,7 @@ export const ListItemActions: React.FC<ListItemActionsProps> = ({
       >
         <Eye className="h-4 w-4" />
       </Button>
-      
+
       {onEdit && (
         <Button
           variant="ghost"
@@ -48,7 +45,7 @@ export const ListItemActions: React.FC<ListItemActionsProps> = ({
           <Pencil className="h-4 w-4" />
         </Button>
       )}
-      
+
       {onDelete && (
         <Button
           variant="ghost"
