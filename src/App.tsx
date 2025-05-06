@@ -24,7 +24,6 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 const PublicGallery = lazy(() => import("./pages/PublicGallery"));
 const Database = lazy(() => import('./pages/Database'));
 const ProductMatching = lazy(() => import('./pages/ProductMatching'));
-const GlProducts = lazy(() => import('./pages/GlProducts'));
 
 import { AppSidebar } from "@/components/Layout/Sidebar";
 
@@ -168,7 +167,6 @@ function App() {
                         <AIChat />
                       </Suspense>
                     } />
-                    {/* Settings route removed */}
                     <Route path="/database" element={
                       <Suspense fallback={<PageLoader />}>
                         <Database />
@@ -177,11 +175,6 @@ function App() {
                     <Route path="/product-matching" element={
                       <Suspense fallback={<PageLoader />}>
                         <ProductMatching />
-                      </Suspense>
-                    } />
-                    <Route path="/products" element={
-                      <Suspense fallback={<PageLoader />}>
-                        <GlProducts />
                       </Suspense>
                     } />
                     <Route path="*" element={
