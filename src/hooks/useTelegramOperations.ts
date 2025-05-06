@@ -1,12 +1,12 @@
-import { useToast } from '@/hooks/useToast';
-import { supabase } from '@/integrations/supabase/client';
-import { createLogger } from '@/lib/logger';
-import { LogEventType } from '@/types/api/LogEventType';
-import { Message } from '@/types/entities/Message';
-import { useCallback, useState } from 'react';
+import { useToast } from "@/hooks/useToast";
+import { supabase } from "@/integrations/supabase/client";
+import { createLogger } from "@/lib/logger";
+import { LogEventType } from "@/types/api/LogEventType";
+import { Message } from "@/types/entities/Message";
+import { useCallback, useState } from "react";
 
 // Create a logger specific to telegram operations
-const logger = createLogger('telegram-operations');
+const logger = createLogger("telegram-operations");
 
 // Custom type for RPC function names to bypass TypeScript checking
 // Using unknown casts instead of RPCFunctionName to avoid linter errors
@@ -18,49 +18,64 @@ export const useTelegramOperations = () => {
   const [isProcessing, setIsProcessing] = useState(false);
 
   // Function to delete a message from Telegram only
-  const deleteTelegramMessage = async (messageId: number, chatId: number, mediaGroupId?: string) => {
+  const deleteTelegramMessage = async (
+    messageId: number,
+    chatId: number,
+    mediaGroupId?: string
+  ) => {
     try {
-      const { data, error } = await supabase.functions.invoke('delete-telegram-message', {
-        body: {
-          message_id: messageId,
-          chat_id: chatId,
-          media_group_id: mediaGroupId
-        },
-      });
+      const { data, error } = await supabase.functions.invoke(
+        "delete-telegram-message",
+        {
+          body: {
+            message_id: messageId,
+            chat_id: chatId,
+            media_group_id: mediaGroupId,
+          },
+        }
+      );
 
       if (error) throw error;
       return { success: true, data };
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      console.error('Error deleting message from Telegram', errorMessage);
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
+      console.error("Error deleting message from Telegram", errorMessage);
       return { success: false, error: errorMessage };
     }
   };
 
   // Function to update caption in Telegram and database
-  const updateCaption = async (message: Message, newCaption: string, updateMediaGroup = true): Promise<boolean> => {
+  const updateCaption = async (
+    message: Message,
+    newCaption: string,
+    updateMediaGroup = true
+  ): Promise<boolean> => {
     try {
       setIsProcessing(true);
 
       if (!message.id) {
-        throw new Error('Message ID is missing');
+        throw new Error("Message ID is missing");
       }
 
       // Log the operation start
       await logger.logEvent(LogEventType.MESSAGE_UPDATED, message.id, {
-        action: 'update_started',
+        action: "update_started",
         old_caption: message.caption,
-        new_caption: newCaption
+        new_caption: newCaption,
       });
 
       // Call the update-telegram-caption edge function
-      const { data, error } = await supabase.functions.invoke('update-telegram-caption', {
-        body: {
-          messageId: message.id,
-          newCaption: newCaption,
-          updateMediaGroup: updateMediaGroup
+      const { data, error } = await supabase.functions.invoke(
+        "update-telegram-caption",
+        {
+          body: {
+            messageId: message.id,
+            newCaption: newCaption,
+            updateMediaGroup: updateMediaGroup,
+          },
         }
-      });
+      );
 
       if (error) {
         throw new Error(`Failed to update caption: ${error.message}`);
@@ -68,31 +83,32 @@ export const useTelegramOperations = () => {
 
       // Log success
       await logger.logEvent(LogEventType.MESSAGE_UPDATED, message.id, {
-        action: 'update_completed',
+        action: "update_completed",
         success: true,
-        update_media_group: updateMediaGroup
+        update_media_group: updateMediaGroup,
       });
 
       toast({
-        title: 'Success',
-        description: 'Caption updated successfully',
+        title: "Success",
+        description: "Caption updated successfully",
       });
 
       return true;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error('Error updating caption:', errorMessage);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      console.error("Error updating caption:", errorMessage);
 
       // Log error
       await logger.logEvent(LogEventType.SYSTEM_ERROR, message.id, {
-        action: 'update_caption',
-        error: errorMessage
+        action: "update_caption",
+        error: errorMessage,
       });
 
       toast({
-        title: 'Error',
+        title: "Error",
         description: errorMessage,
-        variant: 'destructive',
+        variant: "destructive",
       });
 
       return false;
@@ -106,43 +122,47 @@ export const useTelegramOperations = () => {
     try {
       // First archive the message
       const { data: archiveData, error: archiveError } = await supabase.rpc(
-        'x_archive_message_for_deletion' as unknown as any,
+        "x_archive_message_for_deletion" as unknown as any,
         { p_message_id: messageUuid }
       );
 
       if (archiveError) {
-        console.error('Error archiving message before deletion:', archiveError);
+        console.error("Error archiving message before deletion:", archiveError);
         throw archiveError;
       }
 
       // Then delete from messages table
       const { error: deleteError } = await supabase
-        .from('messages')
+        .from("messages")
         .delete()
-        .eq('id', messageUuid);
+        .eq("id", messageUuid);
 
       if (deleteError) throw deleteError;
 
       // Trigger storage cleanup
       try {
-        await supabase.functions.invoke('cleanup-storage-on-delete', {
-          body: { message_id: messageUuid }
+        await supabase.functions.invoke("cleanup-storage-on-delete", {
+          body: { message_id: messageUuid },
         });
       } catch (storageError) {
         // Log but don't fail the operation
-        console.warn('Storage cleanup may be delayed:', storageError);
+        console.warn("Storage cleanup may be delayed:", storageError);
       }
 
       return { success: true };
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      console.error('Error deleting message from database', errorMessage);
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
+      console.error("Error deleting message from database", errorMessage);
       return { success: false, error: errorMessage };
     }
   };
 
   // Function to delete a message with two possible flows: DB only or DB + Telegram
-  const deleteMessage = async (message: Message, deleteFromTelegram = false) => {
+  const deleteMessage = async (
+    message: Message,
+    deleteFromTelegram = false
+  ) => {
     setIsDeleting(true);
     setIsProcessing(true);
 
@@ -152,31 +172,35 @@ export const useTelegramOperations = () => {
         id: messageUuid,
         telegram_message_id: telegramMessageId,
         chat_id: chatId,
-        media_group_id: mediaGroupId
+        media_group_id: mediaGroupId,
       } = message;
 
       // Validate required fields
       if (!messageUuid) {
-        throw new Error('Message ID is missing');
+        throw new Error("Message ID is missing");
       }
 
       // Log the operation
       await logger.logEvent(LogEventType.MESSAGE_DELETED, messageUuid, {
-        operation: deleteFromTelegram ? 'delete_from_telegram_and_db' : 'delete_from_db_only',
+        operation: deleteFromTelegram
+          ? "delete_from_telegram_and_db"
+          : "delete_from_db_only",
         telegram_message_id: telegramMessageId,
-        chat_id: chatId
+        chat_id: chatId,
       });
 
       // If deleting from both Telegram and database
       if (deleteFromTelegram) {
         // Validate Telegram-specific fields
         if (!telegramMessageId || !chatId) {
-          throw new Error('Missing Telegram message details (message ID or chat ID)');
+          throw new Error(
+            "Missing Telegram message details (message ID or chat ID)"
+          );
         }
 
         // First archive the message
         const { data: archiveData, error: archiveError } = await supabase.rpc(
-          'x_archive_message_for_deletion' as unknown as any,
+          "x_archive_message_for_deletion" as unknown as any,
           { p_message_id: messageUuid }
         );
 
@@ -192,19 +216,23 @@ export const useTelegramOperations = () => {
         );
 
         if (!telegramResult.success) {
-          throw new Error(`Failed to delete from Telegram: ${telegramResult.error}`);
+          throw new Error(
+            `Failed to delete from Telegram: ${telegramResult.error}`
+          );
         }
 
         // If Telegram deletion was successful, delete from database
         const dbResult = await deleteFromDatabase(messageUuid);
 
         if (!dbResult.success) {
-          throw new Error(`Message deleted from Telegram but failed to delete from database: ${dbResult.error}`);
+          throw new Error(
+            `Message deleted from Telegram but failed to delete from database: ${dbResult.error}`
+          );
         }
 
         toast({
-          title: 'Success',
-          description: 'Message deleted from Telegram and database',
+          title: "Success",
+          description: "Message deleted from Telegram and database",
         });
 
         return true;
@@ -217,19 +245,20 @@ export const useTelegramOperations = () => {
         }
 
         toast({
-          title: 'Success',
-          description: 'Message deleted from database',
+          title: "Success",
+          description: "Message deleted from database",
         });
 
         return true;
       }
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      console.error('Error in deleteMessage:', errorMessage);
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
+      console.error("Error in deleteMessage:", errorMessage);
       toast({
-        title: 'Error',
+        title: "Error",
         description: errorMessage,
-        variant: 'destructive',
+        variant: "destructive",
       });
       return false;
     } finally {
@@ -238,96 +267,104 @@ export const useTelegramOperations = () => {
     }
   };
 
-  const handleForward = useCallback(async (message: Message, chatId: number): Promise<void> => {
-    try {
-      setIsProcessing(true);
+  const handleForward = useCallback(
+    async (message: Message, chatId: number): Promise<void> => {
+      try {
+        setIsProcessing(true);
 
-      // Log the operation with consolidated logging
-      await logger.logEvent(LogEventType.USER_ACTION, message.id, {
-        action: 'forward',
-        target_chat_id: chatId,
-        file_unique_id: message.file_unique_id
-      });
+        // Log the operation with consolidated logging
+        await logger.logEvent(LogEventType.USER_ACTION, message.id, {
+          action: "forward",
+          target_chat_id: chatId,
+          file_unique_id: message.file_unique_id,
+        });
 
-      // Call the Edge Function to handle forwarding
-      const { error } = await supabase.functions.invoke('xdelo_forward_message', {
-        body: {
-          messageId: message.id,
-          targetChatId: chatId
-        }
-      });
+        // Call the Edge Function to handle forwarding
+        const { error } = await supabase.functions.invoke(
+          "xdelo_forward_message",
+          {
+            body: {
+              messageId: message.id,
+              targetChatId: chatId,
+            },
+          }
+        );
 
-      if (error) throw new Error(error.message);
+        if (error) throw new Error(error.message);
 
-      toast({
-        title: 'Message Forwarded',
-        description: `Message has been forwarded to chat ID: ${chatId}`,
-      });
+        toast({
+          title: "Message Forwarded",
+          description: `Message has been forwarded to chat ID: ${chatId}`,
+        });
+      } catch (error) {
+        console.error("Error forwarding message:", error);
 
-    } catch (error) {
-      console.error('Error forwarding message:', error);
+        // Log the error with consolidated logging
+        await logger.logEvent(LogEventType.SYSTEM_ERROR, message.id, {
+          action: "forward",
+          target_chat_id: chatId,
+          error: error instanceof Error ? error.message : String(error),
+        });
 
-      // Log the error with consolidated logging
-      await logger.logEvent(LogEventType.SYSTEM_ERROR, message.id, {
-        action: 'forward',
-        target_chat_id: chatId,
-        error: error instanceof Error ? error.message : String(error)
-      });
+        toast({
+          title: "Error",
+          description: "Failed to forward message. Please try again.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsProcessing(false);
+      }
+    },
+    [toast]
+  );
 
-      toast({
-        title: 'Error',
-        description: 'Failed to forward message. Please try again.',
-        variant: 'destructive',
-      });
+  const handleReprocess = useCallback(
+    async (message: Message): Promise<void> => {
+      try {
+        setIsProcessing(true);
 
-    } finally {
-      setIsProcessing(false);
-    }
-  }, [toast]);
+        // Log the operation with consolidated logging
+        await logger.logEvent(LogEventType.MESSAGE_REPROCESSED, message.id, {
+          action: "manual_reprocess",
+        });
 
-  const handleReprocess = useCallback(async (message: Message): Promise<void> => {
-    try {
-      setIsProcessing(true);
+        // Call the Edge Function
+        const { error } = await supabase.functions.invoke(
+          "xdelo_reprocess_message",
+          {
+            body: {
+              messageId: message.id,
+              force: true,
+            },
+          }
+        );
 
-      // Log the operation with consolidated logging
-      await logger.logEvent(LogEventType.MESSAGE_REPROCESSED, message.id, {
-        action: 'manual_reprocess'
-      });
+        if (error) throw new Error(error.message);
 
-      // Call the Edge Function
-      const { error } = await supabase.functions.invoke('xdelo_reprocess_message', {
-        body: {
-          messageId: message.id,
-          force: true
-        }
-      });
+        toast({
+          title: "Reprocessing Started",
+          description: "The message has been queued for reprocessing.",
+        });
+      } catch (error) {
+        console.error("Error reprocessing message:", error);
 
-      if (error) throw new Error(error.message);
+        // Log the error with consolidated logging
+        await logger.logEvent(LogEventType.SYSTEM_ERROR, message.id, {
+          action: "reprocess",
+          error: error instanceof Error ? error.message : String(error),
+        });
 
-      toast({
-        title: 'Reprocessing Started',
-        description: 'The message has been queued for reprocessing.',
-      });
-
-    } catch (error) {
-      console.error('Error reprocessing message:', error);
-
-      // Log the error with consolidated logging
-      await logger.logEvent(LogEventType.SYSTEM_ERROR, message.id, {
-        action: 'reprocess',
-        error: error instanceof Error ? error.message : String(error)
-      });
-
-      toast({
-        title: 'Error',
-        description: 'Failed to reprocess message. Please try again.',
-        variant: 'destructive',
-      });
-
-    } finally {
-      setIsProcessing(false);
-    }
-  }, [toast]);
+        toast({
+          title: "Error",
+          description: "Failed to reprocess message. Please try again.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsProcessing(false);
+      }
+    },
+    [toast]
+  );
 
   return {
     deleteMessage,
@@ -335,6 +372,6 @@ export const useTelegramOperations = () => {
     handleForward,
     handleReprocess,
     isDeleting,
-    isProcessing
+    isProcessing,
   };
 };

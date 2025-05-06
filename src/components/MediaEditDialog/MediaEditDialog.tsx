@@ -8,13 +8,13 @@ import {
 } from "@/components/ui/dialog";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
-import { useMediaUtils } from '@/hooks/useMediaUtils';
+import { useMediaUtils } from "@/hooks/useMediaUtils";
 import { useToast } from "@/hooks/useToast";
 import { Message } from "@/types/entities/Message";
-import { useEffect, useState } from 'react';
+import { useEffect, useState } from "react";
 
 // Define a minimal message type with only the properties needed for editing
-interface EditableMessage {
+interface EditableMessage extends Partial<Message> {
   id: string;
   caption?: string;
   media_group_id?: string;
@@ -27,7 +27,6 @@ interface MediaEditDialogProps {
   onClose?: () => void;
   onOpenChange?: (open: boolean) => void; // Support both callback patterns
   onSave?: (newCaption: string) => void;
-  onSuccess?: () => void;
   refresh?: () => void;
 }
 
@@ -38,12 +37,11 @@ export function MediaEditDialog({
   onClose,
   onOpenChange,
   onSave,
-  onSuccess,
-  refresh
+  refresh,
 }: MediaEditDialogProps) {
   // Use either isOpen or open prop
   const isDialogOpen = isOpen !== undefined ? isOpen : open;
-  
+
   const [newCaption, setNewCaption] = useState(media?.caption || "");
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -59,16 +57,16 @@ export function MediaEditDialog({
 
   const handleSave = async () => {
     if (!media) return;
-    
+
     try {
       setIsSaving(true);
       setError(null);
-      
+
       // Check if caption changed
       if (newCaption !== media.caption) {
         // Call the API to update the caption
         const success = await syncMessageCaption(media.id, newCaption);
-        
+
         if (!success) {
           const errorMessage = "Failed to update caption";
           setError(errorMessage);
@@ -79,12 +77,12 @@ export function MediaEditDialog({
           });
           return;
         }
-        
+
         toast({
           title: "Success",
           description: "Caption updated successfully",
         });
-        
+
         if (onSave) {
           onSave(newCaption);
         }
@@ -93,10 +91,6 @@ export function MediaEditDialog({
           onClose();
         } else if (onOpenChange) {
           onOpenChange(false);
-        }
-
-        if (onSuccess) {
-          onSuccess();
         }
 
         if (refresh) {
@@ -111,8 +105,8 @@ export function MediaEditDialog({
         }
       }
     } catch (error) {
-      console.error('Error saving media:', error);
-      setError('An unexpected error occurred');
+      console.error("Error saving media:", error);
+      setError("An unexpected error occurred");
       toast({
         title: "Error",
         description: "An unexpected error occurred",
@@ -124,13 +118,16 @@ export function MediaEditDialog({
   };
 
   return (
-    <Dialog open={isDialogOpen} onOpenChange={(open) => {
-      if (onOpenChange) {
-        onOpenChange(open);
-      } else if (!open && onClose) {
-        onClose();
-      }
-    }}>
+    <Dialog
+      open={isDialogOpen}
+      onOpenChange={(open) => {
+        if (onOpenChange) {
+          onOpenChange(open);
+        } else if (!open && onClose) {
+          onClose();
+        }
+      }}
+    >
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Edit Media</DialogTitle>
@@ -151,22 +148,22 @@ export function MediaEditDialog({
               />
             </div>
 
-            {error && (
-              <div className="text-sm text-red-500">
-                {error}
-              </div>
-            )}
+            {error && <div className="text-sm text-red-500">{error}</div>}
           </div>
         )}
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => {
-            if (onClose) {
-              onClose();
-            } else if (onOpenChange) {
-              onOpenChange(false);
-            }
-          }} disabled={isSaving}>
+          <Button
+            variant="outline"
+            onClick={() => {
+              if (onClose) {
+                onClose();
+              } else if (onOpenChange) {
+                onOpenChange(false);
+              }
+            }}
+            disabled={isSaving}
+          >
             Cancel
           </Button>
           <Button onClick={handleSave} disabled={isSaving}>

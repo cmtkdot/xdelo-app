@@ -107,6 +107,7 @@ serve(async (req) => {
     // Archive previous analyzed content
     const oldAnalyzedContent = message.analyzed_content;
 
+<<<<<<< HEAD
     // Properly handle edit history as a JSONB field
     let newEditHistory;
     const newEditEntry = {
@@ -125,6 +126,8 @@ serve(async (req) => {
       newEditHistory = [newEditEntry];
     }
 
+=======
+>>>>>>> 35f58cbf (refactor: improve type safety and error handling in media operations)
     // Update caption in database
     const { error: updateError } = await supabase
       .from('messages')
@@ -139,8 +142,22 @@ serve(async (req) => {
         // Reset processing state to trigger reanalysis
         processing_state: 'initialized',
 
+<<<<<<< HEAD
         // Add edit history as a proper JSONB
         edit_history: newEditHistory,
+=======
+        // Add edit history
+        edit_history: [
+          {
+            edited_at: new Date().toISOString(),
+            previous_caption: message.caption,
+            previous_analyzed_content: oldAnalyzedContent,
+            correlation_id: correlationId,
+            source: 'caption_update_edge_function'
+          },
+          ...(message.edit_history || [])
+        ],
+>>>>>>> 35f58cbf (refactor: improve type safety and error handling in media operations)
 
         // Set edit metadata
         is_edit: true,
@@ -221,6 +238,7 @@ serve(async (req) => {
                   }
                 };
 
+<<<<<<< HEAD
                 // Properly handle edit history for group message
                 let groupMsgEditHistory;
                 const groupEditEntry = {
@@ -239,6 +257,8 @@ serve(async (req) => {
                   groupMsgEditHistory = [groupEditEntry];
                 }
 
+=======
+>>>>>>> 35f58cbf (refactor: improve type safety and error handling in media operations)
                 // Update group message in database first
                 const { error: groupUpdateError } = await supabase
                   .from('messages')
@@ -253,8 +273,22 @@ serve(async (req) => {
                     // Reset processing state to trigger reanalysis
                     processing_state: 'initialized',
 
+<<<<<<< HEAD
                     // Add edit history as a proper JSONB
                     edit_history: groupMsgEditHistory,
+=======
+                    // Add edit history
+                    edit_history: [
+                      {
+                        edited_at: new Date().toISOString(),
+                        previous_caption: groupMsg.caption,
+                        previous_analyzed_content: oldGroupAnalyzedContent,
+                        correlation_id: correlationId,
+                        source: 'media_group_caption_sync'
+                      },
+                      ...(groupMsg.edit_history || [])
+                    ],
+>>>>>>> 35f58cbf (refactor: improve type safety and error handling in media operations)
 
                     // Set edit metadata
                     is_edit: true,
@@ -415,16 +449,27 @@ async function logError(supabase, entityId, errorMessage, correlationId, additio
     await supabase
       .from('unified_audit_logs')
       .insert({
+<<<<<<< HEAD
         event_type: 'caption_update_failed',
         entity_id: entityId,
         metadata: {
           error: errorMessage,
+=======
+        event_type: 'caption_updated',
+        entity_id: entityId,
+        metadata: {
+          operation: 'update_error',
+>>>>>>> 35f58cbf (refactor: improve type safety and error handling in media operations)
           ...additionalMetadata
         },
         correlation_id: correlationId,
         error_message: errorMessage
       });
   } catch (logError) {
+<<<<<<< HEAD
     console.error(`[${correlationId}] Error logging error:`, logError);
+=======
+    console.error(`[${correlationId}] Error logging to audit logs:`, logError);
+>>>>>>> 35f58cbf (refactor: improve type safety and error handling in media operations)
   }
 }
