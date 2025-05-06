@@ -10,7 +10,6 @@ import { supabase } from "./integrations/supabase/client";
 import type { Session } from "@supabase/supabase-js";
 import Auth from "./pages/Auth";
 import { MobileBottomNav } from "./components/Layout/MobileBottomNav";
-import { useIsMobile } from "./hooks/useMobile";
 
 // Import Dashboard directly to ensure it's properly loaded
 import Dashboard from "./pages/Dashboard";
@@ -19,12 +18,10 @@ import Dashboard from "./pages/Dashboard";
 const MessagesEnhanced = lazy(() => import("./pages/MessagesEnhanced"));
 const MediaTable = lazy(() => import("./pages/MediaTable"));
 const AIChat = lazy(() => import("./pages/AIChat"));
-// Settings page removed
 const NotFound = lazy(() => import("./pages/NotFound"));
 const PublicGallery = lazy(() => import("./pages/PublicGallery"));
 const Database = lazy(() => import('./pages/Database'));
 const ProductMatching = lazy(() => import('./pages/ProductMatching'));
-const GlProducts = lazy(() => import('./pages/GlProducts'));
 
 import { AppSidebar } from "@/components/Layout/Sidebar";
 
@@ -168,7 +165,6 @@ function App() {
                         <AIChat />
                       </Suspense>
                     } />
-                    {/* Settings route removed */}
                     <Route path="/database" element={
                       <Suspense fallback={<PageLoader />}>
                         <Database />
@@ -177,11 +173,6 @@ function App() {
                     <Route path="/product-matching" element={
                       <Suspense fallback={<PageLoader />}>
                         <ProductMatching />
-                      </Suspense>
-                    } />
-                    <Route path="/products" element={
-                      <Suspense fallback={<PageLoader />}>
-                        <GlProducts />
                       </Suspense>
                     } />
                     <Route path="*" element={

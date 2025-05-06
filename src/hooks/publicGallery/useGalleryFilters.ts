@@ -1,3 +1,4 @@
+
 import { useState, useMemo } from 'react';
 import { Message } from '@/types';
 import { isVideoMessage } from '@/utils/mediaUtils';
@@ -74,7 +75,8 @@ export function useGalleryFilters({
           // Keep all messages in the group (for proper detail viewing) but only show one in the grid
           groupsWithThumbnails[groupId] = messages;
           // Mark the thumbnail message as the representative for this group
-          thumbnail.isGroupThumbnail = true;
+          // Using type assertion to modify the property since we know it exists in our custom Message type
+          (thumbnail as Message & { isGroupThumbnail?: boolean }).isGroupThumbnail = true;
         }
       });
       

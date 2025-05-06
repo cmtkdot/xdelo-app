@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 
 /**
@@ -97,15 +98,17 @@ export async function analyzeWithAI(messageId: string, caption: string) {
     // Generate a correlation ID
     const correlationId = crypto.randomUUID().toString();
     
-    // Call the database function directly
-    const { data, error } = await supabase.rpc('xdelo_process_caption_workflow', {
-      p_message_id: messageId,
-      p_correlation_id: correlationId,
-      p_force: true
+    // Use edge function instead of direct RPC
+    const { data, error } = await supabase.functions.invoke('process-caption', {
+      body: {
+        messageId,
+        correlationId,
+        force: true
+      }
     });
     
     if (error) {
-      console.error('Error invoking xdelo_process_caption_workflow:', error);
+      console.error('Error invoking process-caption:', error);
       return { 
         success: false, 
         error: error.message || 'Error processing caption',
@@ -136,15 +139,19 @@ export async function parseCaption(messageId: string, caption?: string, isEdit =
     // Generate a correlation ID
     const correlationId = crypto.randomUUID().toString();
     
-    // Call the database function directly instead of the edge function
-    const { data, error } = await supabase.rpc('xdelo_process_caption_workflow', {
-      p_message_id: messageId,
-      p_correlation_id: correlationId,
-      p_force: true
+    // Use edge function instead of direct RPC
+    const { data, error } = await supabase.functions.invoke('process-caption', {
+      body: {
+        messageId,
+        caption,
+        isEdit,
+        correlationId,
+        force: true
+      }
     });
     
     if (error) {
-      console.error('Error invoking xdelo_process_caption_workflow:', error);
+      console.error('Error invoking process-caption:', error);
       return { 
         success: false, 
         error: error.message || 'Error processing caption',

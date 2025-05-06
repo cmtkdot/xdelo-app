@@ -1,3 +1,4 @@
+
 import type { ProcessingState } from '../api/ProcessingState';
 import type { AnalyzedContent } from '../utils/AnalyzedContent';
 
@@ -84,6 +85,9 @@ export interface Message {
   is_forwarded?: boolean;
   forward_date?: string;
   is_edited_channel_post?: boolean;
+  // UI-specific flags
+  isGroupThumbnail?: boolean;
+  media_group_sync?: string | boolean;
 }
 
 export interface MessageApiResponse {

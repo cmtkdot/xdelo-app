@@ -27,12 +27,15 @@ export const CONFIG = DEFAULT_CONFIG;
  */
 export const fetchMatchingConfig = async (): Promise<ProductMatchingConfig> => {
   try {
-    // Use the new RPC function to get configuration
-    const { data, error } = await supabase
-      .rpc('xdelo_get_product_matching_config');
+    // Use an edge function instead of direct RPC
+    const { data, error } = await supabase.functions.invoke('get-product-matching-config');
     
     if (error) {
       console.warn("Could not fetch matching configuration, using defaults", error);
+      return DEFAULT_CONFIG;
+    }
+    
+    if (!data) {
       return DEFAULT_CONFIG;
     }
     
@@ -65,18 +68,17 @@ export const updateMatchingConfig = async (config: Partial<ProductMatchingConfig
       }
     };
     
-    // Use the new RPC function to update configuration
-    const { data, error } = await supabase
-      .rpc('xdelo_update_product_matching_config', {
-        p_config: updatedConfig
-      });
+    // Use an edge function instead of direct RPC
+    const { data, error } = await supabase.functions.invoke('update-product-matching-config', {
+      body: { config: updatedConfig }
+    });
     
     if (error) {
       console.error("Failed to update matching configuration:", error);
       return updatedConfig;
     }
     
-    return data as ProductMatchingConfig;
+    return data as ProductMatchingConfig || updatedConfig;
   } catch (err) {
     console.error("Error updating product matching configuration:", err);
     return { ...DEFAULT_CONFIG, ...config };

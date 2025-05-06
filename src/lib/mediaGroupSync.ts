@@ -25,10 +25,12 @@ export async function syncMediaGroup(mediaGroupId: string, sourceMessageId: stri
   }
 
   try {
-    // Call the RPC function to sync the media group
-    const { data, error } = await supabase.rpc('sync_media_group_captions', {
-      p_media_group_id: mediaGroupId,
-      p_source_message_id: sourceMessageId
+    // Use edge function instead of direct RPC
+    const { data, error } = await supabase.functions.invoke('sync-media-group', {
+      body: {
+        mediaGroupId,
+        sourceMessageId
+      }
     });
 
     if (error) {
@@ -40,12 +42,10 @@ export async function syncMediaGroup(mediaGroupId: string, sourceMessageId: stri
     }
 
     // Type cast the result to SyncResult or create a default response
-    const result: SyncResult = data || { 
+    return data as SyncResult || { 
       success: true, 
       message: "Media group synced successfully" 
     };
-    
-    return result;
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
     console.error("Exception during media group sync:", errorMessage);
@@ -62,7 +62,7 @@ export async function syncMediaGroup(mediaGroupId: string, sourceMessageId: stri
  */
 export async function syncAllMediaGroups(): Promise<SyncResult> {
   try {
-    const { data, error } = await supabase.rpc('sync_all_media_groups');
+    const { data, error } = await supabase.functions.invoke('sync-all-media-groups');
 
     if (error) {
       console.error("Error syncing all media groups:", error);
@@ -72,13 +72,11 @@ export async function syncAllMediaGroups(): Promise<SyncResult> {
       };
     }
 
-    // Type cast the result to SyncResult or create a default response
-    const result: SyncResult = data || { 
+    // Type cast the result to SyncResult
+    return data as SyncResult || { 
       success: true, 
       message: "All media groups synced successfully" 
     };
-    
-    return result;
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
     console.error("Exception during syncing all media groups:", errorMessage);

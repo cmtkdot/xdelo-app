@@ -48,7 +48,7 @@ export type MessageData = {
   product_name: string | null;
   product_code: string | null;
   vendor_uid: string | null;
-  media_group_sync: boolean | null;
+  media_group_sync: string | boolean | null;
   product_sku: string | null;
   message_url: string | null;
   glide_row_id: string | null;
