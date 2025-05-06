@@ -1,19 +1,18 @@
-
-import { useState, useCallback } from 'react';
 import { Message } from '@/types';
+import { useCallback, useState } from 'react';
 import { useTelegramOperations } from './useTelegramOperations';
 
 export function useMessageViewHandlers() {
   // Store the actual message objects rather than just booleans
   const [selectedMessages, setSelectedMessages] = useState<Record<string, Message>>({});
-  const { handleDelete, isProcessing } = useTelegramOperations();
+  const { deleteMessage, isDeleting } = useTelegramOperations();
 
   // Toggle message selection with proper typing
   const handleToggleSelect = useCallback((message: Message) => {
     setSelectedMessages(prev => {
       // If already selected, remove it; otherwise add it
       if (prev[message.id]) {
-        const newSelected = {...prev};
+        const newSelected = { ...prev };
         delete newSelected[message.id];
         return newSelected;
       } else {
@@ -46,7 +45,7 @@ export function useMessageViewHandlers() {
     clearSelection,
     getSelectedMessageIds,
     getSelectedMessagesArray,
-    deleteMessage: handleDelete,
-    isProcessing
+    deleteMessage,
+    isDeleting
   };
 }

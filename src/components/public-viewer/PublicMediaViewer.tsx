@@ -1,9 +1,9 @@
-
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { Message } from '@/types/entities/Message'
-import { PublicEnhancedMediaDetail } from './PublicEnhancedMediaDetail'
+import { PublicEnhancedMediaDetail, MediaViewerProps } from './PublicEnhancedMediaDetail'
 
-export interface MediaViewerProps {
+// For backward compatibility - old interface
+export interface PublicMediaViewerProps {
   isOpen: boolean
   onClose: () => void
   currentGroup: Message[]
@@ -25,8 +25,9 @@ export function PublicMediaViewer({
   onNext,
   hasPrevious = false,
   hasNext = false,
-  onDelete
-}: MediaViewerProps) {
+  onDelete,
+  className
+}: PublicMediaViewerProps) {
   const [touchStart, setTouchStart] = useState<number | null>(null)
   const [touchEnd, setTouchEnd] = useState<number | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -80,6 +81,23 @@ export function PublicMediaViewer({
   
   if (!isOpen || currentGroup.length === 0) return null
   
+  // Convert from old props interface to new interface
+  const newProps: MediaViewerProps = {
+    items: currentGroup,
+    currentIndex: initialIndex,
+    open: isOpen,
+    onClose: onClose,
+    onDelete: onDelete,
+    className: className,
+    // Convert onPrevious/onNext to productNavigation prop
+    productNavigation: (onPrevious || onNext) ? {
+      hasPrevious: !!hasPrevious,
+      hasNext: !!hasNext,
+      goToPrevious: onPrevious || (() => {}),
+      goToNext: onNext || (() => {})
+    } : undefined
+  };
+  
   return (
     <div 
       ref={containerRef}
@@ -88,17 +106,7 @@ export function PublicMediaViewer({
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
-      <PublicEnhancedMediaDetail
-        isOpen={isOpen}
-        onClose={onClose}
-        currentGroup={currentGroup}
-        initialIndex={initialIndex}
-        onPrevious={onPrevious}
-        onNext={onNext}
-        hasPrevious={hasPrevious}
-        hasNext={hasNext}
-        onDelete={onDelete}
-      />
+      <PublicEnhancedMediaDetail {...newProps} />
     </div>
   )
 }

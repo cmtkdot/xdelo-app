@@ -38,6 +38,8 @@ export interface PublicMediaViewerProps {
     goToPrevious: () => void;
     goToNext: () => void;
   };
+  /** Delete media handler */
+  onDelete?: (mediaId: string) => Promise<void>;
 }
 
 // Optimized thumbnail component with React.memo to reduce unnecessary re-renders
@@ -49,14 +51,14 @@ interface MediaThumbnailsProps {
 
 const MediaThumbnails = React.memo(({ items, currentIndex, onSelect }: MediaThumbnailsProps) => {
   return (
-    <div className="grid grid-flow-col auto-cols-max gap-2 sm:gap-3 overflow-x-auto px-2 py-2 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-muted-foreground/30 touch-pan-x w-full">
+    <div className="flex flex-nowrap items-center gap-2 sm:gap-3 md:gap-4 px-2 py-1 overflow-x-auto scrollbar-thin scrollbar-track-transparent scrollbar-thumb-muted-foreground/30 touch-pan-x">
       {items.map((item, idx) => {
         const isSelected = idx === currentIndex;
         return (
           <button
             key={`thumbnail-${idx}-${item.id}`}
             className={cn(
-              "relative flex-shrink-0 rounded-sm overflow-hidden border-2 transition-all duration-200 h-12 sm:h-14 w-12 sm:w-14",
+              "flex-shrink-0 rounded-sm overflow-hidden border-2 transition-all duration-200 h-12 sm:h-14 md:h-16 w-12 sm:w-14 md:w-16",
               isSelected
                 ? "border-primary shadow-md scale-105 z-10"
                 : "border-border/50 hover:border-border"
@@ -104,7 +106,8 @@ const PublicEnhancedMediaDetail: React.FC<PublicMediaViewerProps> = ({
   onSelect,
   open,
   className,
-  productNavigation
+  productNavigation,
+  onDelete
 }) => {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -179,18 +182,11 @@ const PublicEnhancedMediaDetail: React.FC<PublicMediaViewerProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [open, handlePrevious, handleNext, onClose]);
 
-  // Handle download of media
-  const handleDownload = useCallback(() => {
-    if (!currentMessage?.public_url) return;
-    
-    const link = document.createElement('a');
-    link.href = currentMessage.public_url;
-    link.download = `${currentMessage.caption || 'media'}-${currentMessage.id}`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    toast.success('Download started');
-  }, [currentMessage]);
+  // Handler for download - move outside component
+  const handleDownloadExternal = (url: string) => {
+    // Open url in new tab
+    window.open(url, '_blank');
+  };
 
   // Handle copying of details
   const handleCopyDetails = useCallback(() => {
@@ -211,6 +207,17 @@ const PublicEnhancedMediaDetail: React.FC<PublicMediaViewerProps> = ({
       toast.error('Failed to copy details');
     });
   }, [currentMessage, getFormattedDate]);
+
+  // Handle copying of link
+  const handleCopyLink = useCallback(() => {
+    if (!currentMessage?.public_url) return;
+    
+    navigator.clipboard.writeText(currentMessage.public_url).then(() => {
+      toast.success('Link copied to clipboard');
+    }).catch(() => {
+      toast.error('Failed to copy link');
+    });
+  }, [currentMessage]);
 
   // Handle delete
   const handleDeleteClick = useCallback(() => {
@@ -280,9 +287,9 @@ const PublicEnhancedMediaDetail: React.FC<PublicMediaViewerProps> = ({
             </Button>
           </div>
           
-          <div className="flex flex-col h-full md:flex-row md:min-h-[600px] overflow-hidden">
+          <div className="flex flex-col h-full md:flex-row overflow-hidden">
             {/* Media container - optimized for mobile */}
-            <div className="relative flex flex-col md:w-3/5 md:h-[85vh] overflow-hidden border-b md:border-b-0 md:border-r h-[40vh] sm:h-[50vh] bg-black/5 dark:bg-black/40">
+            <div className="relative flex flex-col md:w-3/5 overflow-hidden border-b md:border-b-0 md:border-r h-[40vh] sm:h-[50vh] md:h-auto bg-black/5 dark:bg-black/40">
               {/* Main media display with navigation overlays */}
               <div className="relative flex-1 flex items-center justify-center bg-black/95 min-h-0">
                 {/* Previous media button (within current group) */}
@@ -317,36 +324,6 @@ const PublicEnhancedMediaDetail: React.FC<PublicMediaViewerProps> = ({
                   <ChevronRight className="h-5 w-5" />
                 </Button>
 
-                {/* Previous product group button */}
-                {productNavigation?.hasPrevious && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="absolute left-2 top-4 z-10 rounded-full h-8 px-3 bg-background/80 backdrop-blur-sm border shadow-md"
-                    onClick={productNavigation.goToPrevious}
-                    aria-label="Previous product"
-                    type="button"
-                  >
-                    <ChevronLeft className="h-4 w-4 mr-1" />
-                    <span className="text-xs">Prev Product</span>
-                  </Button>
-                )}
-
-                {/* Next product group button */}
-                {productNavigation?.hasNext && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="absolute right-2 top-4 z-10 rounded-full h-8 px-3 bg-background/80 backdrop-blur-sm border shadow-md"
-                    onClick={productNavigation.goToNext}
-                    aria-label="Next product"
-                    type="button"
-                  >
-                    <span className="text-xs">Next Product</span>
-                    <ChevronRight className="h-4 w-4 ml-1" />
-                  </Button>
-                )}
-
                 {/* Media display component */}
                 <ErrorBoundary
                   fallback={
@@ -371,21 +348,27 @@ const PublicEnhancedMediaDetail: React.FC<PublicMediaViewerProps> = ({
 
               {/* Thumbnails for media groups with pagination */}
               {items.length > 1 && (
-                <div className="border-t bg-background/95 backdrop-blur-sm h-auto shrink-0 overflow-hidden flex flex-col">
-                  <div className="grid grid-cols-[auto_1fr_auto] h-full min-h-[70px] sm:min-h-[80px]">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className={`h-8 w-8 rounded-full flex-shrink-0 self-center ml-2 ${canNavigatePrev ? 'opacity-100' : 'opacity-30 cursor-not-allowed'}`}
-                      onClick={handlePrevious}
-                      disabled={!canNavigatePrev}
-                      aria-label="Previous thumbnail group"
-                      type="button"
-                    >
-                      <ChevronLeft className="w-4 h-4" />
-                    </Button>
+                <div className="border-t bg-background/95 backdrop-blur-sm h-auto shrink-0">
+                  <div className="flex items-center justify-between px-2 h-[72px] md:h-[80px]">
+                    {/* Previous product button instead of thumbnail navigation */}
+                    {productNavigation?.hasPrevious ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 rounded-md bg-background"
+                        onClick={productNavigation.goToPrevious}
+                        aria-label="Previous product"
+                        type="button"
+                      >
+                        <ChevronLeft className="w-4 h-4 mr-1" />
+                        <span className="text-xs">Prev Product</span>
+                      </Button>
+                    ) : (
+                      // Spacer for alignment
+                      <div className="w-[105px]"></div>
+                    )}
                     
-                    <div className="overflow-x-auto flex items-center justify-start scroll-smooth snap-x">
+                    <div className="flex-1 overflow-x-auto flex items-center justify-center">
                       <ErrorBoundary
                         fallback={
                           <div className="p-2 text-xs text-center text-muted-foreground h-full flex items-center justify-center">
@@ -401,31 +384,38 @@ const PublicEnhancedMediaDetail: React.FC<PublicMediaViewerProps> = ({
                       </ErrorBoundary>
                     </div>
                     
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className={`h-8 w-8 rounded-full flex-shrink-0 self-center mr-2 ${canNavigateNext ? 'opacity-100' : 'opacity-30 cursor-not-allowed'}`}
-                      onClick={handleNext}
-                      disabled={!canNavigateNext}
-                      aria-label="Next thumbnail group"
-                      type="button"
-                    >
-                      <ChevronRight className="w-4 h-4" />
-                    </Button>
+                    {/* Next product button instead of thumbnail navigation */}
+                    {productNavigation?.hasNext ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 rounded-md bg-background"
+                        onClick={productNavigation.goToNext}
+                        aria-label="Next product"
+                        type="button"
+                      >
+                        <span className="text-xs">Next Product</span>
+                        <ChevronRight className="w-4 h-4 ml-1" />
+                      </Button>
+                    ) : (
+                      // Spacer for alignment
+                      <div className="w-[105px]"></div>
+                    )}
                   </div>
                 </div>
               )}
             </div>
 
-            {/* Details panel - with improved mobile layout and overlay */}
-            <div className="w-full md:w-2/5 flex-grow overflow-y-auto flex flex-col bg-background/95 h-[40vh] sm:h-[45vh] border-border z-20">
+            {/* Information container - tabs for details and metadata */}
+            <div className="md:w-2/5 h-[45vh] sm:h-[40vh] md:h-auto overflow-y-auto">
               <Tabs defaultValue="info" className="w-full h-full flex flex-col">
                 <TabsList className="w-full mb-0 grid grid-cols-2 bg-muted/60 sticky top-0 z-30">
                   <TabsTrigger value="info" className="text-[11px] sm:text-xs px-2 sm:px-3 h-8 sm:h-9 data-[state=active]:bg-background">
-                    <Info className="w-3 h-3 mr-1" /> Info
+                    <Info className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-1.5" />
+                    Info
                   </TabsTrigger>
                   <TabsTrigger value="details" className="text-[11px] sm:text-xs px-2 sm:px-3 h-8 sm:h-9 data-[state=active]:bg-background">
-                    <FileText className="w-3 h-3 mr-1" /> Details
+                    Details
                   </TabsTrigger>
                 </TabsList>
                 
@@ -434,37 +424,41 @@ const PublicEnhancedMediaDetail: React.FC<PublicMediaViewerProps> = ({
                   <TabsContent value="info" className="mt-0 h-full data-[state=active]:flex data-[state=active]:flex-col">
                     <div className="space-y-3 pb-16">
                       {/* Action buttons moved to info tab */}
-                      <div className="flex justify-center items-center gap-3 sm:gap-4 py-2 border border-border/30 rounded-md bg-muted/20">
-                        {false && (
+                      <div className="flex flex-wrap justify-center items-center gap-3 sm:gap-4 py-2 border border-border/30 rounded-md bg-muted/20">
+                        {onDelete && (
                           <Button
                             variant="outline"
                             size="sm"
+                            className="h-9 rounded-md bg-background"
                             onClick={handleDeleteClick}
-                            className="text-destructive h-8 w-8 p-0 hover:bg-destructive/10 rounded-full"
+                            disabled={isDeleting}
+                            aria-label="Delete media"
                           >
-                            <Trash2 className="h-3.5 w-3.5" />
-                            <span className="sr-only">Delete</span>
+                            <Trash2 className="w-4 h-4 mr-1 text-destructive" />
+                            <span>Delete</span>
                           </Button>
                         )}
-                        
+
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={handleDownload}
-                          className="h-8 w-8 p-0 hover:bg-primary/10 rounded-full"
+                          className="h-9 rounded-md bg-background"
+                          onClick={() => currentMessage?.public_url && handleDownloadExternal(currentMessage.public_url)}
+                          aria-label="Download media"
                         >
-                          <Download className="h-3.5 w-3.5" />
-                          <span className="sr-only">Download</span>
+                          <Download className="w-4 h-4 mr-1 text-primary" />
+                          <span>Download</span>
                         </Button>
-                        
+
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={handleCopyDetails}
-                          className="h-8 w-8 p-0 hover:bg-primary/10 rounded-full"
+                          className="h-9 rounded-md bg-background"
+                          onClick={handleCopyLink}
+                          aria-label="Copy media URL"
                         >
-                          <Clipboard className="h-3.5 w-3.5" />
-                          <span className="sr-only">Copy Details</span>
+                          <Clipboard className="w-4 h-4 mr-1 text-blue-500 dark:text-blue-400" />
+                          <span>Copy URL</span>
                         </Button>
                       </div>
                 
@@ -614,4 +608,8 @@ const PublicMediaViewerWithClickOutside: React.FC<PublicMediaViewerProps> = ({
   );
 };
 
+// Default export for backwards compatibility
 export default PublicMediaViewerWithClickOutside;
+
+// Add this line for backwards compatibility with existing imports
+export { PublicEnhancedMediaDetail };

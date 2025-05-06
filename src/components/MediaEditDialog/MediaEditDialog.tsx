@@ -1,51 +1,41 @@
-
-import React, { useState, useEffect } from 'react';
+import { Button } from "@/components/ui/button";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
-import { Button } from "@/components/ui/button"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { useToast } from "@/hooks/useToast"
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Spinner } from "@/components/ui/spinner";
+import { Textarea } from "@/components/ui/textarea";
 import { useMediaUtils } from '@/hooks/useMediaUtils';
+import { useToast } from "@/hooks/useToast";
+import { useEffect, useState } from 'react';
 
 interface MediaEditDialogProps {
-  media: { id: string; caption?: string; media_group_id?: string };
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onClose?: () => void;
+  isOpen: boolean;
+  media: any; // Using any for now, should be typed properly
+  onClose: () => void;
   onSave?: (newCaption: string) => void;
   onSuccess?: () => void;
+  refresh?: () => void;
 }
 
-export function MediaEditDialog({ 
-  media, 
-  open, 
-  onOpenChange, 
+export function MediaEditDialog({
+  isOpen,
+  media,
   onClose,
-  onSave, 
-  onSuccess 
+  onSave,
+  onSuccess,
+  refresh
 }: MediaEditDialogProps) {
   const [newCaption, setNewCaption] = useState(media?.caption || "");
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
-  const { toast } = useToast();
-  const { syncMessageCaption } = useMediaUtils();
 
-  const handleOpenChange = (isOpen: boolean) => {
-    onOpenChange(isOpen);
-    if (!isOpen && onClose) {
-      onClose();
-    }
-  };
+  const { syncMessageCaption } = useMediaUtils();
+  const { toast } = useToast();
 
   useEffect(() => {
     if (media) {
@@ -56,93 +46,95 @@ export function MediaEditDialog({
   const handleSave = async () => {
     setIsSaving(true);
     setError(null);
-    setSyncStatus(null);
-    
+
     try {
       if (!media) throw new Error("No media found");
-      
-      setSyncStatus('Updating and analyzing caption...');
-      
-      // Use the updated caption sync hook to handle the update and sync
-      const result = await syncMessageCaption({ messageId: media.id });
-      
-      if (!result?.success) {
-        throw new Error(result?.message || 'Failed to process caption update');
+
+      // If caption is updated, sync it with Telegram using our new function
+      if (media.caption !== newCaption) {
+        const captionSyncResult = await syncMessageCaption(media.id, newCaption);
+
+        if (!captionSyncResult) {
+          toast({
+            variant: 'destructive',
+            title: 'Caption Update Failed',
+            description: 'Failed to sync caption with Telegram',
+          });
+        } else {
+          toast({
+            title: 'Message Updated',
+            description: 'Caption has been updated successfully',
+          });
+
+          // Call the onSave callback if provided
+          onSave && onSave(newCaption);
+
+          onClose();
+          refresh?.();
+        }
+      } else {
+        // If nothing changed, just close
+        onClose();
       }
-      
-      setSyncStatus('Caption updated and synced');
-      
-      // Call the onSave callback if provided
-      onSave && onSave(newCaption);
-      
-      // Allow parent to refresh data after successful save
-      setTimeout(() => {
-        onSuccess && onSuccess();
-      }, 1500); // Small delay to ensure sync completes
-      
-    } catch (err: any) {
-      console.error('Error updating caption:', err);
-      setError(err.message || 'Error updating caption');
+    } catch (error) {
+      console.error('Error saving media:', error);
+      setError(error instanceof Error ? error.message : 'Unknown error occurred');
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Unknown error occurred',
+      });
     } finally {
       setIsSaving(false);
     }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setNewCaption(e.target.value);
-  };
-
   return (
-    <AlertDialog open={open} onOpenChange={handleOpenChange}>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Edit Media Caption</AlertDialogTitle>
-          <AlertDialogDescription>
-            Update the caption for this media item.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <div className="grid gap-4 py-4">
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="name" className="text-right">
-              Caption
-            </Label>
-            <div className="col-span-3">
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Edit Media</DialogTitle>
+        </DialogHeader>
+
+        {media && (
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-1 gap-2">
+              <label htmlFor="caption" className="text-sm font-medium">
+                Caption
+              </label>
               <Textarea
                 id="caption"
                 value={newCaption}
-                onChange={handleChange}
+                onChange={(e) => setNewCaption(e.target.value)}
                 className="col-span-3"
+                rows={5}
               />
             </div>
+
+            {error && (
+              <div className="text-sm text-red-500">
+                {error}
+              </div>
+            )}
+
+            {syncStatus && (
+              <div className="text-sm text-blue-500">
+                {syncStatus}
+              </div>
+            )}
           </div>
-          {syncStatus && (
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="name" className="text-right">
-                Sync Status
-              </Label>
-              <div className="col-span-3">
-                <p className="text-sm text-muted-foreground">{syncStatus}</p>
-              </div>
-            </div>
-          )}
-          {error && (
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="name" className="text-right">
-                Error
-              </Label>
-              <div className="col-span-3">
-                <p className="text-sm text-red-500">{error}</p>
-              </div>
-            </div>
-          )}
-        </div>
-        <AlertDialogFooter>
-          <AlertDialogCancel disabled={isSaving}>Cancel</AlertDialogCancel>
-          <Button type="submit" onClick={handleSave} disabled={isSaving}>
-            {isSaving ? "Saving..." : "Save changes"}
+        )}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={isSaving}>
+            Cancel
           </Button>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+          <Button onClick={handleSave} disabled={isSaving}>
+            {isSaving ? <Spinner className="mr-2" /> : null}
+            Save
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

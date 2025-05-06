@@ -1,8 +1,7 @@
-
-import { useState, useCallback } from "react";
 import { useToast } from "@/hooks/useToast";
 import { supabase } from "@/integrations/supabase/client";
 import { Message } from "@/types/entities/Message";
+import { useCallback, useState } from "react";
 
 // Type for response from reupload function
 interface ReuploadResponse {
@@ -23,7 +22,7 @@ export function useMediaUtils() {
    */
   const reuploadMediaFromTelegram = useCallback(async (message: Message | string): Promise<ReuploadResponse> => {
     const messageId = typeof message === 'string' ? message : message.id;
-    
+
     if (!messageId) {
       toast({
         title: "Error",
@@ -55,7 +54,7 @@ export function useMediaUtils() {
 
       // Handle the response data properly with type assertion
       const response = data as ReuploadResponse;
-      
+
       if (response && response.success) {
         toast({
           title: "Media Re-upload Successful",
@@ -121,7 +120,7 @@ export function useMediaUtils() {
 
       // Handle the response data properly with type assertion
       const response = data as ReuploadResponse;
-      
+
       if (response && response.success) {
         toast({
           title: "Caption Fix Successful",
@@ -182,7 +181,7 @@ export function useMediaUtils() {
 
       // Handle the response data properly with type assertion
       const response = data as ReuploadResponse;
-      
+
       if (response && response.success) {
         toast({
           title: "Content Disposition Fixed",
@@ -234,7 +233,7 @@ export function useMediaUtils() {
         acc[id] = true;
         return acc;
       }, {});
-      
+
       setProcessingMessageIds(prev => ({ ...prev, ...processingIds }));
 
       // Call the Supabase function to repair batch
@@ -255,7 +254,7 @@ export function useMediaUtils() {
 
       // Handle the response data properly with type assertion
       const response = data as ReuploadResponse;
-      
+
       if (response && response.success) {
         toast({
           title: "Batch Repair Successful",
@@ -292,63 +291,55 @@ export function useMediaUtils() {
   }, [toast]);
 
   /**
-   * Sync message caption
+   * Sync the caption of a message with Telegram
    */
-  const syncMessageCaption = useCallback(async ({ messageId }: { messageId: string }): Promise<ReuploadResponse> => {
-    if (!messageId) {
-      toast({
-        title: "Error",
-        description: "Message ID is required",
-        variant: "destructive",
-      });
-      return { success: false, message: "Message ID is required" };
-    }
-
+  const syncMessageCaption = async (messageId: string, newCaption: string) => {
     try {
       setProcessingMessageIds(prev => ({ ...prev, [messageId]: true }));
 
-      // Call the Supabase function to sync caption
-      // Using any for now to bypass type issues with RPC functions
-      const { data, error } = await supabase.rpc('sync_message_caption' as any, {
-        p_message_id: messageId
-      });
+      // Use the new RPC function to update the caption
+      const { data, error } = await supabase.rpc(
+        'x_sync_message_caption_edge',
+        {
+          p_message_id: messageId,
+          p_new_caption: newCaption
+        }
+      );
 
       if (error) {
-        console.error("Error syncing message caption:", error);
         toast({
-          title: "Caption Sync Failed",
-          description: error.message,
-          variant: "destructive",
+          variant: 'destructive',
+          title: 'Caption Update Failed',
+          description: `Failed to update caption: ${error.message}`,
         });
-        return { success: false, message: error.message };
+        return false;
       }
 
-      // Handle the response data properly with type assertion
-      const response = data as ReuploadResponse;
-      
-      if (response && response.success) {
+      if (data && data.success) {
         toast({
-          title: "Caption Sync Successful",
-          description: response.message || "Message caption has been synced.",
+          title: 'Caption Updated',
+          description: 'Caption has been updated successfully.',
         });
-        return { success: true, message: response.message, data: response.data };
+
+        // Refresh the message to update the UI
+        refreshMessage();
+        return true;
       } else {
         toast({
-          title: "Caption Sync Failed",
-          description: response.message || "Failed to sync message caption.",
-          variant: "destructive",
+          variant: 'destructive',
+          title: 'Caption Update Failed',
+          description: data?.error || 'Unknown error occurred',
         });
-        return { success: false, message: response.message };
+        return false;
       }
     } catch (error) {
-      console.error("Exception during caption sync:", error);
-      const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+      console.error('Error syncing caption:', error);
       toast({
-        title: "Caption Sync Error",
-        description: errorMessage,
-        variant: "destructive",
+        variant: 'destructive',
+        title: 'Caption Update Failed',
+        description: error instanceof Error ? error.message : 'An unexpected error occurred',
       });
-      return { success: false, message: errorMessage };
+      return false;
     } finally {
       setProcessingMessageIds(prev => {
         const newState = { ...prev };
@@ -356,7 +347,7 @@ export function useMediaUtils() {
         return newState;
       });
     }
-  }, [toast]);
+  };
 
   return {
     reuploadMediaFromTelegram,
