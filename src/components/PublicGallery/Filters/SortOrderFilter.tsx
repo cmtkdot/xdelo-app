@@ -1,6 +1,7 @@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
-import { ArrowUpDown } from "lucide-react";
+import { ArrowUpDown, ChevronsUpDown } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
 interface SortOrderFilterProps {
   value: 'asc' | 'desc';
@@ -8,15 +9,26 @@ interface SortOrderFilterProps {
 }
 
 export const SortOrderFilter = ({ value, onChange }: SortOrderFilterProps) => {
+  // Get display text for selected value
+  const getDisplayText = () => {
+    switch (value) {
+      case 'desc':
+        return 'Newest First';
+      case 'asc':
+        return 'Oldest First';
+      default:
+        return 'Sort Order';
+    }
+  };
+
   return (
-    <div className="space-y-2 min-w-[120px]">
-      <Label className="text-xs font-medium flex items-center gap-1 pl-1">
-        <ArrowUpDown className="w-3 h-3" />
-        Sort Order
-      </Label>
+    <div className="min-w-[120px]">
       <Select value={value} onValueChange={onChange}>
-        <SelectTrigger className="h-8 text-sm">
-          <SelectValue placeholder="Sort Order" />
+        <SelectTrigger className="h-8 border-dashed text-sm px-3 flex items-center justify-between">
+          <div className="flex items-center gap-1 truncate">
+            <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="truncate">{getDisplayText()}</span>
+          </div>
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="desc">Newest First</SelectItem>

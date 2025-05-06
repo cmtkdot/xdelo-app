@@ -3,8 +3,7 @@ import { AlertCircle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { MediaDisplayProps } from '../types';
-
-
+import { VideoThumbnail } from '@/components/shared/VideoThumbnail';
 
 /**
  * EnhancedMediaDisplay - A completely rewritten media display component
@@ -193,6 +192,14 @@ function VideoDisplay({
   onLoadError: () => void;
   mimeType?: string;
 }) {
+  const [showThumbnail, setShowThumbnail] = useState(true);
+  
+  // Handle video load success
+  const handleVideoLoad = () => {
+    setShowThumbnail(false);
+    onLoadSuccess();
+  };
+  
   // Handle video play error internally to attempt auto-switching to picture in picture
   const handleVideoError = (e: React.SyntheticEvent<HTMLVideoElement, Event>) => {
     const videoEl = e.currentTarget;
@@ -218,13 +225,34 @@ function VideoDisplay({
   
   return (
     <div className="w-full h-full flex items-center justify-center">
+      {showThumbnail && (
+        <div className="absolute inset-0 z-20 flex items-center justify-center">
+          <VideoThumbnail
+            src={url}
+            alt="Video preview"
+            className="w-full h-full cursor-pointer"
+            width={320}
+            height={180}
+            onLoad={() => {}} // We don't want to mark the entire component as loaded yet
+            onClick={() => setShowThumbnail(false)}
+          />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="w-16 h-16 flex items-center justify-center bg-black/50 rounded-full cursor-pointer">
+              <svg viewBox="0 0 24 24" fill="none" className="w-8 h-8" stroke="white" strokeWidth={2}>
+                <polygon points="5 3 19 12 5 21 5 3" fill="white" />
+              </svg>
+            </div>
+          </div>
+        </div>
+      )}
+      
       <video
         src={url}
         className="w-full h-full object-cover" // Consistent filling of container
         controls
         controlsList="nodownload"
         preload="metadata"
-        onLoadedData={onLoadSuccess}
+        onLoadedData={handleVideoLoad}
         onError={handleVideoError}
         playsInline
         autoPlay={false}

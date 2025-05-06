@@ -13,8 +13,11 @@ import { DeleteConfirmationDialog } from "./TableComponents/DeleteConfirmationDi
 import { useMessageTableState } from "./hooks/useMessageTableState";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Edit2, Save, X, Trash2, Search, ArrowUp, ArrowDown } from "lucide-react";
+import { Edit2, Save, X, Trash2, Search, ArrowUp, ArrowDown, Play } from "lucide-react";
 import { cn } from "@/lib/generalUtils";
+import { VideoThumbnail } from '@/components/shared/VideoThumbnail';
+import { isVideoMessage } from '@/utils/mediaUtils';
+import { useVideoThumbnail } from '@/hooks/useVideoThumbnail';
 
 interface MessagesTableProps {
   messages: Message[];
@@ -125,21 +128,46 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
   const renderMediaPreview = (message: Message) => {
     if (!message.public_url) return null;
 
-    if (message.mime_type?.startsWith('video/')) {
-      return (
-        <div className="relative w-16 h-16 cursor-pointer" onClick={() => handleMediaClick(message)}>
-          <video src={message.public_url} className="w-16 h-16 object-cover rounded-md" />
-        </div>
-      );
-    }
+    const isVideo = isVideoMessage(message);
 
     return (
-      <img 
-        src={message.public_url} 
-        alt={message.caption || 'Preview'} 
-        className="w-16 h-16 object-cover rounded-md cursor-pointer"
-        onClick={() => handleMediaClick(message)}
-      />
+      <div className="flex items-center gap-3">
+        <div className="relative flex-shrink-0">
+          {isVideo ? (
+            <div className="relative w-16 h-16 rounded-md overflow-hidden">
+              <VideoThumbnail
+                src={message.public_url}
+                alt={message.caption || 'Video preview'}
+                className="cursor-pointer"
+                width={64}
+                height={64}
+                onClick={() => handleMediaClick(message)}
+              />
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div className="rounded-full bg-black/60 p-2">
+                  <Play className="h-3 w-3 text-white fill-white" />
+                </div>
+              </div>
+            </div>
+          ) : (
+            <img 
+              src={message.public_url} 
+              alt={message.caption || 'Preview'} 
+              className="w-16 h-16 object-cover rounded-md cursor-pointer"
+              onClick={() => handleMediaClick(message)}
+            />
+          )}
+        </div>
+        <div className="max-w-[120px]">
+          <div className="line-clamp-2 text-xs">
+            {message.analyzed_content?.product_name ? (
+              <span className="font-medium">{message.analyzed_content.product_name}</span>
+            ) : (
+              <span>{message.caption || "No caption"}</span>
+            )}
+          </div>
+        </div>
+      </div>
     );
   };
 
