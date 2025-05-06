@@ -1,18 +1,20 @@
 import { ErrorBoundary } from '@/components/ErrorBoundary/ErrorBoundary'
 import { EnhancedMediaDisplay } from '@/components/media-viewer/shared/EnhancedMediaDisplay'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
-import { Separator } from "@/components/ui/separator"
-import { Skeleton } from "@/components/ui/skeleton"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Card } from '@/components/ui/card'
+import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { useToast } from '@/hooks/useToast'
+import { useTelegramOperations } from '@/hooks/useTelegramOperations'
 import { Message } from '@/types/entities/Message'
+import { ArrowLeft, ArrowRight, Copy, Download, Trash, X } from 'lucide-react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { DeleteMessageDialog } from '@/components/shared/DeleteMessageDialog'
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
 import { format } from 'date-fns'
-import { Calendar, ChevronLeft, ChevronRight, Clipboard, Download, FileText, Info, MessageSquare, ShoppingBag, Trash2, X } from 'lucide-react'
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { Calendar, ChevronLeft, ChevronRight, Clipboard, Download as DownloadIcon, FileText, Info, MessageSquare, ShoppingBag, Trash2, X as XIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { VideoThumbnail } from '@/components/shared/VideoThumbnail'
 import { cn } from '@/lib/utils'
@@ -224,12 +226,18 @@ const PublicEnhancedMediaDetail: React.FC<PublicMediaViewerProps> = ({
     setShowDeleteConfirm(true);
   }, []);
 
-  const handleDeleteConfirm = useCallback(async () => {
+  const handleDeleteConfirm = useCallback(async (deleteTelegram: boolean) => {
     if (!currentMessage) return;
     
     setIsDeleting(true);
     try {
-      // TODO: implement delete logic
+      if (onDelete) {
+        await onDelete(currentMessage.id);
+      } else if (currentMessage) {
+        const { deleteMessage } = useTelegramOperations();
+        await deleteMessage(currentMessage, deleteTelegram);
+      }
+      
       toast.success('Media deleted successfully');
       setShowDeleteConfirm(false);
       
@@ -240,14 +248,13 @@ const PublicEnhancedMediaDetail: React.FC<PublicMediaViewerProps> = ({
         // If this was the last index, go to previous
         setCurrentIndex(currentIndex - 1);
       }
-      // otherwise the group will be updated and the current index maintained
     } catch (error) {
-      console.error('Failed to delete media:', error);
+      console.error('Error deleting media:', error);
       toast.error('Failed to delete media');
     } finally {
       setIsDeleting(false);
     }
-  }, [currentMessage, items, currentIndex, onClose]);
+  }, [currentMessage, onDelete, items.length, currentIndex, onClose]);
 
   // If no message is available, show nothing
   if (!currentMessage) return null;
@@ -283,7 +290,7 @@ const PublicEnhancedMediaDetail: React.FC<PublicMediaViewerProps> = ({
               onClick={onClose}
               aria-label="Close"
             >
-              <X className="w-4 h-4" />
+              <XIcon className="w-4 h-4" />
             </Button>
           </div>
           
@@ -446,7 +453,7 @@ const PublicEnhancedMediaDetail: React.FC<PublicMediaViewerProps> = ({
                           onClick={() => currentMessage?.public_url && handleDownloadExternal(currentMessage.public_url)}
                           aria-label="Download media"
                         >
-                          <Download className="w-4 h-4 mr-1 text-primary" />
+                          <DownloadIcon className="w-4 h-4 mr-1 text-primary" />
                           <span>Download</span>
                         </Button>
 
@@ -559,26 +566,13 @@ const PublicEnhancedMediaDetail: React.FC<PublicMediaViewerProps> = ({
       </div>
 
       {/* Delete confirmation dialog */}
-      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Media</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete this media? This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDeleteConfirm}
-              disabled={isDeleting}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {isDeleting ? 'Deleting...' : 'Delete'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <DeleteMessageDialog
+        isOpen={showDeleteConfirm}
+        onOpenChange={setShowDeleteConfirm}
+        messageToDelete={currentMessage}
+        onConfirm={handleDeleteConfirm}
+        isProcessing={isDeleting}
+      />
     </>
   );
 };

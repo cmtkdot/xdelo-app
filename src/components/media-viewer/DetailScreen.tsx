@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react'
 import { Message } from '@/types/entities/Message'
 import { AnalyzedContent } from '@/types/utils/AnalyzedContent'
@@ -23,22 +22,12 @@ import {
 } from '@/components/ui/accordion'
 import { Button } from '@/components/ui/button'
 import { 
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle
-} from '@/components/ui/alert-dialog'
-import { Textarea } from '@/components/ui/textarea'
-import { 
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { Textarea } from '@/components/ui/textarea'
 import { 
   ChevronLeft, 
   ChevronRight, 
@@ -52,6 +41,7 @@ import {
 import { cn } from '@/lib/utils'
 import { format } from 'date-fns'
 import { useTelegramOperations } from '@/hooks/useTelegramOperations'
+import { DeleteMessageDialog } from '@/components/shared/DeleteMessageDialog'
 
 interface MediaViewerDetailProps {
   isOpen: boolean
@@ -75,12 +65,16 @@ export function MediaViewerDetail({
   hasNext = false,
 }: MediaViewerDetailProps) {
   const [currentIndex, setCurrentIndex] = useState(initialIndex)
+  const [isProcessing, setIsProcessing] = useState(false)
+  const [activeTab, setActiveTab] = useState('media')
   const [isEditingCaption, setIsEditingCaption] = useState(false)
-  const [captionValue, setCaptionValue] = useState('')
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
-  const { handleDelete, isProcessing } = useTelegramOperations()
+  
+  // Get the telegram operations hook
+  const { deleteMessage, isDeleting } = useTelegramOperations()
   
   const currentMedia = currentGroup[currentIndex]
+  const [captionValue, setCaptionValue] = useState(currentMedia?.caption || '')
   
   // Reset current index when group changes
   React.useEffect(() => {
@@ -129,18 +123,11 @@ export function MediaViewerDetail({
     setIsDeleteDialogOpen(true)
   }
   
-  const handleDeleteConfirm = async (deleteFrom: 'database' | 'telegram' | 'both') => {
+  const handleDeleteConfirm = async (deleteTelegram: boolean) => {
     if (!currentMedia) return
     
     try {
-      if (deleteFrom === 'database') {
-        await handleDelete(currentMedia, false)
-      } else if (deleteFrom === 'telegram') {
-        await handleDelete(currentMedia, true)
-      } else if (deleteFrom === 'both') {
-        await handleDelete(currentMedia, true)
-      }
-      
+      await deleteMessage(currentMedia, deleteTelegram)
       setIsDeleteDialogOpen(false)
       onClose()
     } catch (error) {
@@ -496,50 +483,13 @@ export function MediaViewerDetail({
       </Dialog>
       
       {/* Delete confirmation dialog */}
-      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Message</AlertDialogTitle>
-            <AlertDialogDescription>
-              How would you like to delete this message?
-              {currentMedia?.media_group_id && (
-                <p className="mt-2 text-sm text-destructive font-medium">
-                  Note: This will delete all related media in the group.
-                </p>
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="flex flex-col sm:flex-row gap-2">
-            <AlertDialogCancel className="mt-0 sm:mt-0">Cancel</AlertDialogCancel>
-            <Button
-              variant="outline"
-              className="border-destructive text-destructive hover:bg-destructive/10"
-              onClick={() => handleDeleteConfirm('database')}
-              disabled={isProcessing}
-            >
-              <Database className="h-4 w-4 mr-2" />
-              Database Only
-            </Button>
-            <Button
-              variant="outline"
-              className="border-destructive text-destructive hover:bg-destructive/10"
-              onClick={() => handleDeleteConfirm('telegram')}
-              disabled={isProcessing}
-            >
-              <Send className="h-4 w-4 mr-2" />
-              Telegram Only
-            </Button>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => handleDeleteConfirm('both')}
-              disabled={isProcessing}
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Delete From Both
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <DeleteMessageDialog
+        isOpen={isDeleteDialogOpen}
+        onOpenChange={setIsDeleteDialogOpen}
+        messageToDelete={currentMedia}
+        onConfirm={handleDeleteConfirm}
+        isProcessing={isDeleting}
+      />
     </>
   )
 }

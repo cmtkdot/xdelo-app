@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Message } from '@/types';
-import { useGalleryData } from './publicGallery/useGalleryData';
-import { useGalleryFilters } from './publicGallery/useGalleryFilters';
+import { useGalleryData } from './useGalleryData';
+import { useGalleryFilters } from './useGalleryFilters';
 import { ProcessingState } from '@/types/api/ProcessingState';
 
 interface UsePublicGalleryProps {
@@ -56,7 +56,7 @@ export function usePublicGallery({
     mediaGroups,
     filter,
     setFilter,
-    searchTerm, 
+    searchTerm,
     setSearchTerm,
     vendorFilter,
     setVendorFilter,

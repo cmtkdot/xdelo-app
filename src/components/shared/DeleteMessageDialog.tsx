@@ -1,4 +1,4 @@
-
+import React from 'react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -9,9 +9,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Message } from "@/types/MessagesTypes";
+import { Message } from "@/types/entities/Message";
 
-interface DeleteConfirmationDialogProps {
+interface DeleteMessageDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   messageToDelete: Message | null;
@@ -19,7 +19,10 @@ interface DeleteConfirmationDialogProps {
   isProcessing: boolean;
 }
 
-export const DeleteConfirmationDialog: React.FC<DeleteConfirmationDialogProps> = ({
+/**
+ * Unified delete message dialog component with options to delete from database only or both database and Telegram
+ */
+export const DeleteMessageDialog: React.FC<DeleteMessageDialogProps> = ({
   isOpen,
   onOpenChange,
   messageToDelete,
@@ -41,7 +44,7 @@ export const DeleteConfirmationDialog: React.FC<DeleteConfirmationDialogProps> =
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogCancel disabled={isProcessing}>Cancel</AlertDialogCancel>
           <AlertDialogAction
             className="bg-primary text-primary-foreground hover:bg-primary/90"
             onClick={() => onConfirm(false)}
@@ -61,3 +64,5 @@ export const DeleteConfirmationDialog: React.FC<DeleteConfirmationDialogProps> =
     </AlertDialog>
   );
 };
+
+export default DeleteMessageDialog;

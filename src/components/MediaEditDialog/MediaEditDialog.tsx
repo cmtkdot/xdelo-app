@@ -13,21 +13,37 @@ import { useToast } from "@/hooks/useToast";
 import { Message } from "@/types/entities/Message";
 import { useEffect, useState } from 'react';
 
+// Define a minimal message type with only the properties needed for editing
+interface EditableMessage {
+  id: string;
+  caption?: string;
+  media_group_id?: string;
+}
+
 interface MediaEditDialogProps {
-  isOpen: boolean;
-  media: Message; // Proper type instead of any
-  onClose: () => void;
+  isOpen?: boolean;
+  open?: boolean; // Support both naming conventions
+  media: EditableMessage;
+  onClose?: () => void;
+  onOpenChange?: (open: boolean) => void; // Support both callback patterns
   onSave?: (newCaption: string) => void;
+  onSuccess?: () => void;
   refresh?: () => void;
 }
 
 export function MediaEditDialog({
   isOpen,
+  open,
   media,
   onClose,
+  onOpenChange,
   onSave,
+  onSuccess,
   refresh
 }: MediaEditDialogProps) {
+  // Use either isOpen or open prop
+  const isDialogOpen = isOpen !== undefined ? isOpen : open;
+  
   const [newCaption, setNewCaption] = useState(media?.caption || "");
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,49 +58,65 @@ export function MediaEditDialog({
   }, [media]);
 
   const handleSave = async () => {
-    setIsSaving(true);
-    setError(null);
-
+    if (!media) return;
+    
     try {
-      if (!media) throw new Error("No media found");
-
-      // If caption is updated, sync it with Telegram using our new function
-      if (media.caption !== newCaption) {
-        const captionSyncResult = await syncMessageCaption(media.id, newCaption);
-
-        if (!captionSyncResult) {
+      setIsSaving(true);
+      setError(null);
+      
+      // Check if caption changed
+      if (newCaption !== media.caption) {
+        // Call the API to update the caption
+        const success = await syncMessageCaption(media.id, newCaption);
+        
+        if (!success) {
+          const errorMessage = "Failed to update caption";
+          setError(errorMessage);
           toast({
-            variant: 'destructive',
-            title: 'Caption Update Failed',
-            description: 'Failed to sync caption with Telegram',
+            title: "Error",
+            description: errorMessage,
+            variant: "destructive",
           });
-        } else {
-          toast({
-            title: 'Message Updated',
-            description: 'Caption has been updated successfully',
-          });
+          return;
+        }
+        
+        toast({
+          title: "Success",
+          description: "Caption updated successfully",
+        });
+        
+        if (onSave) {
+          onSave(newCaption);
+        }
 
-          // Fix the unused expression by using if statement
-          if (onSave) {
-            onSave(newCaption);
-          }
-
+        if (onClose) {
           onClose();
-          if (refresh) {
-            refresh();
-          }
+        } else if (onOpenChange) {
+          onOpenChange(false);
+        }
+
+        if (onSuccess) {
+          onSuccess();
+        }
+
+        if (refresh) {
+          refresh();
         }
       } else {
         // If nothing changed, just close
-        onClose();
+        if (onClose) {
+          onClose();
+        } else if (onOpenChange) {
+          onOpenChange(false);
+        }
       }
     } catch (error) {
       console.error('Error saving media:', error);
-      setError(error instanceof Error ? error.message : 'Unknown error occurred');
+      setError('An unexpected error occurred');
       toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: error instanceof Error ? error.message : 'Unknown error occurred',
+        title: "Error",
+        description: "An unexpected error occurred",
+        variant: "destructive",
       });
     } finally {
       setIsSaving(false);
@@ -92,7 +124,13 @@ export function MediaEditDialog({
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+    <Dialog open={isDialogOpen} onOpenChange={(open) => {
+      if (onOpenChange) {
+        onOpenChange(open);
+      } else if (!open && onClose) {
+        onClose();
+      }
+    }}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Edit Media</DialogTitle>
@@ -122,7 +160,13 @@ export function MediaEditDialog({
         )}
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={isSaving}>
+          <Button variant="outline" onClick={() => {
+            if (onClose) {
+              onClose();
+            } else if (onOpenChange) {
+              onOpenChange(false);
+            }
+          }} disabled={isSaving}>
             Cancel
           </Button>
           <Button onClick={handleSave} disabled={isSaving}>

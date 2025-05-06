@@ -5,7 +5,8 @@ import { useVideoThumbnail } from '@/hooks/useVideoThumbnail'
 import { isVideoMessage } from '@/utils/mediaUtils'
 import { ExpandableTabs } from '@/components/ui/expandable-tabs'
 import { MediaEditDialog } from '@/components/MediaEditDialog/MediaEditDialog'
-import { DeleteConfirmationDialog } from '@/components/MessagesTable/TableComponents/DeleteConfirmationDialog'
+import { DeleteMessageDialog } from '@/components/shared/DeleteMessageDialog'
+import { useTelegramOperations } from '@/hooks/useTelegramOperations'
 
 interface PublicMediaCardProps {
   message: Message
@@ -28,16 +29,7 @@ function _getImageDimensions(img: HTMLImageElement): Promise<{ width: number; he
   });
 }
 
-export function PublicMediaCard({ message, onClick }: PublicMediaCardProps) {
-  // Enhanced video detection - check MIME type, Telegram data, and URL extension
-  const isVideo = isVideoMessage(message) || 
-    (message.public_url && (
-      message.public_url.endsWith('.mp4') || 
-      message.public_url.endsWith('.mov') ||
-      message.public_url.endsWith('.webm') ||
-      message.public_url.endsWith('.avi')
-    ))
-  const videoRef = useRef<HTMLVideoElement>(null)
+export const PublicMediaCard: React.FC<PublicMediaCardProps> = ({ message, onClick }) => {
   const [isHovering, setIsHovering] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
@@ -56,7 +48,7 @@ export function PublicMediaCard({ message, onClick }: PublicMediaCardProps) {
   // Auto-generate thumbnail for videos on component mount with debouncing
   useEffect(() => {
     // Skip if not a video or if we already have a thumbnail or are currently generating one
-    if (!isVideo || thumbnailUrl || isLoading) return;
+    if (!isVideoMessage(message) || thumbnailUrl || isLoading) return;
     
     // Add a slight delay to avoid too many simultaneous thumbnail generations
     const timeoutId = setTimeout(() => {
@@ -64,11 +56,11 @@ export function PublicMediaCard({ message, onClick }: PublicMediaCardProps) {
     }, 100 * (Math.floor(Math.random() * 10) + 1)); // Random delay between 100-1000ms
     
     return () => clearTimeout(timeoutId);
-  }, [isVideo, message.id, thumbnailUrl, isLoading, generateThumbnail])
+  }, [message.id, thumbnailUrl, isLoading, generateThumbnail])
   
   // Handle video hover playback with better error handling
   useEffect(() => {
-    if (!videoRef.current || !isVideo) return;
+    if (!videoRef.current || !isVideoMessage(message)) return;
     
     if (isHovering) {
       // Add a small delay to ensure UI updates first
@@ -98,8 +90,10 @@ export function PublicMediaCard({ message, onClick }: PublicMediaCardProps) {
       // Pause when not hovering
       videoRef.current.pause();
     }
-  }, [isHovering, isVideo]);
+  }, [isHovering, message]);
 
+  const { deleteMessage, isDeleting } = useTelegramOperations();
+  
   const handleClick = (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
@@ -147,9 +141,13 @@ export function PublicMediaCard({ message, onClick }: PublicMediaCardProps) {
     }
   }
   
-  const handleDeleteConfirm = async (_deleteTelegram: boolean) => {
-    // Will be implemented in future
-    setIsDeleteDialogOpen(false)
+  const handleDeleteConfirm = async (deleteTelegram: boolean) => {
+    try {
+      await deleteMessage(message, deleteTelegram);
+      setIsDeleteDialogOpen(false);
+    } catch (error) {
+      console.error('Error deleting message:', error);
+    }
   }
   
   const tabs = [
@@ -212,6 +210,17 @@ export function PublicMediaCard({ message, onClick }: PublicMediaCardProps) {
   
   const vendorBgColor = message.vendor_uid ? getVendorColor(message.vendor_uid) : 'bg-purple-500/70'
   const vendorRingColor = message.vendor_uid ? getVendorRingColor(message.vendor_uid) : 'ring-purple-500/20'
+
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const cardRef = useRef<HTMLDivElement>(null)
+
+  const isVideo = isVideoMessage(message) || 
+    (message.public_url && (
+      message.public_url.endsWith('.mp4') || 
+      message.public_url.endsWith('.mov') ||
+      message.public_url.endsWith('.webm') ||
+      message.public_url.endsWith('.avi')
+    ))
 
   return (
     <div 
@@ -293,13 +302,6 @@ export function PublicMediaCard({ message, onClick }: PublicMediaCardProps) {
         </div>
       )}
 
-      {/* Media Type Tag (Top Left) with glassmorphism */}
-      <div className="absolute top-2 left-2 z-10">
-        <div className="bg-black/50 backdrop-blur-sm px-2 py-0.5 rounded text-white/90 text-xs italic font-light">
-          {isVideo ? 'Video' : 'Image'}
-        </div>
-      </div>
-
       {/* Default State: Product Name and Date */}
       <div className="absolute inset-x-0 bottom-0 p-2 bg-black/60 backdrop-blur-sm">
         <div className="flex justify-between items-center">
@@ -376,12 +378,12 @@ export function PublicMediaCard({ message, onClick }: PublicMediaCardProps) {
         onSuccess={() => setIsEditDialogOpen(false)}
       />
       
-      <DeleteConfirmationDialog
+      <DeleteMessageDialog
         isOpen={isDeleteDialogOpen}
         onOpenChange={setIsDeleteDialogOpen}
         messageToDelete={message}
         onConfirm={handleDeleteConfirm}
-        isProcessing={false}
+        isProcessing={isDeleting}
       />
     </div>
   )

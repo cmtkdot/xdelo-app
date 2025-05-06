@@ -350,11 +350,7 @@ const PublicGallery = () => {
                               message={thumbnailMedia}
                               onClick={() => handleMediaClick(thumbnailMedia)}
                             />
-                            {filter === 'all' && group.length > 1 && (
-                              <div className="absolute top-1 right-1 z-10 bg-black/70 text-white text-xs px-1.5 py-0.5 rounded-md">
-                                {group.length}
-                              </div>
-                            )}
+                            {/* Removed count indicator div as requested */}
                           </div>
                         );
                       })

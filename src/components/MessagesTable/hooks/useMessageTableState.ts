@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useToast } from "@/hooks/useToast";
 import { useTelegramOperations } from "@/hooks/useTelegramOperations";
@@ -16,7 +15,7 @@ export function useMessageTableState(initialMessages: Message[]) {
   const [messageToDelete, setMessageToDelete] = useState<Message | null>(null);
   const [isViewerOpen, setIsViewerOpen] = useState(false);
   const [selectedMedia, setSelectedMedia] = useState<Message[]>([]);
-  const { handleDelete, isProcessing } = useTelegramOperations();
+  const { deleteMessage, isProcessing } = useTelegramOperations();
   const { toast } = useToast();
 
   const handleEdit = (id: string) => {
@@ -78,25 +77,42 @@ export function useMessageTableState(initialMessages: Message[]) {
   };
 
   const handleDeleteClick = (message: Message) => {
-    const typedMessage: Message = {
-      ...message,
-      file_unique_id: message.file_unique_id,
-      public_url: message.public_url,
-      storage_path_standardized: message.storage_path_standardized,
-      storage_exists: message.storage_exists
-    };
-    
-    setMessageToDelete(typedMessage);
+    if (!message) {
+      toast({
+        title: "Error",
+        description: "No message selected for deletion",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setMessageToDelete(message);
     setIsDeleteDialogOpen(true);
   };
 
   const handleDeleteConfirm = async (deleteTelegram: boolean) => {
-    if (!messageToDelete) return;
+    if (!messageToDelete) {
+      toast({
+        title: "Error",
+        description: "No message selected for deletion",
+        variant: "destructive",
+      });
+      return;
+    }
 
-    await handleDelete(messageToDelete, deleteTelegram);
-    setMessages(prev => prev.filter(m => m.id !== messageToDelete.id));
-    setIsDeleteDialogOpen(false);
-    setMessageToDelete(null);
+    try {
+      await deleteMessage(messageToDelete, deleteTelegram);
+      setMessages(prev => prev.filter(m => m.id !== messageToDelete.id));
+      setIsDeleteDialogOpen(false);
+      setMessageToDelete(null);
+    } catch (error) {
+      console.error('Error in handleDeleteConfirm:', error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : 'An error occurred during deletion',
+        variant: "destructive",
+      });
+    }
   };
 
   const handleAnalyzedContentChange = (id: string, field: keyof AnalyzedContent, value: string | number) => {

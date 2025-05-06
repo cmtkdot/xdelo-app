@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/table";
 import { MediaViewer } from "@/components/ui/media-viewer";
 import { Message } from "@/types";
-import { DeleteConfirmationDialog } from "./TableComponents/DeleteConfirmationDialog";
+import { DeleteMessageDialog } from "@/components/shared/DeleteMessageDialog";
 import { useMessageTableState } from "./hooks/useMessageTableState";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -379,7 +379,7 @@ export const MessagesTable: React.FC<MessagesTableProps> = ({ messages: initialM
         </Table>
       </div>
 
-      <DeleteConfirmationDialog
+      <DeleteMessageDialog
         isOpen={isDeleteDialogOpen}
         onOpenChange={setIsDeleteDialogOpen}
         messageToDelete={messageToDelete}
