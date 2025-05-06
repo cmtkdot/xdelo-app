@@ -10,14 +10,14 @@ import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { useMediaUtils } from '@/hooks/useMediaUtils';
 import { useToast } from "@/hooks/useToast";
+import { Message } from "@/types/entities/Message";
 import { useEffect, useState } from 'react';
 
 interface MediaEditDialogProps {
   isOpen: boolean;
-  media: any; // Using any for now, should be typed properly
+  media: Message; // Proper type instead of any
   onClose: () => void;
   onSave?: (newCaption: string) => void;
-  onSuccess?: () => void;
   refresh?: () => void;
 }
 
@@ -26,13 +26,11 @@ export function MediaEditDialog({
   media,
   onClose,
   onSave,
-  onSuccess,
   refresh
 }: MediaEditDialogProps) {
   const [newCaption, setNewCaption] = useState(media?.caption || "");
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [syncStatus, setSyncStatus] = useState<string | null>(null);
 
   const { syncMessageCaption } = useMediaUtils();
   const { toast } = useToast();
@@ -66,11 +64,15 @@ export function MediaEditDialog({
             description: 'Caption has been updated successfully',
           });
 
-          // Call the onSave callback if provided
-          onSave && onSave(newCaption);
+          // Fix the unused expression by using if statement
+          if (onSave) {
+            onSave(newCaption);
+          }
 
           onClose();
-          refresh?.();
+          if (refresh) {
+            refresh();
+          }
         }
       } else {
         // If nothing changed, just close
@@ -114,12 +116,6 @@ export function MediaEditDialog({
             {error && (
               <div className="text-sm text-red-500">
                 {error}
-              </div>
-            )}
-
-            {syncStatus && (
-              <div className="text-sm text-blue-500">
-                {syncStatus}
               </div>
             )}
           </div>
