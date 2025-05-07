@@ -1,37 +1,36 @@
-import { EmptyState } from "@/components/PublicGallery/EmptyState";
-import { GalleryFilters } from "@/components/PublicGallery/GalleryFilters";
-import { GalleryTableView } from "@/components/PublicGallery/GalleryTableView";
-import { LoadMoreButton } from "@/components/PublicGallery/LoadMoreButton";
+import { GalleryFilters } from "@/components/public-gallery/GalleryFilters";
 import { PublicMediaCard, PublicMediaViewer } from "@/components/public-viewer";
+import { EmptyState } from "@/components/public-viewer/EmptyState";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDebounce } from "@/hooks/useDebounce";
-import { useIsMobile } from "@/hooks/useMobile";
 import { usePublicGallery } from "@/hooks/usePublicGallery";
 import { useTelegramOperations } from "@/hooks/useTelegramOperations";
 import { Message } from "@/types";
-import { getMainMediaFromGroup } from "@/utils/mediaUtils";
 import { Grid, List, SlidersHorizontal } from "lucide-react";
-import { Suspense, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
+/**
+ * PublicGallery component that displays a grid of messages with images
+ * and videos from the messages table in Supabase.
+ */
 const PublicGallery = () => {
-  const isMobile = useIsMobile();
-  const [viewMode, setViewMode] = useState<'grid' | 'table'>(isMobile ? 'grid' : 'grid');
+  const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [isNetworkError, setIsNetworkError] = useState(false);
   const { handleDelete } = useTelegramOperations();
 
-  // Local state for filter controls
-  const [search, setSearch] = useState('');
+  // Local state for search
+  const [search, setSearch] = useState("");
   const [debouncedSearch] = useDebounce(search, 300);
 
   // Initialize search term from URL params if available
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const urlSearch = params.get('search');
+    const urlSearch = params.get("search");
     if (urlSearch) {
       setSearch(urlSearch);
     }
@@ -41,13 +40,15 @@ const PublicGallery = () => {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (debouncedSearch) {
-      params.set('search', debouncedSearch);
+      params.set("search", debouncedSearch);
     } else {
-      params.delete('search');
+      params.delete("search");
     }
 
-    const newUrl = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}`;
-    window.history.replaceState({}, '', newUrl);
+    const newUrl = `${window.location.pathname}${
+      params.toString() ? `?${params.toString()}` : ""
+    }`;
+    window.history.replaceState({}, "", newUrl);
   }, [debouncedSearch]);
 
   const {
@@ -55,7 +56,6 @@ const PublicGallery = () => {
     filteredMessages,
     mediaGroups,
     isLoading,
-    isLoadingMore,
     hasMoreItems,
     filter,
     setFilter,
@@ -69,10 +69,11 @@ const PublicGallery = () => {
     setSortOrder,
     vendors,
     currentPage,
-    fetchMessages,
     loadMore,
-    deleteMessage
-  } = usePublicGallery();
+    deleteMessage,
+  } = usePublicGallery({
+    itemsPerPage: 24, // Increased for better grid appearance
+  });
 
   // Sync local search with gallery hook
   useEffect(() => {
@@ -114,25 +115,25 @@ const PublicGallery = () => {
   // Function to find and open the correct group based on clicked item
   const handleMediaClick = (message: Message) => {
     // Find which group this message belongs to
-    const groupIndex = mediaGroups.findIndex(group =>
-      group.some(item => item.id === message.id)
+    const groupIndex = mediaGroups.findIndex((group) =>
+      group.some((item) => item.id === message.id)
     );
 
     if (groupIndex !== -1) {
       const group = mediaGroups[groupIndex];
       // Find index of this message within its group
-      const messageIndex = group.findIndex(item => item.id === message.id);
+      const messageIndex = group.findIndex((item) => item.id === message.id);
 
       // Open viewer with this group
       openViewer(groupIndex, messageIndex >= 0 ? messageIndex : 0);
     }
   };
 
-  // CRUD operations for messages
+  // Handle deleting a message
   const handleDeleteMessage = async (id: string) => {
     try {
       // Find the message to delete
-      const messageToDelete = messages.find(message => message.id === id);
+      const messageToDelete = messages.find((message) => message.id === id);
       if (!messageToDelete) {
         toast.error("Message not found");
         return;
@@ -148,147 +149,128 @@ const PublicGallery = () => {
     } catch (error) {
       console.error("Error in delete operation:", error);
       toast.error("An error occurred during deletion");
-
-      // Revert the optimistic update if the deletion failed
-      fetchMessages(currentPage);
     }
   };
 
   // Memoize current active filters for better performance
   const activeFilters = useMemo(() => {
     const filters = [];
-    if (filter !== 'all') filters.push(filter);
+    if (filter !== "all") filters.push(filter);
     if (vendorFilter.length > 0) filters.push(`${vendorFilter.length} vendors`);
-    if (dateField !== 'created_at') filters.push('Custom date');
-    if (sortOrder !== 'desc') filters.push('Ascending');
+    if (dateField !== "created_at") filters.push("Custom date");
+    if (sortOrder !== "desc") filters.push("Ascending");
     if (searchTerm) filters.push(`"${searchTerm}"`);
     return filters;
   }, [filter, vendorFilter, dateField, sortOrder, searchTerm]);
 
+  // Check for network connectivity
   useEffect(() => {
-    console.log("PublicGallery - Messages count:", messages.length);
-    console.log("PublicGallery - Filtered messages count:", filteredMessages.length);
-    console.log("PublicGallery - Media groups count:", mediaGroups.length);
-    
-    // Check for network connectivity
     const checkNetworkStatus = () => {
       const isOnline = navigator.onLine;
-      console.log("Network status - Online:", isOnline);
       setIsNetworkError(!isOnline);
     };
-    
-    checkNetworkStatus();
-    window.addEventListener('online', checkNetworkStatus);
-    window.addEventListener('offline', checkNetworkStatus);
-    
-    return () => {
-      window.removeEventListener('online', checkNetworkStatus);
-      window.removeEventListener('offline', checkNetworkStatus);
-    };
-  }, [messages.length, filteredMessages.length, mediaGroups.length]);
 
-  const handleRefresh = () => {
-    fetchMessages(currentPage);
-  };
+    checkNetworkStatus();
+    window.addEventListener("online", checkNetworkStatus);
+    window.addEventListener("offline", checkNetworkStatus);
+
+    return () => {
+      window.removeEventListener("online", checkNetworkStatus);
+      window.removeEventListener("offline", checkNetworkStatus);
+    };
+  }, []);
 
   return (
     <div className="container px-2 py-4 mx-auto sm:px-4 md:py-8 max-w-7xl">
       {/* Mobile Filter Bar */}
-      {isMobile ? (
-        <div className="sticky top-0 z-10 pt-1 pb-3 mb-4 border-b bg-background/95 backdrop-blur-sm">
-          <div className="flex items-center justify-between gap-2">
-            {/* Search Input */}
-            <div className="relative flex-1">
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search gallery..."
-                className="w-full px-3 py-2 text-sm border rounded-md h-9 border-input bg-background ring-offset-background"
-              />
-              {search && (
-                <button
-                  className="absolute -translate-y-1/2 right-2 top-1/2 text-muted-foreground hover:text-foreground"
-                  onClick={() => setSearch('')}
-                >
-                  ×
-                </button>
-              )}
-            </div>
-
-            {/* View Mode Toggle */}
-            <div className="flex overflow-hidden border rounded-md">
-              <Button
-                variant={viewMode === 'grid' ? 'default' : 'ghost'}
-                size="sm"
-                className="px-2 border-0 rounded-none h-9"
-                onClick={() => setViewMode('grid')}
+      <div className="sticky top-0 z-10 pt-1 pb-3 mb-4 border-b bg-background/95 backdrop-blur-sm">
+        <div className="flex items-center justify-between gap-2">
+          {/* Search Input */}
+          <div className="relative flex-1">
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search gallery..."
+              className="w-full px-3 py-2 text-sm border rounded-md h-9 border-input bg-background ring-offset-background"
+            />
+            {search && (
+              <button
+                className="absolute -translate-y-1/2 right-2 top-1/2 text-muted-foreground hover:text-foreground"
+                onClick={() => setSearch("")}
               >
-                <Grid className="w-4 h-4" />
-              </Button>
-              <Button
-                variant={viewMode === 'table' ? 'default' : 'ghost'}
-                size="sm"
-                className="px-2 border-0 rounded-none h-9"
-                onClick={() => setViewMode('table')}
-              >
-                <List className="w-4 h-4" />
-              </Button>
-            </div>
-
-            {/* Filter Sheet Trigger */}
-            <Sheet open={isFilterOpen} onOpenChange={setIsFilterOpen}>
-              <SheetTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-1 px-2 h-9">
-                  <SlidersHorizontal className="w-4 h-4" />
-                  <span className="sr-only md:not-sr-only md:inline">Filters</span>
-                  {activeFilters.length > 0 && (
-                    <Badge variant="secondary" className="h-5 px-1 ml-1 text-xs">
-                      {activeFilters.length}
-                    </Badge>
-                  )}
-                </Button>
-              </SheetTrigger>
-              <SheetContent side="right" className="w-[85vw] sm:max-w-md p-0">
-                <div className="h-full p-6 overflow-y-auto">
-                  <GalleryFilters
-                    filter={filter}
-                    setFilter={setFilter}
-                    viewMode={viewMode}
-                    setViewMode={setViewMode}
-                    vendorFilter={vendorFilter}
-                    vendors={vendors}
-                    onVendorFilterChange={setVendorFilter}
-                    dateField={dateField}
-                    onDateFieldChange={setDateField}
-                    sortOrder={sortOrder}
-                    onSortOrderChange={setSortOrder}
-                    searchTerm={search}
-                    onSearchChange={setSearch}
-                  />
-                </div>
-              </SheetContent>
-            </Sheet>
+                ×
+              </button>
+            )}
           </div>
 
-          {/* Active Filters */}
-          {activeFilters.length > 0 && (
-            <div className="flex gap-1.5 overflow-x-auto py-2 scrollbar-none">
-              {activeFilters.map((filter, index) => (
-                <Badge key={index} variant="outline" className="whitespace-nowrap">
-                  {filter}
-                </Badge>
-              ))}
-            </div>
-          )}
+          {/* View Mode Toggle */}
+          <div className="flex overflow-hidden border rounded-md">
+            <Button
+              variant={viewMode === "grid" ? "default" : "ghost"}
+              size="sm"
+              className="px-2 border-0 rounded-none h-9"
+              onClick={() => setViewMode("grid")}
+            >
+              <Grid className="w-4 h-4" />
+            </Button>
+            <Button
+              variant={viewMode === "table" ? "default" : "ghost"}
+              size="sm"
+              className="px-2 border-0 rounded-none h-9"
+              onClick={() => setViewMode("table")}
+            >
+              <List className="w-4 h-4" />
+            </Button>
+          </div>
+
+          {/* Filter Sheet Trigger */}
+          <Sheet open={isFilterOpen} onOpenChange={setIsFilterOpen}>
+            <SheetTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-1 px-2 h-9">
+                <SlidersHorizontal className="w-4 h-4" />
+                <span className="sr-only md:not-sr-only md:inline">
+                  Filters
+                </span>
+                {activeFilters.length > 0 && (
+                  <Badge variant="secondary" className="h-5 px-1 ml-1 text-xs">
+                    {activeFilters.length}
+                  </Badge>
+                )}
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="right" className="w-full sm:max-w-md">
+              <GalleryFilters
+                filter={filter}
+                setFilter={setFilter}
+                viewMode={viewMode}
+                setViewMode={setViewMode}
+                searchTerm={search}
+                onSearchChange={setSearch}
+                vendorFilter={vendorFilter}
+                vendors={vendors}
+                onVendorFilterChange={setVendorFilter}
+                dateField={dateField}
+                onDateFieldChange={setDateField}
+                sortOrder={sortOrder}
+                onSortOrderChange={setSortOrder}
+              />
+            </SheetContent>
+          </Sheet>
         </div>
-      ) : (
-        <div className="mb-6 animate-fade-in">
+      </div>
+
+      {/* Main Content Area */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-12">
+        {/* Filters (Desktop) */}
+        <div className="hidden col-span-3 md:block">
           <GalleryFilters
             filter={filter}
             setFilter={setFilter}
             viewMode={viewMode}
             setViewMode={setViewMode}
+            searchTerm={search}
+            onSearchChange={setSearch}
             vendorFilter={vendorFilter}
             vendors={vendors}
             onVendorFilterChange={setVendorFilter}
@@ -296,101 +278,160 @@ const PublicGallery = () => {
             onDateFieldChange={setDateField}
             sortOrder={sortOrder}
             onSortOrderChange={setSortOrder}
-            searchTerm={search}
-            onSearchChange={setSearch}
           />
         </div>
-      )}
 
-      {isLoading ? (
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 sm:gap-3 md:gap-4 lg:gap-5">
-          {Array.from({ length: 12 }).map((_, index) => (
-            <div key={index} className="relative overflow-hidden rounded-md aspect-square">
-              <Skeleton className="w-full h-full" />
+        {/* Gallery Content */}
+        <div className="col-span-1 md:col-span-9">
+          {isLoading ? (
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+              {Array.from({ length: 16 }).map((_, i) => (
+                <div key={i} className="overflow-hidden rounded shadow">
+                  <Skeleton className="w-full aspect-square" />
+                  <div className="p-2">
+                    <Skeleton className="w-3/4 h-4 mb-2" />
+                    <Skeleton className="w-1/2 h-3" />
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-      ) : (
-        <>
-          {viewMode === 'grid' ? (
-            <>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 sm:gap-3 md:gap-4 lg:gap-5">
-                {isLoading ? (
-                  Array.from({ length: 8 }).map((_, index) => (
-                    <div key={index} className="relative overflow-hidden rounded-md aspect-square">
-                      <div className="w-full h-full bg-muted animate-pulse"></div>
-                    </div>
-                  ))
-                ) : (
-                  <Suspense fallback={
-                    <div className="flex justify-center py-8 col-span-full">
-                      <div className="flex flex-col items-center gap-2">
-                        <div className="w-5 h-5 border-2 rounded-full border-primary border-l-transparent animate-spin"></div>
-                        <div className="text-sm text-muted-foreground">Loading media...</div>
-                      </div>
-                    </div>
-                  }>
-                    {mediaGroups.length > 0 ? (
-                      mediaGroups.map((group, groupIndex) => {
-                        // In "all" filter mode, only show the representative thumbnail
-                        // In specific filter modes, show all items that match the filter
-                        const thumbnailMedia = filter === 'all'
-                          ? group.find(m => m.isGroupThumbnail) || getMainMediaFromGroup(group) || group[0]
-                          : group[0];
-
-                        if (!thumbnailMedia) {
-                          console.log("No thumbnail found for group at index:", groupIndex);
-                          return null;
-                        }
-
-                        return (
-                          <div key={thumbnailMedia.id || `group-${groupIndex}`} className="group-card relative">
-                            <PublicMediaCard
-                              key={thumbnailMedia.id || `media-${groupIndex}`}
-                              message={thumbnailMedia}
-                              onClick={() => handleMediaClick(thumbnailMedia)}
-                            />
-                            {/* Removed count indicator div as requested */}
-                          </div>
-                        );
-                      })
-                    ) : (
-                      <div className="col-span-full py-4">
-                        <EmptyState isNetworkError={isNetworkError} onTryAgain={handleRefresh} />
-                      </div>
-                    )}
-                  </Suspense>
-                )}
-              </div>
-
-              {!isLoading && mediaGroups.length === 0 ? null : (
-                <LoadMoreButton
-                  onClick={loadMore}
-                  isLoading={isLoadingMore}
-                  hasMoreItems={hasMoreItems}
-                />
-              )}
-            </>
-          ) : (
-            <GalleryTableView
-              messages={filteredMessages}
-              onMediaClick={handleMediaClick}
-              onDeleteMessage={handleDeleteMessage}
+          ) : isNetworkError ? (
+            <EmptyState
+              message="Network connection lost"
+              subMessage="Please check your internet connection and try again."
             />
-          )}
+          ) : filteredMessages.length === 0 ? (
+            <EmptyState
+              message={
+                searchTerm
+                  ? `No results found for "${searchTerm}"`
+                  : "No media items found"
+              }
+              subMessage={
+                searchTerm
+                  ? "Try adjusting your search term or filters"
+                  : "There are no media items in the gallery."
+              }
+            />
+          ) : (
+            <div className="space-y-4">
+              {viewMode === "grid" ? (
+                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+                  {mediaGroups.map((group, groupIndex) => {
+                    const message = group[0]; // Use first message as representative
+                    return (
+                      <PublicMediaCard
+                        key={message.id}
+                        message={message}
+                        group={group}
+                        onClick={() => handleMediaClick(message)}
+                      />
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-full border-collapse">
+                    <thead>
+                      <tr className="border-b bg-muted/50">
+                        <th className="w-16 px-4 py-2 text-left">Media</th>
+                        <th className="px-4 py-2 text-left">Name</th>
+                        <th className="px-4 py-2 text-left">Code</th>
+                        <th className="px-4 py-2 text-left">Created</th>
+                        <th className="px-4 py-2 text-left">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {mediaGroups.map((group) => {
+                        const message = group[0]; // Use first message as representative
+                        return (
+                          <tr
+                            key={message.id}
+                            className="border-b cursor-pointer hover:bg-muted/50"
+                            onClick={() => handleMediaClick(message)}
+                          >
+                            <td className="px-4 py-2">
+                              <div className="relative w-12 h-12 overflow-hidden rounded">
+                                <img
+                                  src={
+                                    message.thumbnail_path ||
+                                    message.file_paths?.[0] ||
+                                    "/placeholder-image.jpg"
+                                  }
+                                  alt="Thumbnail"
+                                  className="object-cover w-full h-full"
+                                />
+                                {group.length > 1 && (
+                                  <div className="absolute top-0 right-0 px-1 text-xs text-white bg-black/70 rounded-bl">
+                                    +{group.length - 1}
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-4 py-2">
+                              {message.product_name ||
+                                message.caption ||
+                                "Untitled"}
+                            </td>
+                            <td className="px-4 py-2">
+                              {message.product_code || "-"}
+                            </td>
+                            <td className="px-4 py-2">
+                              {message.created_at
+                                ? new Date(
+                                    message.created_at
+                                  ).toLocaleDateString()
+                                : "-"}
+                            </td>
+                            <td className="px-4 py-2">
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteMessage(message.id);
+                                }}
+                              >
+                                Delete
+                              </Button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
 
-          {/* Public Media Viewer */}
-          <PublicMediaViewer
-            isOpen={isViewerOpen}
-            onClose={() => setIsViewerOpen(false)}
-            currentGroup={currentGroup}
-            onPrevious={goToPreviousGroup}
-            onNext={goToNextGroup}
-            hasPrevious={hasPreviousGroup}
-            hasNext={hasNextGroup}
-            onDelete={handleDeleteMessage}
-          />
-        </>
+              {hasMoreItems && (
+                <div className="flex justify-center mt-8">
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    className="w-full sm:w-auto"
+                    onClick={loadMore}
+                    disabled={isLoading}
+                  >
+                    Load More
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Media Viewer */}
+      {isViewerOpen && currentGroup && (
+        <PublicMediaViewer
+          isOpen={isViewerOpen}
+          onClose={() => setIsViewerOpen(false)}
+          messages={currentGroup}
+          initialIndex={currentImageIndex}
+          onPrevious={hasPreviousGroup ? goToPreviousGroup : undefined}
+          onNext={hasNextGroup ? goToNextGroup : undefined}
+          onDelete={handleDeleteMessage}
+        />
       )}
     </div>
   );

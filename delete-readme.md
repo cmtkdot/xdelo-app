@@ -10,8 +10,9 @@ This document provides an in-depth explanation of the complete message deletion 
 4. [Edge Functions](#edge-functions)
 5. [Frontend Components](#frontend-components)
 6. [Migrations](#migrations)
-7. [Troubleshooting](#troubleshooting)
-8. [Testing](#testing)
+7. [Row Level Security](#row-level-security)
+8. [Troubleshooting](#troubleshooting)
+9. [Testing](#testing)
 
 ## Overview
 
@@ -22,6 +23,7 @@ The message deletion system provides a robust flow for deleting messages from bo
 - **Storage Cleanup**: Removes associated files from storage with automatic retry
 - **Safety Net**: Database triggers ensure messages are archived even if bypassing the frontend
 - **Resilience**: Handles failures gracefully with correlation IDs for tracking
+- **Security**: Proper RLS policies ensure only authenticated users can perform operations
 
 ## Complete Deletion Flow
 
@@ -45,7 +47,7 @@ The message deletion system provides a robust flow for deleting messages from bo
 4. **Database Deletion Phase**
    - After successful Telegram deletion, `deleteFromDatabase()` is called
    - This triggers the database `BEFORE DELETE` trigger `ensure_message_archived_before_delete_trigger`
-   - Trigger verifies archiving has been done (skips if already archived)
+   - Trigger calls `x_ensure_message_archived_before_delete()` to verify archiving has been done (skips if already archived)
    - Database deletion proceeds after archiving check
 
 5. **Storage Cleanup Phase**
@@ -75,7 +77,7 @@ The message deletion system provides a robust flow for deleting messages from bo
 1. **Database Deletion Initiated**
    - DELETE query executed directly against `messages` table
    - `BEFORE DELETE` trigger `ensure_message_archived_before_delete_trigger` fires
-   - Trigger calls `x_archive_message_for_deletion()` to create archive records
+   - Trigger calls `x_ensure_message_archived_before_delete()` to create archive records
    - Message deletion proceeds
 
 2. **Storage Cleanup Phase**
@@ -136,7 +138,7 @@ The message deletion system provides a robust flow for deleting messages from bo
      -- Call the edge function to clean up storage
      PERFORM
        net.http_post(
-         'https://[project-id].supabase.co/functions/v1/cleanup-storage-on-delete',
+         'https://swrfsullhirscyxqneay.supabase.co/functions/v1/cleanup-storage-on-delete',
          jsonb_build_object('message_id', OLD.id),
          headers := '{"Content-Type": "application/json"}'::jsonb
        );
@@ -148,9 +150,9 @@ The message deletion system provides a robust flow for deleting messages from bo
    - Called by the AFTER DELETE trigger
    - Invokes the cleanup-storage-on-delete edge function
 
-3. **ensure_message_archived_before_delete()**
+3. **x_ensure_message_archived_before_delete()**
    ```sql
-   CREATE OR REPLACE FUNCTION ensure_message_archived_before_delete()
+   CREATE OR REPLACE FUNCTION x_ensure_message_archived_before_delete()
    RETURNS TRIGGER AS $$
    DECLARE
      v_archived_exists BOOLEAN;
@@ -177,22 +179,25 @@ The message deletion system provides a robust flow for deleting messages from bo
    - Safety net function that checks if a message is archived before deletion
    - If not archived, it calls `x_archive_message_for_deletion()`
 
-4. **retry_failed_storage_cleanup()**
+4. **x_sync_message_caption_edge(p_message_id UUID, p_new_caption text)**
    ```sql
-   CREATE OR REPLACE FUNCTION retry_failed_storage_cleanup()
-   RETURNS void AS $$
+   CREATE OR REPLACE FUNCTION x_sync_message_caption_edge(p_message_id UUID, p_new_caption text)
+   RETURNS JSONB AS $$
    DECLARE
+     v_result JSONB;
      v_message RECORD;
-     v_retry_count INT;
+     v_group_messages JSONB := '[]'::jsonb;
    BEGIN
-     -- Find recent failed storage cleanup operations
-     -- Retry them if under the max retry count
-     -- [function body details...]
+     -- Get message details and update caption in database
+     -- Call edge function to update caption in Telegram
+     -- Handle media group caption syncing
+     -- Return results with status information
    END;
    $$ LANGUAGE plpgsql;
    ```
-   - Scheduled function that automatically retries failed storage cleanups
-   - Finds failed deletions in audit logs and calls cleanup function again
+   - Updates a message caption in both the database and Telegram
+   - Handles media group caption syncing
+   - Integrates with the update-telegram-caption edge function
 
 ### Triggers
 
@@ -201,7 +206,7 @@ The message deletion system provides a robust flow for deleting messages from bo
    CREATE TRIGGER ensure_message_archived_before_delete_trigger
    BEFORE DELETE ON messages
    FOR EACH ROW
-   EXECUTE FUNCTION ensure_message_archived_before_delete();
+   EXECUTE FUNCTION x_ensure_message_archived_before_delete();
    ```
    - Fires BEFORE DELETE on messages
    - Ensures message is archived before deletion
@@ -215,19 +220,6 @@ The message deletion system provides a robust flow for deleting messages from bo
    ```
    - Fires AFTER DELETE on messages
    - Calls storage cleanup function
-
-### Scheduled Jobs
-
-1. **retry-failed-storage-cleanup**
-   ```sql
-   SELECT cron.schedule(
-     'retry-failed-storage-cleanup',
-     '0 */4 * * *',
-     $$SELECT retry_failed_storage_cleanup()$$
-   );
-   ```
-   - Runs every 4 hours
-   - Calls the retry function to attempt cleanup of any failed storage deletions
 
 ## Edge Functions
 
@@ -268,6 +260,25 @@ The message deletion system provides a robust flow for deleting messages from bo
 - Handles media group cleanup
 - Race condition handling for already-deleted messages
 - Comprehensive logging with correlation IDs
+
+### 3. update-telegram-caption
+
+**Location**: `supabase/functions/update-telegram-caption/index.ts`
+
+**Purpose**: Updates a message caption in Telegram.
+
+**Flow**:
+1. Receives messageId and newCaption parameters
+2. Gets message details from database
+3. Updates caption in Telegram via API
+4. Updates caption in database
+5. If message is part of a media group, updates all related messages
+6. Logs results and returns success/failure
+
+**Key Features**:
+- Media group handling
+- Error handling for Telegram API
+- Integration with database caption updates
 
 ## Frontend Components
 
@@ -329,9 +340,9 @@ const deleteMessage = async (message: Message, deleteFromTelegram = false) => {
 };
 ```
 
-### 2. DeleteConfirmationDialog Component
+### 2. DeleteMessageDialog Component
 
-**Location**: `src/components/MessagesTable/TableComponents/DeleteConfirmationDialog.tsx`
+**Location**: `src/components/shared/DeleteMessageDialog.tsx`
 
 **Purpose**: UI dialog that confirms deletion and lets user choose deletion type.
 
@@ -340,136 +351,86 @@ const deleteMessage = async (message: Message, deleteFromTelegram = false) => {
 - Offers two deletion options: "Delete from Database Only" and "Delete from Both"
 - Passes the user's choice to the parent component
 
-## Migrations
+## Row Level Security
 
-Here are the key migrations implemented for the deletion system:
+Row Level Security (RLS) policies have been standardized for all tables involved in the message deletion system:
 
-### 1. fix_duplicate_delete_triggers
-
-```sql
--- 1. Drop duplicate triggers
-DROP TRIGGER IF EXISTS x_after_delete_message_cleanup ON messages;
-
--- Create a single, well-documented trigger
-DROP TRIGGER IF EXISTS x_after_delete_message_cleanup_trigger ON messages;
-CREATE TRIGGER x_after_delete_message_cleanup_trigger
-AFTER DELETE ON messages
-FOR EACH ROW
-EXECUTE FUNCTION x_trigger_storage_cleanup();
-
--- Document the trigger
-COMMENT ON TRIGGER x_after_delete_message_cleanup_trigger ON messages IS
-'Trigger that calls the cleanup-storage-on-delete edge function when a message is deleted to ensure associated files are properly removed from storage.';
-```
-
-### 2. add_foreign_key_cascade_constraints_fixed
+### messages Table
 
 ```sql
--- Add ON DELETE CASCADE constraints for tables referencing messages
-DO $$
-DECLARE
-    constraint_name text;
-BEGIN
-    -- Find any existing constraints from match_logs to messages
-    SELECT tc.constraint_name INTO constraint_name
-    FROM information_schema.table_constraints tc
-    JOIN information_schema.constraint_column_usage ccu ON tc.constraint_name = ccu.constraint_name
-    JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name
-    WHERE tc.constraint_type = 'FOREIGN KEY'
-      AND kcu.table_name = 'match_logs'
-      AND kcu.column_name = 'message_id'
-      AND ccu.table_name = 'messages';
+CREATE POLICY "Allow authenticated users full SELECT access" ON public.messages
+    FOR SELECT
+    TO authenticated
+    USING (true);
 
-    -- Drop if exists
-    IF constraint_name IS NOT NULL THEN
-        EXECUTE 'ALTER TABLE match_logs DROP CONSTRAINT ' || constraint_name;
-    END IF;
+CREATE POLICY "Allow authenticated users full INSERT access" ON public.messages
+    FOR INSERT
+    TO authenticated
+    WITH CHECK (true);
 
-    -- Add CASCADE constraint
-    ALTER TABLE match_logs
-    ADD CONSTRAINT fk_match_logs_message_id
-    FOREIGN KEY (message_id) REFERENCES messages(id)
-    ON DELETE CASCADE;
+CREATE POLICY "Allow authenticated users full UPDATE access" ON public.messages
+    FOR UPDATE
+    TO authenticated
+    USING (true)
+    WITH CHECK (true);
 
-    RAISE NOTICE 'Added ON DELETE CASCADE constraint to match_logs.message_id';
-EXCEPTION
-    WHEN OTHERS THEN
-        RAISE NOTICE 'Error adding constraint to match_logs: %', SQLERRM;
-END$$;
+CREATE POLICY "Allow authenticated users full DELETE access" ON public.messages
+    FOR DELETE
+    TO authenticated
+    USING (true);
 ```
 
-### 3. add_safety_net_archiving_trigger
+### deleted_messages Table
 
 ```sql
--- Create a BEFORE DELETE trigger as a safety net for archiving
-CREATE OR REPLACE FUNCTION ensure_message_archived_before_delete()
-RETURNS TRIGGER AS $$
-DECLARE
-  v_archived_exists BOOLEAN;
-  v_result JSONB;
-BEGIN
-  -- Check if this message has already been archived
-  SELECT EXISTS(
-    SELECT 1 FROM deleted_messages
-    WHERE original_message_id = OLD.id
-  ) INTO v_archived_exists;
+CREATE POLICY "Allow authenticated users full SELECT access" ON public.deleted_messages
+    FOR SELECT
+    TO authenticated
+    USING (true);
 
-  -- If not archived, archive it now as a safety net
-  IF NOT v_archived_exists THEN
-    -- Call the archiving function directly
-    v_result := x_archive_message_for_deletion(OLD.id);
+CREATE POLICY "Allow authenticated users full INSERT access" ON public.deleted_messages
+    FOR INSERT
+    TO authenticated
+    WITH CHECK (true);
 
-    -- Log that safety net was triggered
-    INSERT INTO unified_audit_logs (
-      event_type,
-      entity_id,
-      metadata,
-      correlation_id
-    ) VALUES (
-      'message_safety_net_archive',
-      OLD.id,
-      jsonb_build_object(
-        'trigger', 'ensure_message_archived_before_delete',
-        'archive_result', v_result,
-        'message', 'Safety net archive triggered for message that was not explicitly archived'
-      ),
-      'safety_net_' || gen_random_uuid()
-    );
-  END IF;
+CREATE POLICY "Allow authenticated users full UPDATE access" ON public.deleted_messages
+    FOR UPDATE
+    TO authenticated
+    USING (true)
+    WITH CHECK (true);
 
-  -- Continue with the delete operation
-  RETURN OLD;
-END;
-$$ LANGUAGE plpgsql;
-
--- Create the trigger
-DROP TRIGGER IF EXISTS ensure_message_archived_before_delete_trigger ON messages;
-CREATE TRIGGER ensure_message_archived_before_delete_trigger
-BEFORE DELETE ON messages
-FOR EACH ROW
-EXECUTE FUNCTION ensure_message_archived_before_delete();
+CREATE POLICY "Allow authenticated users full DELETE access" ON public.deleted_messages
+    FOR DELETE
+    TO authenticated
+    USING (true);
 ```
 
-### 4. message_deletion_flow_improvements_final
+### unified_audit_logs Table
 
 ```sql
--- Add detailed comments and setup retry system
--- 1. Add detailed comments for the deletion and archiving functions
-COMMENT ON FUNCTION x_archive_message_for_deletion(UUID) IS
-'Archives a message and its associated media group messages before deletion.
-Called by:
-- Frontend via useTelegramOperations.deleteMessage()
-- Database via ensure_message_archived_before_delete() safety net trigger';
+CREATE POLICY "Allow authenticated users full SELECT access" ON public.unified_audit_logs
+    FOR SELECT
+    TO authenticated
+    USING (true);
 
--- [Additional migration code for retry system...]
+CREATE POLICY "Allow authenticated users full INSERT access" ON public.unified_audit_logs
+    FOR INSERT
+    TO authenticated
+    WITH CHECK (true);
 
--- Set up a scheduled job to retry failed storage cleanups every 4 hours
-SELECT cron.schedule(
-  'retry-failed-storage-cleanup',
-  '0 */4 * * *',
-  $$SELECT retry_failed_storage_cleanup()$$
-);
+CREATE POLICY "Allow authenticated users full UPDATE access" ON public.unified_audit_logs
+    FOR UPDATE
+    TO authenticated
+    USING (true)
+    WITH CHECK (true);
+
+CREATE POLICY "Allow authenticated users full DELETE access" ON public.unified_audit_logs
+    FOR DELETE
+    TO authenticated
+    USING (true);
 ```
+
+All tables have RLS enabled with `ALTER TABLE table_name ENABLE ROW LEVEL SECURITY` and are configured to enforce RLS even for the database owner with `ALTER TABLE table_name FORCE ROW LEVEL SECURITY`.
 
 ## Troubleshooting
 
@@ -509,18 +470,20 @@ SELECT cron.schedule(
      WHERE tgrelid = 'messages'::regclass;
      ```
 
-3. **Test Edge Functions Directly**
+3. **Check RLS Policies**
+   - Verify that RLS policies are properly configured:
+     ```sql
+     SELECT tablename, policyname, permissive, roles, cmd, qual
+     FROM pg_policies
+     WHERE tablename IN ('messages', 'deleted_messages', 'unified_audit_logs');
+     ```
+
+4. **Test Edge Functions Directly**
    - You can test the edge functions directly by calling them with a message ID:
      ```
      DELETE FROM messages WHERE id = 'your_message_id';
      ```
      Then check logs for any errors
-
-4. **Monitor the Retry Job**
-   - Check if the retry job is running properly:
-     ```sql
-     SELECT * FROM cron.job WHERE jobname = 'retry-failed-storage-cleanup';
-     ```
 
 ## Testing
 

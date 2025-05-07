@@ -1,7 +1,7 @@
-import { cn } from '@/lib/utils';
-import { Message } from '@/types';
-import { EmptyState } from './grid/EmptyState';
-import { MessageCard } from './grid/MessageCard';
+import { cn } from "@/lib/utils";
+import { Message } from "@/types";
+import { EmptyState } from "./grid/EmptyState";
+import { MessageCard } from "./grid/MessageCard";
 
 interface MessageGridViewProps {
   messageGroups: Message[][];
@@ -22,7 +22,7 @@ export function MessageGridView({
   onDelete,
   selectedMessages,
   hasMoreItems,
-  onLoadMore
+  onLoadMore,
 }: MessageGridViewProps) {
   if (!messageGroups || messageGroups.length === 0) {
     return <EmptyState />;
@@ -30,10 +30,12 @@ export function MessageGridView({
 
   return (
     <div className="space-y-6">
-      <div className={cn(
-        "grid gap-3",
-        "grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
-      )}>
+      <div
+        className={cn(
+          "grid gap-3",
+          "grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
+        )}
+      >
         {messageGroups.map((group) => {
           // Skip empty groups
           if (!group || group.length === 0) return null;

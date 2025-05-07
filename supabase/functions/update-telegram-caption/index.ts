@@ -107,6 +107,24 @@ serve(async (req) => {
     // Archive previous analyzed content
     const oldAnalyzedContent = message.analyzed_content;
 
+    // Properly handle edit history as a JSONB field
+    let newEditHistory;
+    const newEditEntry = {
+      edited_at: new Date().toISOString(),
+      previous_caption: message.caption,
+      previous_analyzed_content: oldAnalyzedContent,
+      correlation_id: correlationId,
+      source: 'caption_update_edge_function'
+    };
+
+    if (message.edit_history && Array.isArray(message.edit_history)) {
+      // If edit_history already exists and is an array, add to it
+      newEditHistory = [newEditEntry, ...message.edit_history];
+    } else {
+      // Otherwise create a new array with just this entry
+      newEditHistory = [newEditEntry];
+    }
+
     // Update caption in database
     const { error: updateError } = await supabase
       .from('messages')
@@ -121,17 +139,8 @@ serve(async (req) => {
         // Reset processing state to trigger reanalysis
         processing_state: 'initialized',
 
-        // Add edit history
-        edit_history: [
-          {
-            edited_at: new Date().toISOString(),
-            previous_caption: message.caption,
-            previous_analyzed_content: oldAnalyzedContent,
-            correlation_id: correlationId,
-            source: 'caption_update_edge_function'
-          },
-          ...(message.edit_history || [])
-        ],
+        // Add edit history as a proper JSONB
+        edit_history: newEditHistory,
 
         // Set edit metadata
         is_edit: true,
@@ -212,6 +221,24 @@ serve(async (req) => {
                   }
                 };
 
+                // Properly handle edit history for group message
+                let groupMsgEditHistory;
+                const groupEditEntry = {
+                  edited_at: new Date().toISOString(),
+                  previous_caption: groupMsg.caption,
+                  previous_analyzed_content: oldGroupAnalyzedContent,
+                  correlation_id: correlationId,
+                  source: 'media_group_caption_sync'
+                };
+
+                if (groupMsg.edit_history && Array.isArray(groupMsg.edit_history)) {
+                  // If edit_history already exists and is an array, add to it
+                  groupMsgEditHistory = [groupEditEntry, ...groupMsg.edit_history];
+                } else {
+                  // Otherwise create a new array with just this entry
+                  groupMsgEditHistory = [groupEditEntry];
+                }
+
                 // Update group message in database first
                 const { error: groupUpdateError } = await supabase
                   .from('messages')
@@ -226,17 +253,8 @@ serve(async (req) => {
                     // Reset processing state to trigger reanalysis
                     processing_state: 'initialized',
 
-                    // Add edit history
-                    edit_history: [
-                      {
-                        edited_at: new Date().toISOString(),
-                        previous_caption: groupMsg.caption,
-                        previous_analyzed_content: oldGroupAnalyzedContent,
-                        correlation_id: correlationId,
-                        source: 'media_group_caption_sync'
-                      },
-                      ...(groupMsg.edit_history || [])
-                    ],
+                    // Add edit history as a proper JSONB
+                    edit_history: groupMsgEditHistory,
 
                     // Set edit metadata
                     is_edit: true,
@@ -397,16 +415,16 @@ async function logError(supabase, entityId, errorMessage, correlationId, additio
     await supabase
       .from('unified_audit_logs')
       .insert({
-        event_type: 'caption_updated',
+        event_type: 'caption_update_failed',
         entity_id: entityId,
         metadata: {
-          operation: 'update_error',
+          error: errorMessage,
           ...additionalMetadata
         },
         correlation_id: correlationId,
         error_message: errorMessage
       });
   } catch (logError) {
-    console.error(`[${correlationId}] Error logging to audit logs:`, logError);
+    console.error(`[${correlationId}] Error logging error:`, logError);
   }
 }

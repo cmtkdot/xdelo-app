@@ -18,10 +18,14 @@ export const useTelegramOperations = () => {
   const [isProcessing, setIsProcessing] = useState(false);
 
   // Function to delete a message from Telegram only
-  const deleteTelegramMessage = async (messageId: string, chatId: string, mediaGroupId?: string) => {
+  const deleteTelegramMessage = async (messageId: number, chatId: number, mediaGroupId?: string) => {
     try {
       const { data, error } = await supabase.functions.invoke('delete-telegram-message', {
-        body: { message_id: messageId, chat_id: chatId, media_group_id: mediaGroupId },
+        body: {
+          message_id: messageId,
+          chat_id: chatId,
+          media_group_id: mediaGroupId
+        },
       });
 
       if (error) throw error;
@@ -33,12 +37,102 @@ export const useTelegramOperations = () => {
     }
   };
 
+  // Function to update caption in Telegram and database
+  const updateCaption = async (message: Message, newCaption: string, updateMediaGroup = true): Promise<boolean> => {
+    try {
+      setIsProcessing(true);
+
+      if (!message.id) {
+        throw new Error('Message ID is missing');
+      }
+
+      // Log the operation start
+      await logger.logEvent(LogEventType.MESSAGE_UPDATED, message.id, {
+        action: 'update_started',
+        old_caption: message.caption,
+        new_caption: newCaption
+      });
+
+      // Call the update-telegram-caption edge function
+      const { data, error } = await supabase.functions.invoke('update-telegram-caption', {
+        body: {
+          messageId: message.id,
+          newCaption: newCaption,
+          updateMediaGroup: updateMediaGroup
+        }
+      });
+
+      if (error) {
+        throw new Error(`Failed to update caption: ${error.message}`);
+      }
+
+      // Log success
+      await logger.logEvent(LogEventType.MESSAGE_UPDATED, message.id, {
+        action: 'update_completed',
+        success: true,
+        update_media_group: updateMediaGroup
+      });
+
+      toast({
+        title: 'Success',
+        description: 'Caption updated successfully',
+      });
+
+      return true;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('Error updating caption:', errorMessage);
+
+      // Log error
+      await logger.logEvent(LogEventType.SYSTEM_ERROR, message.id, {
+        action: 'update_caption',
+        error: errorMessage
+      });
+
+      toast({
+        title: 'Error',
+        description: errorMessage,
+        variant: 'destructive',
+      });
+
+      return false;
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   // Function to delete a message from the database only
   const deleteFromDatabase = async (messageUuid: string) => {
     try {
-      const { error } = await supabase.from('messages').delete().eq('id', messageUuid);
+      // First archive the message
+      const { data: archiveData, error: archiveError } = await supabase.rpc(
+        'x_archive_message_for_deletion' as unknown as any,
+        { p_message_id: messageUuid }
+      );
 
-      if (error) throw error;
+      if (archiveError) {
+        console.error('Error archiving message before deletion:', archiveError);
+        throw archiveError;
+      }
+
+      // Then delete from messages table
+      const { error: deleteError } = await supabase
+        .from('messages')
+        .delete()
+        .eq('id', messageUuid);
+
+      if (deleteError) throw deleteError;
+
+      // Trigger storage cleanup
+      try {
+        await supabase.functions.invoke('cleanup-storage-on-delete', {
+          body: { message_id: messageUuid }
+        });
+      } catch (storageError) {
+        // Log but don't fail the operation
+        console.warn('Storage cleanup may be delayed:', storageError);
+      }
+
       return { success: true };
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -47,32 +141,79 @@ export const useTelegramOperations = () => {
     }
   };
 
-  // Function to refresh the message cache
-  const refreshCache = () => {
-    // This would typically call a function to refresh the message list
-    // For now, we'll just use window.location.reload() as a fallback
-    window.location.reload();
-  };
-
   // Function to delete a message with two possible flows: DB only or DB + Telegram
   const deleteMessage = async (message: Message, deleteFromTelegram = false) => {
     setIsDeleting(true);
+    setIsProcessing(true);
 
     try {
       // Destructure needed message properties
-      const { id: messageUuid, telegram_message_id: telegramMessageId, chat_id: chatId, media_group_id: mediaGroupId } = message;
+      const {
+        id: messageUuid,
+        telegram_message_id: telegramMessageId,
+        chat_id: chatId,
+        media_group_id: mediaGroupId
+      } = message;
 
-      // If we're not deleting from Telegram, just delete from the database
-      if (!deleteFromTelegram) {
+      // Validate required fields
+      if (!messageUuid) {
+        throw new Error('Message ID is missing');
+      }
+
+      // Log the operation
+      await logger.logEvent(LogEventType.MESSAGE_DELETED, messageUuid, {
+        operation: deleteFromTelegram ? 'delete_from_telegram_and_db' : 'delete_from_db_only',
+        telegram_message_id: telegramMessageId,
+        chat_id: chatId
+      });
+
+      // If deleting from both Telegram and database
+      if (deleteFromTelegram) {
+        // Validate Telegram-specific fields
+        if (!telegramMessageId || !chatId) {
+          throw new Error('Missing Telegram message details (message ID or chat ID)');
+        }
+
+        // First archive the message
+        const { data: archiveData, error: archiveError } = await supabase.rpc(
+          'x_archive_message_for_deletion' as unknown as any,
+          { p_message_id: messageUuid }
+        );
+
+        if (archiveError) {
+          throw new Error(`Failed to archive message: ${archiveError.message}`);
+        }
+
+        // Delete from Telegram
+        const telegramResult = await deleteTelegramMessage(
+          telegramMessageId,
+          chatId,
+          mediaGroupId
+        );
+
+        if (!telegramResult.success) {
+          throw new Error(`Failed to delete from Telegram: ${telegramResult.error}`);
+        }
+
+        // If Telegram deletion was successful, delete from database
+        const dbResult = await deleteFromDatabase(messageUuid);
+
+        if (!dbResult.success) {
+          throw new Error(`Message deleted from Telegram but failed to delete from database: ${dbResult.error}`);
+        }
+
+        toast({
+          title: 'Success',
+          description: 'Message deleted from Telegram and database',
+        });
+
+        return true;
+      } else {
+        // Just delete from database
         const result = await deleteFromDatabase(messageUuid);
 
         if (!result.success) {
-          toast({
-            title: 'Error',
-            description: result.error || 'Failed to delete message',
-            variant: 'destructive',
-          });
-          return false;
+          throw new Error(`Failed to delete message: ${result.error}`);
         }
 
         toast({
@@ -80,89 +221,20 @@ export const useTelegramOperations = () => {
           description: 'Message deleted from database',
         });
 
-        refreshCache();
         return true;
       }
-
-      // If we're deleting from Telegram, we need to:
-      // 1. Archive the message(s) using our new function
-      // 2. Delete from Telegram
-      // 3. Delete from database
-
-      // Step 1: Archive the message(s)
-      // Using the custom RPC function we created
-      try {
-        // Use supabase.rpc directly but with type casting to bypass TS errors
-        const { error: archiveError } = await supabase.rpc(
-          // Cast using unknown first to bypass the TypeScript limitation
-          'x_archive_message_for_deletion' as unknown as any,
-          { p_message_id: messageUuid }
-        );
-
-        if (archiveError) {
-          toast({
-            title: 'Error',
-            description: `Failed to archive message: ${archiveError.message}`,
-            variant: 'destructive',
-          });
-          return false;
-        }
-      } catch (error: unknown) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        toast({
-          title: 'Error',
-          description: `Failed to archive message: ${errorMessage}`,
-          variant: 'destructive',
-        });
-        return false;
-      }
-
-      // Step 2: Delete from Telegram
-      const telegramResult = await deleteTelegramMessage(
-        telegramMessageId.toString(),
-        chatId.toString(),
-        mediaGroupId
-      );
-
-      if (!telegramResult.success) {
-        toast({
-          title: 'Error',
-          description: `Failed to delete from Telegram: ${telegramResult.error}`,
-          variant: 'destructive',
-        });
-        return false;
-      }
-
-      // Step 3: Delete from database
-      const dbResult = await deleteFromDatabase(messageUuid);
-
-      if (!dbResult.success) {
-        toast({
-          title: 'Warning',
-          description: `Message deleted from Telegram but failed to delete from database: ${dbResult.error}`,
-          variant: 'destructive',
-        });
-        return false;
-      }
-
-      toast({
-        title: 'Success',
-        description: 'Message deleted from Telegram and database',
-      });
-
-      refreshCache();
-      return true;
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.error('Error in deleteMessage:', errorMessage);
       toast({
         title: 'Error',
-        description: errorMessage || 'An error occurred while deleting the message',
+        description: errorMessage,
         variant: 'destructive',
       });
       return false;
     } finally {
       setIsDeleting(false);
+      setIsProcessing(false);
     }
   };
 
@@ -251,6 +323,7 @@ export const useTelegramOperations = () => {
         description: 'Failed to reprocess message. Please try again.',
         variant: 'destructive',
       });
+
     } finally {
       setIsProcessing(false);
     }
@@ -258,9 +331,10 @@ export const useTelegramOperations = () => {
 
   return {
     deleteMessage,
+    updateCaption,
     handleForward,
     handleReprocess,
     isDeleting,
-    isProcessing,
+    isProcessing
   };
 };
