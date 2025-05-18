@@ -10,7 +10,7 @@ import { supabaseClient } from './cors.ts';
    * Creates a new RetryHandler with the specified configuration
    *
    * @param config - Configuration for the retry behavior
-   */ constructor(config = {}) {
+   */ constructor(config = {}){
     // Default configuration
     this.config = {
       maxRetries: 3,
@@ -28,15 +28,15 @@ import { supabaseClient } from './cors.ts';
    * @param timeoutMs - Timeout in milliseconds
    * @returns A promise that rejects if the function doesn't complete within the timeout
    */ withTimeout(fn, timeoutMs) {
-    return async () => {
-      return new Promise((resolve, reject) => {
-        const timeoutId = setTimeout(() => {
+    return async ()=>{
+      return new Promise((resolve, reject)=>{
+        const timeoutId = setTimeout(()=>{
           reject(new Error(`Operation timed out after ${timeoutMs}ms`));
         }, timeoutMs);
-        fn().then((result) => {
+        fn().then((result)=>{
           clearTimeout(timeoutId);
           resolve(result);
-        }).catch((error) => {
+        }).catch((error)=>{
           clearTimeout(timeoutId);
           reject(error);
         });
@@ -79,7 +79,7 @@ import { supabaseClient } from './cors.ts';
       await this.logToUnifiedAuditLogs(supabaseClient, errorCategory, correlationId, operationName, lastError.message, contextData);
     }
     // Retry loop
-    while (attempts <= this.config.maxRetries) {
+    while(attempts <= this.config.maxRetries){
       // Calculate delay with exponential backoff
       const delay = this.calculateBackoffDelay(attempts);
       // Log that we're waiting to retry using enhanced logger
@@ -94,7 +94,7 @@ import { supabaseClient } from './cors.ts';
         });
       }
       // Wait for the calculated delay
-      await new Promise((resolve) => setTimeout(resolve, delay));
+      await new Promise((resolve)=>setTimeout(resolve, delay));
       // Also log to unified_audit_logs
       await this.logToUnifiedAuditLogs(supabaseClient, 'webhook_retry_attempt', correlationId, operationName, `Retry attempt ${attempts} of ${this.config.maxRetries + 1}`, {
         attempt: attempts,
@@ -249,7 +249,7 @@ import { supabaseClient } from './cors.ts';
  */ export class Logger {
   correlationId;
   source;
-  constructor(correlationId, source = 'telegram-webhook') {
+  constructor(correlationId, source = 'telegram-webhook'){
     this.correlationId = correlationId;
     this.source = source;
   }
@@ -418,7 +418,7 @@ import { supabaseClient } from './cors.ts';
  * @param metadata - Additional metadata to include
  */ export function logWithCorrelation(correlationId, message, level = 'info', source = 'telegram-webhook', metadata = {}) {
   const logger = new Logger(correlationId, source);
-  switch (level) {
+  switch(level){
     case 'debug':
       logger.debug(message, metadata);
       break;

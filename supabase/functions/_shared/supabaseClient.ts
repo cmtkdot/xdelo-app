@@ -46,7 +46,7 @@ export const supabaseClient = createSupabaseClient();
  */ export async function executeQuery(operation, table, options = {}, errorMessage = 'Database operation failed') {
   try {
     let query;
-    switch (operation) {
+    switch(operation){
       case 'select':
         query = supabaseClient.from(table).select(options.columns || '*');
         break;
@@ -66,7 +66,7 @@ export const supabaseClient = createSupabaseClient();
     }
     // Apply filters if provided
     if (options.filters) {
-      options.filters.forEach((filter) => {
+      options.filters.forEach((filter)=>{
         const { type, column, value } = filter;
         if (type === 'eq') query = query.eq(column, value);
         else if (type === 'neq') query = query.neq(column, value);
@@ -77,7 +77,7 @@ export const supabaseClient = createSupabaseClient();
         else if (type === 'like') query = query.like(column, value);
         else if (type === 'ilike') query = query.ilike(column, value);
         else if (type === 'in') query = query.in(column, value);
-        // Add other filter types as needed
+      // Add other filter types as needed
       });
     }
     // Apply order by if provided

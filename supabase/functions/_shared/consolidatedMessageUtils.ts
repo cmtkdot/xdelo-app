@@ -112,7 +112,7 @@ import { supabaseClient } from './supabaseClient.ts';
       detectSessionInUrl: false
     },
     global: {
-      fetch: (...args) => fetch(...args)
+      fetch: (...args)=>fetch(...args)
     }
   });
 }

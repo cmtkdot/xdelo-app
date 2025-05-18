@@ -1,113 +1,3 @@
-import { SupabaseClient } from './supabaseClient.ts';
-import { corsHeaders } from './cors.ts';
-import { TelegramMessage } from '../telegram-webhook/types.ts';
-
-/**
- * Options for the retry operation
- */
-interface RetryOptions {
-  /** Maximum number of retry attempts */
-  maxAttempts: number;
-  /** Initial delay between retries in milliseconds */
-  initialDelayMs: number;
-  /** Factor by which to increase delay on each retry */
-  backoffFactor: number;
-  /** Function to determine if an error is retryable */
-  isRetryable?: (error: unknown) => boolean;
-}
-
-/**
- * Result of a retry operation
- */
-interface RetryResult<T> {
-  /** Whether the operation succeeded */
-  success: boolean;
-  /** The result of the operation if successful */
-  result?: T;
-  /** Error message if the operation failed */
-  error?: string;
-  /** Number of attempts made */
-  attempts: number;
-  /** Total time spent on retry attempts in milliseconds */
-  totalTimeMs: number;
-}
-
-/**
- * Media content extracted from a Telegram message
- */
-export interface MediaContent {
-  /** Unique identifier for the file */
-  fileUniqueId: string;
-  /** File ID used for downloading from Telegram */
-  fileId: string;
-  /** Width of the media (for photos and videos) */
-  width?: number;
-  /** Height of the media (for photos and videos) */
-  height?: number;
-  /** Duration in seconds (for videos) */
-  duration?: number;
-  /** MIME type of the media */
-  mimeType?: string;
-  /** Size of the file in bytes */
-  fileSize?: number;
-  /** Type of media (photo, video, document) */
-  mediaType: 'photo' | 'video' | 'document';
-}
-
-/**
- * Result of a media download operation
- */
-export interface DownloadResult {
-  /** Whether the download was successful */
-  success: boolean;
-  /** The downloaded file as a Blob */
-  blob?: Blob;
-  /** Path where the file should be stored */
-  storagePath?: string;
-  /** Detected MIME type of the file */
-  mimeType?: string;
-  /** Error message if download failed */
-  error?: string;
-  /** Number of attempts made to download */
-  attempts?: number;
-}
-
-/**
- * Result of a media upload operation
- */
-export interface UploadResult {
-  /** Whether the upload was successful */
-  success: boolean;
-  /** Public URL of the uploaded file */
-  publicUrl?: string;
-  /** Error message if upload failed */
-  error?: string;
-}
-
-/**
- * Result of a media processing operation
- */
-export interface ProcessingResult {
-  /** Status of the processing operation */
-  status: 'success' | 'duplicate' | 'error' | 'download_failed_forwarded';
-  /** File ID of the processed media */
-  fileId: string;
-  /** Unique identifier for the file */
-  fileUniqueId: string;
-  /** Path where the file is stored */
-  storagePath: string | null;
-  /** Public URL of the file */
-  publicUrl: string | null;
-  /** MIME type of the file */
-  mimeType: string | null;
-  /** File extension */
-  extension: string | null;
-  /** Content disposition for browser handling */
-  contentDisposition?: 'inline' | 'attachment';
-  /** Error message if processing failed */
-  error?: string;
-}
-
 /**
  * Utility function to retry an asynchronous operation with exponential backoff
  * 
@@ -116,24 +6,15 @@ export interface ProcessingResult {
  * @param correlationId - Correlation ID for logging
  * @param operationName - Name of the operation for logging
  * @returns Result of the retry operation
- */
-export async function retryOperation<T>(
-  operation: () => Promise<T>,
-  options: RetryOptions,
-  correlationId: string,
-  operationName: string
-): Promise<RetryResult<T>> {
+ */ export async function retryOperation(operation, options, correlationId, operationName) {
   const startTime = Date.now();
   let attempts = 0;
   let delay = options.initialDelayMs;
-  let lastError: unknown;
-  
-  const defaultIsRetryable = () => true;
+  let lastError;
+  const defaultIsRetryable = ()=>true;
   const isRetryable = options.isRetryable || defaultIsRetryable;
-  
-  while (attempts < options.maxAttempts) {
+  while(attempts < options.maxAttempts){
     attempts++;
-    
     try {
       const result = await operation();
       return {
@@ -146,18 +27,15 @@ export async function retryOperation<T>(
       lastError = error;
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.log(`[${correlationId}][${operationName}] Attempt ${attempts} failed: ${errorMessage}`);
-      
       if (attempts >= options.maxAttempts || !isRetryable(error)) {
         break;
       }
-      
       // Wait before the next attempt with exponential backoff
       console.log(`[${correlationId}][${operationName}] Retrying in ${delay}ms...`);
-      await new Promise(resolve => setTimeout(resolve, delay));
+      await new Promise((resolve)=>setTimeout(resolve, delay));
       delay *= options.backoffFactor;
     }
   }
-  
   return {
     success: false,
     error: lastError instanceof Error ? lastError.message : String(lastError),
@@ -165,36 +43,30 @@ export async function retryOperation<T>(
     totalTimeMs: Date.now() - startTime
   };
 }
-
 /**
  * MediaProcessor class for handling Telegram media
  * 
  * This class provides a comprehensive set of methods for processing media files from Telegram messages.
  * It handles downloading media from Telegram, uploading to Supabase Storage, and managing file metadata.
- */
-export class MediaProcessor {
+ */ export class MediaProcessor {
   // Core dependencies
-  private readonly supabaseClient: SupabaseClient;
-  private readonly telegramBotToken: string;
-  private readonly storageBucket: string;
-  
+  supabaseClient;
+  telegramBotToken;
+  storageBucket;
   // Cache mapping objects for better performance
-  private readonly mimeToExtensionMap: Record<string, string>;
-  private readonly extensionToMimeMap: Record<string, string>;
-  
+  mimeToExtensionMap;
+  extensionToMimeMap;
   // Common retry configurations
-  private readonly defaultDownloadRetryOptions: RetryOptions = {
+  defaultDownloadRetryOptions = {
     maxAttempts: 3,
     initialDelayMs: 1000,
     backoffFactor: 2
   };
-  
-  private readonly defaultUploadRetryOptions: RetryOptions = {
+  defaultUploadRetryOptions = {
     maxAttempts: 3,
     initialDelayMs: 1000,
     backoffFactor: 2
   };
-  
   /**
    * Create a new MediaProcessor instance
    * 
@@ -210,16 +82,10 @@ export class MediaProcessor {
    *   'telegram-media'
    * );
    * ```
-   */
-  constructor(
-    supabaseClient: SupabaseClient,
-    telegramBotToken: string,
-    storageBucket: string = 'telegram-media'
-  ) {
+   */ constructor(supabaseClient, telegramBotToken, storageBucket = 'telegram-media'){
     this.supabaseClient = supabaseClient;
     this.telegramBotToken = telegramBotToken;
     this.storageBucket = storageBucket;
-    
     // Initialize MIME type to extension mapping cache for better performance
     this.mimeToExtensionMap = {
       'image/jpeg': 'jpeg',
@@ -272,14 +138,12 @@ export class MediaProcessor {
       'font/woff2': 'woff2',
       'font/otf': 'otf'
     };
-    
     // Initialize extension to MIME type mapping cache
     this.extensionToMimeMap = {};
-    for (const [mime, ext] of Object.entries(this.mimeToExtensionMap)) {
+    for (const [mime, ext] of Object.entries(this.mimeToExtensionMap)){
       this.extensionToMimeMap[ext] = mime;
     }
   }
-  
   /**
    * Extract media content from a Telegram message
    * 
@@ -310,10 +174,8 @@ export class MediaProcessor {
    *   console.log('No media content found in message');
    * }
    * ```
-   */
-  public extractMediaContent(message: TelegramMessage): MediaContent | undefined {
+   */ extractMediaContent(message) {
     if (!message) return undefined;
-    
     // Extract photo (use the largest available)
     if (message.photo && message.photo.length > 0) {
       const photo = message.photo[message.photo.length - 1];
@@ -326,7 +188,6 @@ export class MediaProcessor {
         mediaType: 'photo'
       };
     }
-    
     // Extract video
     if (message.video) {
       return {
@@ -340,7 +201,6 @@ export class MediaProcessor {
         mediaType: 'video'
       };
     }
-    
     // Extract document
     if (message.document) {
       return {
@@ -351,10 +211,8 @@ export class MediaProcessor {
         mediaType: 'document'
       };
     }
-    
     return undefined;
   }
-  
   /**
    * Determine if a file should be viewable in browser based on its MIME type
    * 
@@ -375,19 +233,10 @@ export class MediaProcessor {
    * console.log(`Content-Disposition for ${mimeType}: ${contentDisposition}`);
    * // Output: "Content-Disposition for image/jpeg: inline"
    * ```
-   */
-  public isViewableMimeType(mimeType: string): boolean {
+   */ isViewableMimeType(mimeType) {
     if (!mimeType) return false;
-    
-    return (
-      mimeType.startsWith('image/') || 
-      mimeType.startsWith('video/') || 
-      mimeType.startsWith('audio/') || 
-      mimeType.startsWith('text/') || 
-      mimeType === 'application/pdf'
-    );
+    return mimeType.startsWith('image/') || mimeType.startsWith('video/') || mimeType.startsWith('audio/') || mimeType.startsWith('text/') || mimeType === 'application/pdf';
   }
-  
   /**
    * Get file extension from MIME type with improved mapping
    * 
@@ -404,10 +253,8 @@ export class MediaProcessor {
    * console.log(`Extension for ${mimeType}: ${extension}`);
    * // Output: "Extension for image/jpeg: jpeg"
    * ```
-   */
-  public getExtensionFromMimeType(mimeType: string): string {
+   */ getExtensionFromMimeType(mimeType) {
     if (!mimeType) return 'bin';
-    
     // Common MIME type patterns
     if (mimeType.startsWith('image/jpeg') || mimeType === 'image/jpg') return 'jpeg';
     if (mimeType.startsWith('image/')) return mimeType.substring(6);
@@ -424,9 +271,8 @@ export class MediaProcessor {
       if (subtype === 'webm') return 'weba';
       return subtype;
     }
-    
     // Full mapping for special cases
-    const mimeToExtensionMap: Record<string, string> = {
+    const mimeToExtensionMap = {
       'application/pdf': 'pdf',
       'application/msword': 'doc',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
@@ -448,10 +294,8 @@ export class MediaProcessor {
       'application/xml': 'xml',
       'application/octet-stream': 'bin'
     };
-    
     return mimeToExtensionMap[mimeType] || 'bin';
   }
-  
   /**
    * Infer MIME type from media type when not provided by Telegram
    * 
@@ -460,25 +304,21 @@ export class MediaProcessor {
    * 
    * @param mediaType - The type of media (photo, video, document)
    * @returns The inferred MIME type
-   */
-  private inferMimeTypeFromMediaType(mediaType: string): string {
+   */ inferMimeTypeFromMediaType(mediaType) {
     if (!mediaType) return 'application/pdf';
-    
-    const mediaTypeToMimeMap: Record<string, string> = {
+    const mediaTypeToMimeMap = {
       'photo': 'image/jpeg',
       'video': 'video/mp4',
-      'document': 'application/pdf',  // Default documents to PDF rather than octet-stream
+      'document': 'application/pdf',
       'audio': 'audio/mpeg',
       'voice': 'audio/ogg',
       'animation': 'video/mp4',
       'sticker': 'image/webp',
       'video_note': 'video/mp4'
     };
-    
     // Only return octet-stream as an absolute last resort
     return mediaTypeToMimeMap[mediaType] || 'application/pdf';
   }
-  
   /**
    * Get MIME type from file extension
    * 
@@ -488,14 +328,11 @@ export class MediaProcessor {
    * @param extension - File extension (without leading dot)
    * @returns The corresponding MIME type or null if not found
    * @private
-   */
-  private getMimeTypeFromExtension(extension: string): string | null {
-    if (!extension) return null;
-    
+   */ getMimeTypeFromExtension(extension1) {
+    if (!extension1) return null;
     // Use the mapping initialized in constructor
-    return this.extensionToMimeMap[extension.toLowerCase()] || null;
+    return this.extensionToMimeMap[extension1.toLowerCase()] || null;
   }
-
   /**
    * Detect and standardize MIME type from Telegram data
    * 
@@ -512,8 +349,7 @@ export class MediaProcessor {
    * const mimeType = mediaProcessor.detectMimeType(message);
    * console.log(`Detected MIME type: ${mimeType}`);
    * ```
-   */
-  public detectMimeType(message: TelegramMessage): string {
+   */ detectMimeType(message) {
     // Try to get MIME type from the message
     const photo = message.photo ? message.photo[message.photo.length - 1] : null;
     const document = message.document;
@@ -522,14 +358,11 @@ export class MediaProcessor {
     const voice = message.voice;
     const animation = message.animation;
     const sticker = message.sticker;
-    
     // Get MIME type from appropriate media object
-    let mimeType: string | null = null;
-    
+    let mimeType = null;
     // First try to get explicit MIME type from Telegram objects
     if (document && document.mime_type) {
       mimeType = document.mime_type;
-      
       // Special handling for files with file_name when MIME type is generic
       if (document.file_name && (mimeType === 'application/octet-stream' || mimeType === 'application/zip')) {
         const fileExtension = document.file_name.split('.').pop()?.toLowerCase();
@@ -554,7 +387,6 @@ export class MediaProcessor {
       // Photos typically don't include mime_type in Telegram API response
       mimeType = 'image/jpeg';
     }
-    
     // If we still don't have a MIME type, infer based on media type
     if (!mimeType) {
       // Try to get from media type
@@ -581,16 +413,13 @@ export class MediaProcessor {
             }
           }
         }
-        
         // Default document type to PDF instead of octet-stream if we can't determine
         mimeType = 'application/pdf';
       }
     }
-    
     // Default fallback - only use octet-stream as a last resort
     return mimeType || 'application/octet-stream';
   }
-  
   /**
  * Create a standardized path for a file combining the fileUniqueId and extension
  * 
@@ -600,15 +429,13 @@ export class MediaProcessor {
  * @param fileUniqueId - Unique identifier for the file from Telegram
  * @param extension - The file extension (without the leading dot)
  * @returns The standardized path string
- */
-public getStandardizedPath(fileUniqueId: string, extension: string): string {
-  // Ensure extension doesn't start with a dot
-  const cleanExtension = extension.startsWith('.') ? extension.substring(1) : extension;
-  // Combine fileUniqueId and extension with a dot in between
-  return `${fileUniqueId}.${cleanExtension}`;
-}
-
-/**
+ */ getStandardizedPath(fileUniqueId, extension1) {
+    // Ensure extension doesn't start with a dot
+    const cleanExtension = extension1.startsWith('.') ? extension1.substring(1) : extension1;
+    // Combine fileUniqueId and extension with a dot in between
+    return `${fileUniqueId}.${cleanExtension}`;
+  }
+  /**
  * Generate a standardized storage path for a file
  * 
  * This method creates a consistent storage path for a file based on its unique ID and MIME type.
@@ -627,12 +454,10 @@ public getStandardizedPath(fileUniqueId: string, extension: string): string {
  * console.log(`Storage path: ${storagePath}`);
  * // Output: "Storage path: AgADcAUAAj-vwFc.jpeg"
  * ```
- */
-public generateStoragePath(fileUniqueId: string, mimeType: string): string {
-  const extension = this.getExtensionFromMimeType(mimeType);
-  return this.getStandardizedPath(fileUniqueId, extension);
-}
-
+ */ generateStoragePath(fileUniqueId, mimeType) {
+    const extension1 = this.getExtensionFromMimeType(mimeType);
+    return this.getStandardizedPath(fileUniqueId, extension1);
+  }
   /**
    * Get standardized path for a file
    * 
@@ -647,30 +472,47 @@ public generateStoragePath(fileUniqueId: string, mimeType: string): string {
    * // Returns 'images/AgADcAUAAj-vwFc.jpeg'
    * const path = mediaProcessor.getStandardizedPath('AgADcAUAAj-vwFc', 'jpeg');
    * ```
-   */
-  public getStandardizedPath(fileUniqueId: string, extension: string): string {
+   */ getStandardizedPath(fileUniqueId, extension1) {
     // Ensure fileUniqueId is cleaned of any unsafe characters
     const sanitizedFileId = fileUniqueId.replace(/[^a-zA-Z0-9_-]/g, '');
-    
     // Determine the path segment based on media type
-    const extensionLower = extension.toLowerCase();
-    
+    const extensionLower = extension1.toLowerCase();
     // Group by general media type
     let typeSegment = 'other';
-    if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(extensionLower)) {
+    if ([
+      'jpg',
+      'jpeg',
+      'png',
+      'gif',
+      'webp'
+    ].includes(extensionLower)) {
       typeSegment = 'images';
-    } else if (['mp4', 'webm', 'mov', 'avi'].includes(extensionLower)) {
+    } else if ([
+      'mp4',
+      'webm',
+      'mov',
+      'avi'
+    ].includes(extensionLower)) {
       typeSegment = 'videos';
-    } else if (['mp3', 'ogg', 'wav', 'm4a'].includes(extensionLower)) {
+    } else if ([
+      'mp3',
+      'ogg',
+      'wav',
+      'm4a'
+    ].includes(extensionLower)) {
       typeSegment = 'audio';
-    } else if (['pdf', 'doc', 'docx', 'txt', 'rtf'].includes(extensionLower)) {
+    } else if ([
+      'pdf',
+      'doc',
+      'docx',
+      'txt',
+      'rtf'
+    ].includes(extensionLower)) {
       typeSegment = 'documents';
     }
-    
     // Format: type/fileUniqueId.extension
     return `${typeSegment}/${sanitizedFileId}.${extensionLower}`;
   }
-
   /**
    * Check if a file already exists in the database
    * 
@@ -691,30 +533,26 @@ public generateStoragePath(fileUniqueId: string, mimeType: string): string {
    *   console.log(`File already exists with ID: ${message.id}`);
    * }
    * ```
-   */
-  public async findExistingFile(fileUniqueId: string): Promise<{ exists: boolean; message?: any }> {
+   */ async findExistingFile(fileUniqueId) {
     try {
-      const { data, error } = await this.supabaseClient
-        .from('messages')
-        .select('*')
-        .eq('file_unique_id', fileUniqueId)
-        .maybeSingle();
-      
+      const { data, error } = await this.supabaseClient.from('messages').select('*').eq('file_unique_id', fileUniqueId).maybeSingle();
       if (error) {
         console.error('Error checking for existing file:', error.message);
-        return { exists: false };
+        return {
+          exists: false
+        };
       }
-      
       return {
         exists: !!data,
         message: data
       };
     } catch (error) {
       console.error('Exception checking for existing file:', error);
-      return { exists: false };
+      return {
+        exists: false
+      };
     }
   }
-  
   /**
    * Check if a file exists in storage
    * 
@@ -729,13 +567,9 @@ public generateStoragePath(fileUniqueId: string, mimeType: string): string {
    * const exists = await mediaProcessor.verifyFileExists('AgADcAUAAj-vwFc.jpeg');
    * console.log(`File ${exists ? 'exists' : 'does not exist'} in storage`);
    * ```
-   */
-  public async verifyFileExists(storagePath: string): Promise<boolean> {
+   */ async verifyFileExists(storagePath) {
     try {
-      const { data } = await this.supabaseClient.storage
-        .from(this.storageBucket)
-        .createSignedUrl(storagePath, 60);
-      
+      const { data } = await this.supabaseClient.storage.from(this.storageBucket).createSignedUrl(storagePath, 60);
       // If we can create a signed URL, the file exists
       return !!data;
     } catch (error) {
@@ -743,7 +577,6 @@ public generateStoragePath(fileUniqueId: string, mimeType: string): string {
       return false;
     }
   }
-  
   /**
    * Download media from Telegram with improved error handling
    * 
@@ -755,117 +588,101 @@ public generateStoragePath(fileUniqueId: string, mimeType: string): string {
    * @param extension - The file extension to use
    * @param correlationId - Correlation ID for logging
    * @returns Download result object with status and file data
-   */
-  private async downloadMediaFromTelegram(
-    fileId: string,
-    fileUniqueId: string,
-    extension: string,
-    correlationId: string
-  ): Promise<DownloadResult> {
+   */ async downloadMediaFromTelegram(fileId, fileUniqueId, extension1, correlationId) {
     const functionName = 'downloadMediaFromTelegram';
     console.log(`[${correlationId}][${functionName}] Downloading file ${fileId} from Telegram`);
-    
     // Create standardized storage path using our utility method
-    const storagePath = this.getStandardizedPath(fileUniqueId, extension);
-    
+    const storagePath = this.getStandardizedPath(fileUniqueId, extension1);
     try {
       // Define retry options for getFile operation
-      const getFileOptions: RetryOptions = {
+      const getFileOptions = {
         maxAttempts: 3,
         initialDelayMs: 1000,
         backoffFactor: 2,
-        isRetryable: (error) => {
+        isRetryable: (error)=>{
           const errorStr = String(error);
           // Don't retry if file reference is expired - this is a permanent error
-          return !errorStr.includes('file reference expired') && 
-                 !errorStr.includes("File_id doesn't match");
+          return !errorStr.includes('file reference expired') && !errorStr.includes("File_id doesn't match");
         }
       };
-      
       // Get file metadata from Telegram with retries
       const getFileUrl = `https://api.telegram.org/bot${this.telegramBotToken}/getFile`;
-      const getFileParams = new URLSearchParams({ file_id: fileId });
-      
-      const getFileResult = await retryOperation(async () => {
+      const getFileParams = new URLSearchParams({
+        file_id: fileId
+      });
+      const getFileResult = await retryOperation(async ()=>{
         const response = await fetch(`${getFileUrl}?${getFileParams.toString()}`);
         if (!response.ok) {
           const errorBody = await response.text();
           throw new Error(`Failed to get file info: ${response.status} ${response.statusText}\nBody: ${errorBody}`);
         }
-        
         const fileData = await response.json();
         if (!fileData.ok || !fileData.result || !fileData.result.file_path) {
           throw new Error(`Invalid getFile response: ${JSON.stringify(fileData)}`);
         }
-        
         return fileData;
       }, getFileOptions, correlationId, functionName + '.getFile');
-      
       if (!getFileResult.success || !getFileResult.result) {
         const errorMsg = getFileResult.error || 'Failed to get file metadata';
         // Check if this is a forwarded message with an expired file reference
         if (errorMsg.includes('file reference expired') || errorMsg.includes("File_id doesn't match")) {
-          return { 
-            success: false, 
+          return {
+            success: false,
             error: 'File reference expired or file ID no longer valid',
             attempts: getFileResult.attempts,
             storagePath
           };
         }
-        
-        return { 
-          success: false, 
+        return {
+          success: false,
           error: errorMsg,
           attempts: getFileResult.attempts,
           storagePath
         };
       }
-      
       // Telegram returned file info, now download the actual file
       const fileData = getFileResult.result;
       const filePath = fileData.result.file_path;
       const downloadUrl = `https://api.telegram.org/file/bot${this.telegramBotToken}/${filePath}`;
-      
       // Define retry options for download operation
-      const downloadOptions: RetryOptions = {
+      const downloadOptions = {
         maxAttempts: 3,
         initialDelayMs: 1000,
         backoffFactor: 2
       };
-      
-      const downloadResult = await retryOperation(async () => {
+      const downloadResult = await retryOperation(async ()=>{
         const response = await fetch(downloadUrl);
         if (!response.ok) {
           throw new Error(`Failed to download file: ${response.status} ${response.statusText}`);
         }
-        
         return response.blob();
       }, downloadOptions, correlationId, functionName + '.download');
-      
       if (!downloadResult.success || !downloadResult.result) {
-        return { 
-          success: false, 
+        return {
+          success: false,
           error: downloadResult.error || 'Failed to download file',
           attempts: getFileResult.attempts + downloadResult.attempts,
           storagePath
         };
       }
-      
       const blob = downloadResult.result;
-      
       // For photos without explicit MIME type, ensure proper image MIME type
       let mimeType = blob.type || 'application/octet-stream';
       if (mimeType === 'application/octet-stream') {
         // Check if extension corresponds to known image types
-        const lowerExt = extension.toLowerCase();
-        if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(lowerExt)) {
+        const lowerExt = extension1.toLowerCase();
+        if ([
+          'jpg',
+          'jpeg',
+          'png',
+          'gif',
+          'webp'
+        ].includes(lowerExt)) {
           // Use extension to MIME type map from cache
           mimeType = this.extensionToMimeMap[lowerExt] || `image/${lowerExt}`;
         }
       }
-      
       console.log(`[${correlationId}][${functionName}] Successfully downloaded file ${fileId} (${blob.size} bytes, MIME: ${mimeType})`);
-      
       return {
         success: true,
         blob,
@@ -875,15 +692,14 @@ public generateStoragePath(fileUniqueId: string, mimeType: string): string {
       };
     } catch (error) {
       console.error(`[${correlationId}][${functionName}] Error downloading media from Telegram: ${error instanceof Error ? error.message : String(error)}`);
-      return { 
-        success: false, 
-        error: error instanceof Error ? error.message : String(error), 
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
         attempts: 1,
-        storagePath 
+        storagePath
       };
     }
   }
-  
   /**
    * Upload media to storage with improved error handling and retry logic
    * 
@@ -907,16 +723,9 @@ public generateStoragePath(fileUniqueId: string, mimeType: string): string {
    *   console.error(`Upload failed: ${result.error}`);
    * }
    * ```
-   */
-  public async uploadMediaToStorage(
-    storagePath: string,
-    fileData: Blob,
-    mimeType: string,
-    correlationId: string
-  ): Promise<UploadResult> {
+   */ async uploadMediaToStorage(storagePath, fileData, mimeType, correlationId) {
     const functionName = 'uploadMediaToStorage';
     console.log(`[${correlationId}][${functionName}] Uploading to storage: ${storagePath}`);
-    
     // Validate inputs
     if (!storagePath || !fileData) {
       return {
@@ -924,11 +733,9 @@ public generateStoragePath(fileUniqueId: string, mimeType: string): string {
         error: !storagePath ? 'Missing storage path' : 'Missing file data'
       };
     }
-    
     try {
       // Determine content disposition based on MIME type
       const contentDisposition = this.isViewableMimeType(mimeType) ? 'inline' : 'attachment';
-      
       // Upload options
       const uploadOptions = {
         cacheControl: '3600',
@@ -939,35 +746,26 @@ public generateStoragePath(fileUniqueId: string, mimeType: string): string {
           'Content-Disposition': `${contentDisposition}; filename="${storagePath}"`
         }
       };
-      
       // Define retry options for upload operation
-      const uploadRetryOptions: RetryOptions = {
+      const uploadRetryOptions = {
         maxAttempts: 3,
         initialDelayMs: 1000,
         backoffFactor: 2,
-        isRetryable: (error) => {
+        isRetryable: (error)=>{
           const errorStr = String(error);
           // Only retry on connection or temporary errors, not permission issues
-          return !errorStr.includes('permission denied') && 
-                 !errorStr.includes('already exists') &&
-                 !errorStr.includes('invalid content type');
+          return !errorStr.includes('permission denied') && !errorStr.includes('already exists') && !errorStr.includes('invalid content type');
         }
       };
-      
       // Upload the file with retry
-      const uploadResult = await retryOperation(async () => {
-        const { data, error } = await this.supabaseClient.storage
-          .from(this.storageBucket)
-          .upload(storagePath, fileData, uploadOptions);
-          
+      const uploadResult = await retryOperation(async ()=>{
+        const { data, error } = await this.supabaseClient.storage.from(this.storageBucket).upload(storagePath, fileData, uploadOptions);
         if (error) {
           // Transform into throwable error for retry mechanism
           throw new Error(`Storage upload failed: ${error.message}`);
         }
-        
         return data;
       }, uploadRetryOptions, correlationId, functionName + '.upload');
-      
       if (!uploadResult.success) {
         console.error(`[${correlationId}][${functionName}] Upload failed after ${uploadResult.attempts} attempts: ${uploadResult.error}`);
         return {
@@ -975,25 +773,19 @@ public generateStoragePath(fileUniqueId: string, mimeType: string): string {
           error: uploadResult.error || 'Upload failed after multiple attempts'
         };
       }
-      
       // Get the public URL - this rarely fails so doesn't need retry
-      const { data: urlData } = this.supabaseClient.storage
-        .from(this.storageBucket)
-        .getPublicUrl(storagePath);
-      
+      const { data: urlData } = this.supabaseClient.storage.from(this.storageBucket).getPublicUrl(storagePath);
       if (!urlData || !urlData.publicUrl) {
         return {
           success: false,
           error: 'Failed to get public URL after successful upload'
         };
       }
-      
       console.log(`[${correlationId}][${functionName}] Upload successful after ${uploadResult.attempts} attempt(s): ${urlData.publicUrl}`);
       return {
         success: true,
         publicUrl: urlData.publicUrl
       };
-      
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.error(`[${correlationId}][${functionName}] Unexpected exception during upload:`, errorMessage);
@@ -1003,7 +795,6 @@ public generateStoragePath(fileUniqueId: string, mimeType: string): string {
       };
     }
   }
-  
   /**
    * Check if a file already exists in storage by its unique ID
    * 
@@ -1024,8 +815,7 @@ public generateStoragePath(fileUniqueId: string, mimeType: string): string {
    *   console.log(`File exists in storage: ${storagePath}`);
    * }
    * ```
-   */
-  /**
+   */ /**
    * Check if a file exists in storage using its Telegram file_unique_id
    * 
    * IMPORTANT: This method uses the original Telegram file_unique_id to check for duplicates,
@@ -1036,78 +826,57 @@ public generateStoragePath(fileUniqueId: string, mimeType: string): string {
    * @param extension - File extension to use in the storage path
    * @param correlationId - Correlation ID for logging
    * @returns Object with existence status and file info if found
-   */
-  public async checkFileExistsInStorage(
-    fileUniqueId: string,
-    extension: string,
-    correlationId: string
-  ): Promise<{ exists: boolean; storagePath?: string; publicUrl?: string }> {
+   */ async checkFileExistsInStorage(fileUniqueId, extension1, correlationId) {
     const functionName = 'checkFileExistsInStorage';
-    console.log(`[${correlationId}][${functionName}] Checking if file ${fileUniqueId}.${extension} exists in storage`);
-    
+    console.log(`[${correlationId}][${functionName}] Checking if file ${fileUniqueId}.${extension1} exists in storage`);
     try {
       // Check if the file exists in the database first (most reliable source of truth)
-      const { data: existingMessage, error: dbError } = await this.supabaseClient
-        .from('messages')
-        .select('storage_path, public_url')
-        .eq('file_unique_id', fileUniqueId)
-        .maybeSingle();
-      
+      const { data: existingMessage, error: dbError } = await this.supabaseClient.from('messages').select('storage_path, public_url').eq('file_unique_id', fileUniqueId).maybeSingle();
       if (dbError) {
         console.error(`[${correlationId}][${functionName}] Error checking database for file_unique_id ${fileUniqueId}: ${dbError.message}`);
       }
-      
       // If we found a record with this file_unique_id and it has a storage_path
       if (existingMessage && existingMessage.storage_path) {
         console.log(`[${correlationId}][${functionName}] Found existing file record in database with file_unique_id ${fileUniqueId}`);
-        
         // Check if the file actually exists in storage
-        const { data: storageData } = await this.supabaseClient
-          .storage
-          .from(this.storageBucket)
-          .getPublicUrl(existingMessage.storage_path);
-        
+        const { data: storageData } = await this.supabaseClient.storage.from(this.storageBucket).getPublicUrl(existingMessage.storage_path);
         if (storageData && await this.verifyUrlExists(storageData.publicUrl, correlationId)) {
           console.log(`[${correlationId}][${functionName}] Verified file exists in storage at path ${existingMessage.storage_path}`);
-          return { 
-            exists: true, 
+          return {
+            exists: true,
             storagePath: existingMessage.storage_path,
             publicUrl: existingMessage.public_url || storageData.publicUrl
           };
         }
       }
-      
       // Try potential file paths in order of likelihood
       const potentialPaths = [
-        `${fileUniqueId}.${extension}`, // Standard path with provided extension
-        `${fileUniqueId}.bin`,         // Fallback with bin extension
-        `${fileUniqueId}`              // Bare fileUniqueId as a last resort
+        `${fileUniqueId}.${extension1}`,
+        `${fileUniqueId}.bin`,
+        `${fileUniqueId}` // Bare fileUniqueId as a last resort
       ];
-      
-      for (const path of potentialPaths) {
-        const { data: storageData } = await this.supabaseClient
-          .storage
-          .from(this.storageBucket)
-          .getPublicUrl(path);
-          
+      for (const path of potentialPaths){
+        const { data: storageData } = await this.supabaseClient.storage.from(this.storageBucket).getPublicUrl(path);
         if (storageData && await this.verifyUrlExists(storageData.publicUrl, correlationId)) {
           console.log(`[${correlationId}][${functionName}] Found file in storage at path ${path}`);
-          return { 
-            exists: true, 
+          return {
+            exists: true,
             storagePath: path,
             publicUrl: storageData.publicUrl
           };
         }
       }
-      
       console.log(`[${correlationId}][${functionName}] File with file_unique_id ${fileUniqueId} not found in storage`);
-      return { exists: false };
+      return {
+        exists: false
+      };
     } catch (error) {
       console.error(`[${correlationId}][${functionName}] Exception checking file existence: ${error instanceof Error ? error.message : String(error)}`);
-      return { exists: false };
+      return {
+        exists: false
+      };
     }
   }
-  
   /**
    * Verify if a URL exists by making a HEAD request
    * 
@@ -1115,21 +884,20 @@ public generateStoragePath(fileUniqueId: string, mimeType: string): string {
    * @param correlationId - Correlation ID for logging
    * @returns Boolean indicating if the URL exists and is accessible
    * @private
-   */
-  private async verifyUrlExists(url: string, correlationId: string): Promise<boolean> {
+   */ async verifyUrlExists(url, correlationId) {
     try {
-      const response = await fetch(url, { 
+      const response = await fetch(url, {
         method: 'HEAD',
-        headers: { 'Cache-Control': 'no-cache' }
+        headers: {
+          'Cache-Control': 'no-cache'
+        }
       });
-      
       return response.ok;
     } catch (error) {
       console.error(`[${correlationId}] Error verifying URL existence: ${error instanceof Error ? error.message : String(error)}`);
       return false;
     }
   }
-  
   /**
    * Gets a standardized path for a file based on its file_unique_id and extension
    * 
@@ -1148,11 +916,9 @@ public generateStoragePath(fileUniqueId: string, mimeType: string): string {
    * const path = mediaProcessor.getStandardizedPath(fileUniqueId, extension);
    * console.log(path); // Output: "AgADcAUAAj-vwFc.jpeg"
    * ```
-   */
-  public getStandardizedPath(fileUniqueId: string, extension: string): string {
+   */ getStandardizedPath(fileUniqueId, extension1) {
     // Ensure extension doesn't have a leading dot
-    const cleanExtension = extension.startsWith('.') ? extension.substring(1) : extension;
-    
+    const cleanExtension = extension1.startsWith('.') ? extension1.substring(1) : extension1;
     // Create a standardized path in the format fileUniqueId.extension
     return `${fileUniqueId}.${cleanExtension}`;
   }
@@ -1174,14 +940,9 @@ public generateStoragePath(fileUniqueId: string, mimeType: string): string {
    *   console.log(`Processed media: ${result.publicUrl}`);
    * }
    * ```
-   */
-  public async processMedia(
-    mediaContent: MediaContent,
-    correlationId: string
-  ): Promise<ProcessingResult> {
+   */ async processMedia(mediaContent, correlationId) {
     const functionName = 'processMedia';
     console.log(`[${correlationId}][${functionName}] Processing media ${mediaContent.fileUniqueId}`);
-    
     try {
       // Validate required fields
       if (!mediaContent.fileId || !mediaContent.fileUniqueId) {
@@ -1196,76 +957,49 @@ public generateStoragePath(fileUniqueId: string, mimeType: string): string {
           error: 'Missing required file identifiers'
         };
       }
-
       // Detect proper MIME type from Telegram data
       let detectedMimeType = mediaContent.mimeType || this.inferMimeTypeFromMediaType(mediaContent.mediaType);
-      
       // Determine file extension from media type or MIME type
-      let extension = this.getExtensionFromMimeType(detectedMimeType);
-      
+      let extension1 = this.getExtensionFromMimeType(detectedMimeType);
       // Fallback for photos without MIME type
-      if (extension === 'bin' && mediaContent.mediaType === 'photo') {
-        extension = 'jpeg';
+      if (extension1 === 'bin' && mediaContent.mediaType === 'photo') {
+        extension1 = 'jpeg';
         detectedMimeType = 'image/jpeg';
       }
-      
       // Log fileUniqueId to aid in debugging duplicate detection issues
       console.log(`[${correlationId}][${functionName}] Processing media with fileUniqueId: ${mediaContent.fileUniqueId}, fileId: ${mediaContent.fileId}`, {
         mediaType: mediaContent.mediaType,
         mimeType: detectedMimeType,
-        extension
+        extension: extension1
       });
-      
       // Check if file already exists in storage by file_unique_id
-      const existingFile = await this.checkFileExistsInStorage(
-        mediaContent.fileUniqueId,
-        extension,
-        correlationId
-      );
-      
+      const existingFile = await this.checkFileExistsInStorage(mediaContent.fileUniqueId, extension1, correlationId);
       // If file already exists, return the existing file info
       if (existingFile.exists && existingFile.publicUrl) {
         console.log(`[${correlationId}][${functionName}] Using existing file ${existingFile.storagePath}`);
-        
         // Determine content disposition based on MIME type
-        const contentDisposition = this.isViewableMimeType(detectedMimeType)
-          ? 'inline'
-          : 'attachment';
-        
+        const contentDisposition = this.isViewableMimeType(detectedMimeType) ? 'inline' : 'attachment';
         console.log(`[${correlationId}][${functionName}] File MIME type: ${detectedMimeType}, Content-Disposition: ${contentDisposition}`);
-        
         return {
           status: 'success',
           fileId: mediaContent.fileId,
           fileUniqueId: mediaContent.fileUniqueId,
           storagePath: existingFile.storagePath,
           publicUrl: existingFile.publicUrl,
-          mimeType: detectedMimeType,  // Use the properly detected MIME type
-          extension: extension,
-          contentDisposition: contentDisposition,  // Add content disposition to the result
+          mimeType: detectedMimeType,
+          extension: extension1,
+          contentDisposition: contentDisposition,
           error: undefined
         };
       }
-      
       // File doesn't exist, proceed with download and upload
       console.log(`[${correlationId}][${functionName}] File doesn't exist, downloading from Telegram`);
-      
       // Download file from Telegram
-      const downloadResult = await this.downloadMediaFromTelegram(
-        mediaContent.fileId,
-        mediaContent.fileUniqueId,
-        extension,
-        correlationId
-      );
-      
+      const downloadResult = await this.downloadMediaFromTelegram(mediaContent.fileId, mediaContent.fileUniqueId, extension1, correlationId);
       if (!downloadResult.success || !downloadResult.blob) {
         // Improved detection of file reference issues common with forwarded media
         const errorMessage = downloadResult.error || 'Unknown download error';
-        const isForwardedMediaError = errorMessage.includes('file reference expired') || 
-                                     errorMessage.includes('File_id doesn\'t match') ||
-                                     errorMessage.includes('bot can\'t access') ||
-                                     errorMessage.includes('file is no longer available');
-        
+        const isForwardedMediaError = errorMessage.includes('file reference expired') || errorMessage.includes('File_id doesn\'t match') || errorMessage.includes('bot can\'t access') || errorMessage.includes('file is no longer available');
         if (isForwardedMediaError) {
           return {
             status: 'download_failed_forwarded',
@@ -1274,7 +1008,7 @@ public generateStoragePath(fileUniqueId: string, mimeType: string): string {
             storagePath: null,
             publicUrl: null,
             mimeType: mediaContent.mimeType || null,
-            extension: extension,
+            extension: extension1,
             error: 'Cannot download forwarded media due to inaccessible file_id.'
           };
         } else {
@@ -1285,20 +1019,13 @@ public generateStoragePath(fileUniqueId: string, mimeType: string): string {
             storagePath: null,
             publicUrl: null,
             mimeType: mediaContent.mimeType || null,
-            extension: extension,
+            extension: extension1,
             error: errorMessage
           };
         }
       }
-      
       // Upload file to storage
-      const uploadResult = await this.uploadMediaToStorage(
-        downloadResult.storagePath!,
-        downloadResult.blob,
-        downloadResult.mimeType!,
-        correlationId
-      );
-      
+      const uploadResult = await this.uploadMediaToStorage(downloadResult.storagePath, downloadResult.blob, downloadResult.mimeType, correlationId);
       if (!uploadResult.success) {
         return {
           status: 'error',
@@ -1307,31 +1034,25 @@ public generateStoragePath(fileUniqueId: string, mimeType: string): string {
           storagePath: downloadResult.storagePath,
           publicUrl: null,
           mimeType: downloadResult.mimeType,
-          extension: extension,
+          extension: extension1,
           error: uploadResult.error || 'Failed to upload media'
         };
       }
-      
       // Determine content disposition based on MIME type
-      const contentDisposition = this.isViewableMimeType(downloadResult.mimeType || '')
-        ? 'inline'
-        : 'attachment';
-      
+      const contentDisposition = this.isViewableMimeType(downloadResult.mimeType || '') ? 'inline' : 'attachment';
       console.log(`[${correlationId}][${functionName}] File MIME type: ${downloadResult.mimeType}, Content-Disposition: ${contentDisposition}`);
-      
       // Success result with correct fileUniqueId handling
       return {
         status: 'success',
         fileId: mediaContent.fileId,
-        fileUniqueId: mediaContent.fileUniqueId, // Important: preserve original fileUniqueId
+        fileUniqueId: mediaContent.fileUniqueId,
         storagePath: downloadResult.storagePath,
         publicUrl: uploadResult.publicUrl,
         mimeType: downloadResult.mimeType,
-        extension: extension,
+        extension: extension1,
         contentDisposition: contentDisposition,
         error: undefined
       };
-      
     } catch (error) {
       console.error(`[${correlationId}][${functionName}] Exception processing media:`, error);
       return {
@@ -1346,7 +1067,6 @@ public generateStoragePath(fileUniqueId: string, mimeType: string): string {
       };
     }
   }
-  
   /**
    * Create a MediaProcessor instance with the provided dependencies
    * 
@@ -1362,12 +1082,7 @@ public generateStoragePath(fileUniqueId: string, mimeType: string): string {
    *   Deno.env.get('TELEGRAM_BOT_TOKEN')
    * );
    * ```
-   */
-  public static createMediaProcessor(
-    supabaseClient: SupabaseClient,
-    telegramBotToken: string,
-    storageBucket: string = 'telegram-media'
-  ): MediaProcessor {
+   */ static createMediaProcessor(supabaseClient, telegramBotToken, storageBucket = 'telegram-media') {
     return new MediaProcessor(supabaseClient, telegramBotToken, storageBucket);
   }
 }
