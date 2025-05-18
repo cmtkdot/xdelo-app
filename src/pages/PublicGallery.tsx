@@ -183,8 +183,8 @@ const PublicGallery = () => {
 
   return (
     <div className="container px-2 py-4 mx-auto sm:px-4 md:py-8 max-w-7xl">
-      {/* Mobile Filter Bar */}
-      <div className="sticky top-0 z-10 pt-1 pb-3 mb-4 border-b bg-background/95 backdrop-blur-sm">
+      {/* Mobile Filter Bar - ONLY VISIBLE ON SMALL SCREENS */}
+      <div className="sticky top-0 z-10 pt-1 pb-3 mb-4 border-b bg-background/95 backdrop-blur-sm md:hidden">
         <div className="flex items-center justify-between gap-2">
           {/* Search Input */}
           <div className="relative flex-1">
@@ -230,9 +230,7 @@ const PublicGallery = () => {
             <SheetTrigger asChild>
               <Button variant="outline" size="sm" className="gap-1 px-2 h-9">
                 <SlidersHorizontal className="w-4 h-4" />
-                <span className="sr-only md:not-sr-only md:inline">
-                  Filters
-                </span>
+                <span className="sr-only">Filters</span>
                 {activeFilters.length > 0 && (
                   <Badge variant="secondary" className="h-5 px-1 ml-1 text-xs">
                     {activeFilters.length}
@@ -255,6 +253,7 @@ const PublicGallery = () => {
                 onDateFieldChange={setDateField}
                 sortOrder={sortOrder}
                 onSortOrderChange={setSortOrder}
+                hideSearch={true}
               />
             </SheetContent>
           </Sheet>
@@ -263,8 +262,8 @@ const PublicGallery = () => {
 
       {/* Main Content Area */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-12">
-        {/* Filters (Desktop) */}
-        <div className="hidden col-span-3 md:block">
+        {/* Filters (Desktop) - ONLY VISIBLE ON MEDIUM AND LARGER SCREENS */}
+        <div className="hidden md:block col-span-3">
           <GalleryFilters
             filter={filter}
             setFilter={setFilter}

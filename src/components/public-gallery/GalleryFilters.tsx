@@ -1,25 +1,26 @@
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Film, Grid, Grid3X3, ImageIcon, Search, Table } from "lucide-react";
+import { useState } from "react";
+import { DateFieldFilter } from "./filters/DateFieldFilter";
+import { SortOrderFilter } from "./filters/SortOrderFilter";
+import { VendorFilter } from "./filters/VendorFilter";
 
-import React from 'react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Checkbox } from '@/components/ui/checkbox'
-
-export interface GalleryFiltersProps {
-  filter: string
-  setFilter: (filter: string) => void
-  viewMode: 'grid' | 'table'
-  setViewMode: (mode: 'grid' | 'table') => void
-  searchTerm: string
-  onSearchChange: (search: string) => void
-  vendorFilter: string[]
-  vendors: string[]
-  onVendorFilterChange: (vendors: string[]) => void
-  dateField: string
-  onDateFieldChange: (field: string) => void
-  sortOrder: string
-  onSortOrderChange: (order: string) => void
+interface GalleryFiltersProps {
+  filter: string;
+  setFilter: (filter: string) => void;
+  viewMode: "grid" | "table";
+  setViewMode: (mode: "grid" | "table") => void;
+  vendorFilter?: string[];
+  vendors?: string[];
+  onVendorFilterChange?: (value: string[]) => void;
+  dateField?: "created_at" | "updated_at";
+  onDateFieldChange?: (value: "created_at" | "updated_at") => void;
+  sortOrder?: "asc" | "desc";
+  onSortOrderChange?: (value: "asc" | "desc") => void;
+  searchTerm?: string;
+  onSearchChange?: (value: string) => void;
+  hideSearch?: boolean;
 }
 
 export function GalleryFilters({
@@ -34,31 +35,65 @@ export function GalleryFilters({
   onVendorFilterChange,
   dateField,
   onDateFieldChange,
-  sortOrder,
-  onSortOrderChange
-}: GalleryFiltersProps) {
-  const handleVendorToggle = (vendor: string) => {
-    const updated = vendorFilter.includes(vendor)
-      ? vendorFilter.filter(v => v !== vendor)
-      : [...vendorFilter, vendor]
-    onVendorFilterChange(updated)
-  }
+  sortOrder = "desc",
+  onSortOrderChange,
+  searchTerm = "",
+  onSearchChange,
+  hideSearch = false,
+}: GalleryFiltersProps) => {
+  const [inputValue, setInputValue] = useState(searchTerm);
+
+  const handleSearch = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" && onSearchChange) {
+      onSearchChange(inputValue);
+    }
+  };
+
+  const handleSearchClick = () => {
+    if (onSearchChange) {
+      onSearchChange(inputValue);
+    }
+  };
+
+  const handleClearSearch = () => {
+    setInputValue("");
+    if (onSearchChange) {
+      onSearchChange("");
+    }
+  };
 
   return (
-    <div className="space-y-6 p-4 border rounded-lg bg-card">
-      <div>
-        <Label htmlFor="search" className="text-sm font-medium">
-          Search
-        </Label>
-        <Input
-          id="search"
-          type="text"
-          placeholder="Search products..."
-          value={searchTerm}
-          onChange={(e) => onSearchChange(e.target.value)}
-          className="mt-1"
-        />
-      </div>
+    <div className="space-y-4 mb-4">
+      {/* Search input - conditionally rendered */}
+      {onSearchChange && !hideSearch && (
+        <div className="flex gap-2 mb-4">
+          <div className="relative flex-1">
+            <Input
+              placeholder="Search by product name, code, vendor or caption..."
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyDown={handleSearch}
+              className="pr-8"
+            />
+            {inputValue && (
+              <button
+                onClick={handleClearSearch}
+                className="absolute right-8 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                ×
+              </button>
+            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute right-0 top-0 h-full"
+              onClick={handleSearchClick}
+            >
+              <Search className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
 
       <div>
         <Label className="text-sm font-medium">Filter</Label>
