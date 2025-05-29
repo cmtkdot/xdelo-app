@@ -1,9 +1,9 @@
 /**
  * Error handling utilities for the Telegram webhook
- */ import { corsHeaders } from "../../_shared/cors.ts";
+ */ import { corsHeaders } from "../_shared/cors.ts";
 /**
  * Create a standardized error response for the Telegram webhook
- * 
+ *
  * @param message - The error message
  * @param functionName - The name of the function where the error occurred
  * @param status - The HTTP status code (default: 500)
@@ -39,7 +39,7 @@
     };
   } else {
     return {
-      name: 'UnknownError',
+      name: "UnknownError",
       message: String(error),
       context
     };

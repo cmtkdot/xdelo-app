@@ -1,11 +1,11 @@
 // Import necessary dependencies
-import { supabaseClient } from "../../_shared/supabaseClient.ts";
+import { supabaseClient } from "../_shared/supabaseClient.ts";
 /**
  * Logger class for telegram-webhook function with enhanced retry support
  */ export class Logger {
   correlationId;
   source;
-  constructor(correlationId, source = 'telegram-webhook'){
+  constructor(correlationId, source = "telegram-webhook"){
     this.correlationId = correlationId;
     this.source = source;
   }
@@ -30,7 +30,7 @@ import { supabaseClient } from "../../_shared/supabaseClient.ts";
     console.error(`[${this.source}][${this.correlationId}] ${message}`, metadata);
     // Log to the database if possible
     try {
-      void this.logToDatabase('error', message, metadata);
+      void this.logToDatabase("error", message, metadata);
     } catch (err) {
       console.error(`Failed to log error to database: ${err instanceof Error ? err.message : String(err)}`);
     }
@@ -39,7 +39,7 @@ import { supabaseClient } from "../../_shared/supabaseClient.ts";
    * Log a message to the unified_audit_logs table
    */ /**
    * Log a retry event
-   * 
+   *
    * @param operationName - The name of the operation being retried
    * @param attemptNumber - The attempt number (1-based)
    * @param maxRetries - The maximum number of retries
@@ -47,7 +47,7 @@ import { supabaseClient } from "../../_shared/supabaseClient.ts";
    * @param metadata - Additional metadata
    */ retryAttempt(operationName, attemptNumber, maxRetries, error, metadata = {}) {
     const errorMessage = error instanceof Error ? error.message : error;
-    this.info(`Retry attempt ${attemptNumber}/${maxRetries + 1} for operation: ${operationName}${errorMessage ? ` (Error: ${errorMessage})` : ''}`, {
+    this.info(`Retry attempt ${attemptNumber}/${maxRetries + 1} for operation: ${operationName}${errorMessage ? ` (Error: ${errorMessage})` : ""}`, {
       retry_operation: operationName,
       retry_attempt: attemptNumber,
       retry_max: maxRetries,
@@ -55,8 +55,8 @@ import { supabaseClient } from "../../_shared/supabaseClient.ts";
       ...metadata
     });
     // Also log to database
-    void this.logToDatabase('info', `Retry attempt ${attemptNumber}/${maxRetries + 1} for operation: ${operationName}`, {
-      event_category: 'webhook_retry',
+    void this.logToDatabase("info", `Retry attempt ${attemptNumber}/${maxRetries + 1} for operation: ${operationName}`, {
+      event_category: "webhook_retry",
       retry_operation: operationName,
       retry_attempt: attemptNumber,
       retry_max: maxRetries,
@@ -66,32 +66,32 @@ import { supabaseClient } from "../../_shared/supabaseClient.ts";
   }
   /**
    * Log a retry success
-   * 
+   *
    * @param operationName - The name of the operation that succeeded
    * @param attemptCount - The number of attempts it took to succeed
    * @param totalTimeMs - The total time it took to succeed
    * @param metadata - Additional metadata
    */ retrySuccess(operationName, attemptCount, totalTimeMs, metadata = {}) {
-    this.info(`Operation ${operationName} succeeded after ${attemptCount} ${attemptCount === 1 ? 'attempt' : 'attempts'} (${totalTimeMs}ms)`, {
+    this.info(`Operation ${operationName} succeeded after ${attemptCount} ${attemptCount === 1 ? "attempt" : "attempts"} (${totalTimeMs}ms)`, {
       retry_operation: operationName,
       retry_attempts: attemptCount,
       retry_total_time_ms: totalTimeMs,
-      retry_outcome: 'success',
+      retry_outcome: "success",
       ...metadata
     });
     // Also log to database
-    void this.logToDatabase('info', `Operation ${operationName} succeeded after ${attemptCount} ${attemptCount === 1 ? 'attempt' : 'attempts'}`, {
-      event_category: 'webhook_retry_success',
+    void this.logToDatabase("info", `Operation ${operationName} succeeded after ${attemptCount} ${attemptCount === 1 ? "attempt" : "attempts"}`, {
+      event_category: "webhook_retry_success",
       retry_operation: operationName,
       retry_attempts: attemptCount,
       retry_total_time_ms: totalTimeMs,
-      retry_outcome: 'success',
+      retry_outcome: "success",
       ...metadata
     });
   }
   /**
    * Log a retry failure when all retries are exhausted
-   * 
+   *
    * @param operationName - The name of the operation that failed
    * @param attemptCount - The number of attempts made
    * @param totalTimeMs - The total time spent retrying
@@ -99,28 +99,28 @@ import { supabaseClient } from "../../_shared/supabaseClient.ts";
    * @param metadata - Additional metadata
    */ retryExhausted(operationName, attemptCount, totalTimeMs, finalError, metadata = {}) {
     const errorMessage = finalError instanceof Error ? finalError.message : finalError;
-    this.error(`Operation ${operationName} failed after ${attemptCount} ${attemptCount === 1 ? 'attempt' : 'attempts'} (${totalTimeMs}ms): ${errorMessage}`, {
+    this.error(`Operation ${operationName} failed after ${attemptCount} ${attemptCount === 1 ? "attempt" : "attempts"} (${totalTimeMs}ms): ${errorMessage}`, {
       retry_operation: operationName,
       retry_attempts: attemptCount,
       retry_total_time_ms: totalTimeMs,
-      retry_outcome: 'exhausted',
+      retry_outcome: "exhausted",
       retry_final_error: errorMessage,
       ...metadata
     });
     // Also log to database
-    void this.logToDatabase('error', `Operation ${operationName} failed after ${attemptCount} ${attemptCount === 1 ? 'attempt' : 'attempts'}: ${errorMessage}`, {
-      event_category: 'webhook_retry_exhausted',
+    void this.logToDatabase("error", `Operation ${operationName} failed after ${attemptCount} ${attemptCount === 1 ? "attempt" : "attempts"}: ${errorMessage}`, {
+      event_category: "webhook_retry_exhausted",
       retry_operation: operationName,
       retry_attempts: attemptCount,
       retry_total_time_ms: totalTimeMs,
-      retry_outcome: 'exhausted',
+      retry_outcome: "exhausted",
       retry_final_error: errorMessage,
       ...metadata
     });
   }
   /**
    * Log a message to the unified_audit_logs table
-   * 
+   *
    * @param level - Log level
    * @param message - Message to log
    * @param metadata - Additional metadata to include
@@ -138,14 +138,14 @@ import { supabaseClient } from "../../_shared/supabaseClient.ts";
       // Determine event type based on category if provided
       const eventType = metadata.event_category || `${this.source}_${level}`;
       delete metadata.event_category; // Remove to avoid duplication
-      await supabaseClient.from('unified_audit_logs').insert({
+      await supabaseClient.from("unified_audit_logs").insert({
         event_type: eventType,
         entity_id: entityId,
         message,
         metadata: {
           ...metadata,
           source: this.source,
-          logger: 'edge-function'
+          logger: "edge-function"
         },
         correlation_id: this.correlationId,
         event_timestamp: new Date().toISOString()
@@ -158,16 +158,16 @@ import { supabaseClient } from "../../_shared/supabaseClient.ts";
 }
 /**
  * Creates a Logger instance specifically for retry operations
- * 
+ *
  * @param correlationId - Correlation ID for request tracking
  * @returns A configured Logger instance for retry operations
  */ export function createRetryLogger(correlationId) {
-  return new Logger(correlationId, 'retry-handler');
+  return new Logger(correlationId, "retry-handler");
 }
 // Logger exports below
 /**
  * Primary function to log processing events
- * 
+ *
  * @param event_type - The type of event being logged
  * @param entity_id - The ID of the entity related to this log
  * @param correlation_id - Correlation ID for request tracking
@@ -175,8 +175,8 @@ import { supabaseClient } from "../../_shared/supabaseClient.ts";
  * @param error - Optional error to log
  */ export async function logProcessingEvent(event_type, entity_id, correlation_id, metadata, error) {
   // First, log to console for immediate visibility
-  const logPrefix = `[${metadata.source || 'telegram-webhook'}][${correlation_id}]`;
-  const message = metadata.message || '';
+  const logPrefix = `[${metadata.source || "telegram-webhook"}][${correlation_id}]`;
+  const message = metadata.message || "";
   if (error) {
     console.error(`${logPrefix} ${message}`, {
       ...metadata,
@@ -203,13 +203,13 @@ import { supabaseClient } from "../../_shared/supabaseClient.ts";
 }
 /**
  * Backward compatible wrapper for logWithCorrelation
- * 
+ *
  * @param correlationId - Correlation ID for request tracking
  * @param message - Message to log
  * @param level - Log level (default: 'info')
  * @param source - Source of the log (default: 'telegram-webhook')
  * @param metadata - Additional metadata to include
- */ export function logWithCorrelation(correlationId, message, level = 'info', source = 'telegram-webhook', metadata = {}) {
+ */ export function logWithCorrelation(correlationId, message, level = "info", source = "telegram-webhook", metadata = {}) {
   // Construct the event type from source and level
   const event_type = `${source}_${level}`;
   // Use entity_id from metadata or generate UUID
@@ -223,5 +223,5 @@ import { supabaseClient } from "../../_shared/supabaseClient.ts";
   };
   // Call the new function without awaiting to maintain backward compatibility
   // with code that doesn't expect logWithCorrelation to be async
-  void logProcessingEvent(event_type, entity_id, correlationId, enhanced_metadata, level === 'error' ? message : undefined);
+  void logProcessingEvent(event_type, entity_id, correlationId, enhanced_metadata, level === "error" ? message : undefined);
 }

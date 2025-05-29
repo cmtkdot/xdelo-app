@@ -1,6 +1,6 @@
 /**
  * messageUtils.ts
- * 
+ *
  * Utility functions for processing Telegram messages.
  * These functions extract common logic from the message handlers
  * to reduce duplication while maintaining the documented workflow.
@@ -8,8 +8,8 @@
 function adaptProcessingResult(result) {
   return {
     status: result.status,
-    success: result.status === 'success',
-    isDuplicate: result.status === 'duplicate',
+    success: result.status === "success",
+    isDuplicate: result.status === "duplicate",
     fileId: result.fileId,
     fileUniqueId: result.fileUniqueId,
     storagePath: result.storagePath,
@@ -28,12 +28,12 @@ function adaptProcessingResult(result) {
     }
   };
 }
-import { createRetryHandler } from "../../_shared/retryHandler.ts";
-import { processCaptionText } from "../../_shared/captionParser.ts";
+import { createRetryHandler } from "../_shared/retryHandler.ts";
+import { processCaptionText } from "../_shared/captionParser.ts";
 import { logWithCorrelation } from "./logger.ts";
 /**
  * Extract forward information from a Telegram message
- * 
+ *
  * @param message - The Telegram message to extract forward info from
  * @returns Forward information or undefined if not forwarded
  * @example
@@ -61,7 +61,7 @@ import { logWithCorrelation } from "./logger.ts";
 }
 /**
  * Extract media content from a Telegram message
- * 
+ *
  * @param message - The Telegram message to extract media from
  * @returns The media content object or undefined if no media found
  * @example
@@ -80,7 +80,7 @@ import { logWithCorrelation } from "./logger.ts";
       width: photo.width,
       height: photo.height,
       fileSize: photo.file_size,
-      mediaType: 'photo'
+      mediaType: "photo"
     };
   }
   // Extract video
@@ -93,7 +93,7 @@ import { logWithCorrelation } from "./logger.ts";
       duration: message.video.duration,
       mimeType: message.video.mime_type,
       fileSize: message.video.file_size,
-      mediaType: 'video'
+      mediaType: "video"
     };
   }
   // Extract document
@@ -103,14 +103,14 @@ import { logWithCorrelation } from "./logger.ts";
       fileId: message.document.file_id,
       mimeType: message.document.mime_type,
       fileSize: message.document.file_size,
-      mediaType: 'document'
+      mediaType: "document"
     };
   }
   return undefined;
 }
 /**
  * Process caption text with retry logic
- * 
+ *
  * @param captionText - The caption text to process
  * @param correlationId - The correlation ID for request tracking
  * @returns Processed caption data
@@ -129,7 +129,7 @@ import { logWithCorrelation } from "./logger.ts";
     useJitter: true
   });
   const result = await retryHandler.execute(async ()=>await processCaptionText(captionText), {
-    operationName: 'processCaptionText',
+    operationName: "processCaptionText",
     correlationId,
     supabaseClient: {},
     contextData: {
@@ -144,7 +144,7 @@ import { logWithCorrelation } from "./logger.ts";
 }
 /**
  * Check if a message exists in the database
- * 
+ *
  * @param supabaseClient - The Supabase client
  * @param telegramMessageId - The Telegram message ID
  * @param chatId - The chat ID
@@ -158,10 +158,10 @@ import { logWithCorrelation } from "./logger.ts";
  *   correlationId
  * );
  */ export async function checkMessageExists(supabaseClient, telegramMessageId, chatId, correlationId) {
-  const functionName = 'checkMessageExists';
-  logWithCorrelation(correlationId, `Checking for message ${telegramMessageId} in chat ${chatId}`, 'info', functionName);
+  const functionName = "checkMessageExists";
+  logWithCorrelation(correlationId, `Checking for message ${telegramMessageId} in chat ${chatId}`, "info", functionName);
   try {
-    const { data, error } = await supabaseClient.from('messages').select('*').eq('telegram_message_id', telegramMessageId).eq('chat_id', chatId).maybeSingle();
+    const { data, error } = await supabaseClient.from("messages").select("*").eq("telegram_message_id", telegramMessageId).eq("chat_id", chatId).maybeSingle();
     if (error) {
       console.error(`[${correlationId}][${functionName}] Error checking message:`, error.message);
       return {
@@ -181,7 +181,7 @@ import { logWithCorrelation } from "./logger.ts";
 }
 /**
  * Determine if media content has changed between messages
- * 
+ *
  * @param oldMedia - The old media content
  * @param newMedia - The new media content
  * @returns Boolean indicating if media has changed
@@ -204,7 +204,7 @@ import { logWithCorrelation } from "./logger.ts";
 }
 /**
  * Process media for a message
- * 
+ *
  * @param message - The Telegram message
  * @param mediaProcessor - The MediaProcessor instance
  * @param correlationId - The correlation ID for request tracking
@@ -216,18 +216,18 @@ import { logWithCorrelation } from "./logger.ts";
  *   correlationId
  * );
  */ export async function processMessageMedia(message, mediaProcessor, correlationId) {
-  const functionName = 'processMessageMedia';
-  logWithCorrelation(correlationId, `Processing media for message ${message.message_id}`, 'info', functionName);
+  const functionName = "processMessageMedia";
+  logWithCorrelation(correlationId, `Processing media for message ${message.message_id}`, "info", functionName);
   try {
     // Extract media content
     const mediaContent = extractMediaContent(message);
     if (!mediaContent) {
       return {
-        status: 'error',
+        status: "error",
         success: false,
         isDuplicate: false,
-        fileId: '',
-        fileUniqueId: '',
+        fileId: "",
+        fileUniqueId: "",
         storagePath: null,
         publicUrl: null,
         mimeType: null,
@@ -236,7 +236,7 @@ import { logWithCorrelation } from "./logger.ts";
       };
     }
     // Log media type and details for debugging
-    logWithCorrelation(correlationId, `Found ${mediaContent.mediaType} with ID ${mediaContent.fileUniqueId}`, 'info', functionName);
+    logWithCorrelation(correlationId, `Found ${mediaContent.mediaType} with ID ${mediaContent.fileUniqueId}`, "info", functionName);
     // Process the media with retry logic using the centralized RetryHandler
     const retryHandler = createRetryHandler({
       maxRetries: 2,
@@ -245,7 +245,7 @@ import { logWithCorrelation } from "./logger.ts";
       useJitter: true
     });
     const result = await retryHandler.execute(async ()=>await mediaProcessor.processMedia(mediaContent, correlationId), {
-      operationName: 'processMedia',
+      operationName: "processMedia",
       correlationId,
       supabaseClient: {},
       contextData: {
@@ -263,7 +263,7 @@ import { logWithCorrelation } from "./logger.ts";
       return adaptedResult;
     } else {
       return {
-        status: 'error',
+        status: "error",
         success: false,
         isDuplicate: false,
         fileId: mediaContent.fileId,
@@ -286,7 +286,7 @@ import { logWithCorrelation } from "./logger.ts";
 }
 /**
  * Create a new message record in the database
- * 
+ *
  * @param supabaseClient - The Supabase client
  * @param message - The Telegram message
  * @param mediaResult - The media processing result
@@ -302,8 +302,8 @@ import { logWithCorrelation } from "./logger.ts";
  *   correlationId
  * );
  */ export async function createMessageRecord(supabaseClient, message, mediaResult, captionData, correlationId) {
-  const functionName = 'createMessageRecord';
-  logWithCorrelation(correlationId, `Creating message record for ${message.message_id}`, 'info', functionName);
+  const functionName = "createMessageRecord";
+  logWithCorrelation(correlationId, `Creating message record for ${message.message_id}`, "info", functionName);
   try {
     // Extract forward info if present
     const forwardInfo = extractForwardInfo(message);
@@ -316,11 +316,11 @@ import { logWithCorrelation } from "./logger.ts";
       message_date: new Date(message.date * 1000).toISOString(),
       caption: message.caption,
       caption_data: captionData,
-      processing_state: 'completed',
+      processing_state: "completed",
       correlation_id: correlationId,
       forward_info: forwardInfo,
       edit_history: [],
-      file_unique_id: mediaResult.fileInfo?.fileUniqueId || '',
+      file_unique_id: mediaResult.fileInfo?.fileUniqueId || "",
       storage_path: mediaResult.fileInfo?.storagePath || null,
       public_url: mediaResult.fileInfo?.publicUrl || null,
       mime_type: mediaResult.fileInfo?.mimeType || null,
@@ -328,21 +328,21 @@ import { logWithCorrelation } from "./logger.ts";
       content_disposition: mediaResult.fileInfo?.contentDisposition || null
     };
     // Insert record
-    const { data, error } = await supabaseClient.from('messages').insert(messageRecord).select('id').single();
+    const { data, error } = await supabaseClient.from("messages").insert(messageRecord).select("id").single();
     if (error) {
-      logWithCorrelation(correlationId, `Error creating message: ${error.message}`, 'error', functionName);
+      logWithCorrelation(correlationId, `Error creating message: ${error.message}`, "error", functionName);
       return null;
     }
-    logWithCorrelation(correlationId, `Created message with ID: ${data.id}`, 'info', functionName);
+    logWithCorrelation(correlationId, `Created message with ID: ${data.id}`, "info", functionName);
     return data.id;
   } catch (error) {
-    logWithCorrelation(correlationId, `Exception creating message: ${error instanceof Error ? error.message : String(error)}`, 'error', functionName);
+    logWithCorrelation(correlationId, `Exception creating message: ${error instanceof Error ? error.message : String(error)}`, "error", functionName);
     return null;
   }
 }
 /**
  * Update an existing message record in the database
- * 
+ *
  * @param supabaseClient - The Supabase client
  * @param existingMessage - The existing message record
  * @param message - The updated Telegram message
@@ -360,8 +360,8 @@ import { logWithCorrelation } from "./logger.ts";
  *   correlationId
  * );
  */ export async function updateMessageRecord(supabaseClient, existingMessage, message, mediaResult, captionData, correlationId) {
-  const functionName = 'updateMessageRecord';
-  logWithCorrelation(correlationId, `Updating message record ${existingMessage.id}`, 'info', functionName);
+  const functionName = "updateMessageRecord";
+  logWithCorrelation(correlationId, `Updating message record ${existingMessage.id}`, "info", functionName);
   try {
     // Create edit history entry
     const editHistoryEntry = {
@@ -380,7 +380,7 @@ import { logWithCorrelation } from "./logger.ts";
       caption_data: captionData,
       // Ensure both caption_data and analyzed_content are kept in sync
       analyzed_content: captionData,
-      processing_state: 'completed',
+      processing_state: "completed",
       correlation_id: correlationId,
       edit_history: [
         ...existingMessage.edit_history || [],
@@ -391,7 +391,7 @@ import { logWithCorrelation } from "./logger.ts";
     // If media changed, update media fields
     if (mediaResult && mediaResult.success && mediaResult.fileInfo) {
       if (mediaResult.fileInfo.storagePath) {
-        updateData.file_unique_id = mediaResult.fileInfo.storagePath.split('.')[0];
+        updateData.file_unique_id = mediaResult.fileInfo.storagePath.split(".")[0];
         updateData.storage_path = mediaResult.fileInfo.storagePath;
       }
       updateData.public_url = mediaResult.fileInfo.publicUrl;
@@ -400,15 +400,15 @@ import { logWithCorrelation } from "./logger.ts";
       updateData.content_disposition = mediaResult.fileInfo.contentDisposition;
     }
     // Update record
-    const { error } = await supabaseClient.from('messages').update(updateData).eq('id', existingMessage.id);
+    const { error } = await supabaseClient.from("messages").update(updateData).eq("id", existingMessage.id);
     if (error) {
-      logWithCorrelation(correlationId, `Error updating message: ${error.message}`, 'error', functionName);
+      logWithCorrelation(correlationId, `Error updating message: ${error.message}`, "error", functionName);
       return false;
     }
-    logWithCorrelation(correlationId, `Updated message ${existingMessage.id}`, 'info', functionName);
+    logWithCorrelation(correlationId, `Updated message ${existingMessage.id}`, "info", functionName);
     return true;
   } catch (error) {
-    logWithCorrelation(correlationId, `Exception updating message: ${error instanceof Error ? error.message : String(error)}`, 'error', functionName);
+    logWithCorrelation(correlationId, `Exception updating message: ${error instanceof Error ? error.message : String(error)}`, "error", functionName);
     return false;
   }
 }
