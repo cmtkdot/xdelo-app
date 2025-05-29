@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState } from 'react'
 import { Message } from '@/types/entities/Message'
 import { Play, Eye, Pencil, Trash, Image as ImageIcon, FileText } from 'lucide-react'
@@ -11,6 +12,7 @@ import { useTelegramOperations } from '@/hooks/useTelegramOperations'
 interface PublicMediaCardProps {
   message: Message
   onClick: (message: Message) => void
+  group?: Message[]
 }
 
 // Function to format video duration in mm:ss format
@@ -20,16 +22,7 @@ function formatDuration(seconds: number): string {
   return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`
 }
 
-// Helper function to get image dimensions, prefixed with _ as currently unused
-function _getImageDimensions(img: HTMLImageElement): Promise<{ width: number; height: number }> {
-  return new Promise((resolve) => {
-    img.onload = () => {
-      resolve({ width: img.width, height: img.height });
-    };
-  });
-}
-
-export const PublicMediaCard: React.FC<PublicMediaCardProps> = ({ message, onClick }) => {
+export const PublicMediaCard: React.FC<PublicMediaCardProps> = ({ message, onClick, group }) => {
   const [isHovering, setIsHovering] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
@@ -110,18 +103,6 @@ export const PublicMediaCard: React.FC<PublicMediaCardProps> = ({ message, onCli
       setTimeout(() => {
         target.classList.remove('ring-2', 'ring-primary')
       }, 300)
-    }
-  }
-  
-  // Not currently used but keeping for future implementation
-  const _openTelegramLink = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    e.preventDefault()
-    const chatId = message.chat_id?.toString().replace('-100', '')
-    const messageId = message.telegram_message_id
-    
-    if (chatId && messageId) {
-      window.open(`https://t.me/c/${chatId}/${messageId}`, '_blank')
     }
   }
   

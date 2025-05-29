@@ -1,3 +1,4 @@
+
 "use client";
 
 import { EnhancedMessagesFilters } from "@/components/EnhancedMessages/EnhancedMessagesFilters";
@@ -32,6 +33,7 @@ export default function MessagesEnhanced() {
     clearSelection,
     getSelectedMessageIds,
     deleteMessage,
+    isProcessing
   } = useMessageViewHandlers();
 
   const {
@@ -71,7 +73,17 @@ export default function MessagesEnhanced() {
 
   const handleDeleteMessage = async (id: string) => {
     try {
-      await deleteMessage({ id } as Message, false);
+      const messageToDelete = items?.find(m => m.id === id);
+      if (!messageToDelete) {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "Message not found",
+        });
+        return;
+      }
+
+      await deleteMessage(messageToDelete, false);
       toast({
         title: "Message deleted",
         description: "The message has been successfully deleted.",

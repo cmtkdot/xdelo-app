@@ -1,164 +1,145 @@
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Film, Grid, Grid3X3, ImageIcon, Search, Table } from "lucide-react";
-import { useState } from "react";
-import { DateFieldFilter } from "./filters/DateFieldFilter";
-import { SortOrderFilter } from "./filters/SortOrderFilter";
-import { VendorFilter } from "./filters/VendorFilter";
 
-interface GalleryFiltersProps {
-  filter: string;
-  setFilter: (filter: string) => void;
-  viewMode: "grid" | "table";
-  setViewMode: (mode: "grid" | "table") => void;
-  vendorFilter?: string[];
-  vendors?: string[];
-  onVendorFilterChange?: (value: string[]) => void;
-  dateField?: "created_at" | "updated_at";
-  onDateFieldChange?: (value: "created_at" | "updated_at") => void;
-  sortOrder?: "asc" | "desc";
-  onSortOrderChange?: (value: "asc" | "desc") => void;
-  searchTerm?: string;
-  onSearchChange?: (value: string) => void;
+import React from 'react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Checkbox } from '@/components/ui/checkbox'
+
+export interface GalleryFiltersProps {
+  filter: string
+  setFilter: (filter: string) => void
+  viewMode: 'grid' | 'table'
+  setViewMode: (mode: 'grid' | 'table') => void
+  searchTerm: string
+  onSearchChange: (search: string) => void
+  vendorFilter: string[]
+  vendors: string[]
+  onVendorFilterChange: (vendors: string[]) => void
+  dateField: string
+  onDateFieldChange: (field: string) => void
+  sortOrder: string
+  onSortOrderChange: (order: string) => void
 }
 
-export const GalleryFilters = ({
+export function GalleryFilters({
   filter,
   setFilter,
   viewMode,
   setViewMode,
-  vendorFilter = [],
-  vendors = [],
-  onVendorFilterChange,
-  dateField = "created_at",
-  onDateFieldChange,
-  sortOrder = "desc",
-  onSortOrderChange,
-  searchTerm = "",
+  searchTerm,
   onSearchChange,
-}: GalleryFiltersProps) => {
-  const [inputValue, setInputValue] = useState(searchTerm);
-
-  const handleSearch = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" && onSearchChange) {
-      onSearchChange(inputValue);
-    }
-  };
-
-  const handleSearchClick = () => {
-    if (onSearchChange) {
-      onSearchChange(inputValue);
-    }
-  };
-
-  const handleClearSearch = () => {
-    setInputValue("");
-    if (onSearchChange) {
-      onSearchChange("");
-    }
-  };
+  vendorFilter,
+  vendors,
+  onVendorFilterChange,
+  dateField,
+  onDateFieldChange,
+  sortOrder,
+  onSortOrderChange
+}: GalleryFiltersProps) {
+  const handleVendorToggle = (vendor: string) => {
+    const updated = vendorFilter.includes(vendor)
+      ? vendorFilter.filter(v => v !== vendor)
+      : [...vendorFilter, vendor]
+    onVendorFilterChange(updated)
+  }
 
   return (
-    <div className="space-y-4 mb-4">
-      {/* Search input */}
-      {onSearchChange && (
-        <div className="flex gap-2 mb-4">
-          <div className="relative flex-1">
-            <Input
-              placeholder="Search by product name, code, vendor or caption..."
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyDown={handleSearch}
-              className="pr-8"
-            />
-            {inputValue && (
-              <button
-                onClick={handleClearSearch}
-                className="absolute right-8 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              >
-                ×
-              </button>
-            )}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="absolute right-0 top-0 h-full"
-              onClick={handleSearchClick}
-            >
-              <Search className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-      )}
+    <div className="space-y-6 p-4 border rounded-lg bg-card">
+      <div>
+        <Label htmlFor="search" className="text-sm font-medium">
+          Search
+        </Label>
+        <Input
+          id="search"
+          type="text"
+          placeholder="Search products..."
+          value={searchTerm}
+          onChange={(e) => onSearchChange(e.target.value)}
+          className="mt-1"
+        />
+      </div>
 
-      <div className="flex flex-wrap justify-between gap-2">
-        <div className="flex flex-wrap gap-2 items-center">
+      <div>
+        <Label className="text-sm font-medium">Filter</Label>
+        <Select value={filter} onValueChange={setFilter}>
+          <SelectTrigger className="mt-1">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Items</SelectItem>
+            <SelectItem value="images">Images Only</SelectItem>
+            <SelectItem value="videos">Videos Only</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div>
+        <Label className="text-sm font-medium">View Mode</Label>
+        <div className="flex gap-2 mt-1">
           <Button
-            variant={filter === "all" ? "default" : "outline"}
-            onClick={() => setFilter("all")}
-            className="transition-all duration-200 ease-in-out"
+            variant={viewMode === 'grid' ? 'default' : 'outline'}
             size="sm"
+            onClick={() => setViewMode('grid')}
           >
-            <Grid3X3 className="mr-2 h-4 w-4" />
-            All
-          </Button>
-          <Button
-            variant={filter === "images" ? "default" : "outline"}
-            onClick={() => setFilter("images")}
-            className="transition-all duration-200 ease-in-out"
-            size="sm"
-          >
-            <ImageIcon className="mr-2 h-4 w-4" />
-            Images
-          </Button>
-          <Button
-            variant={filter === "videos" ? "default" : "outline"}
-            onClick={() => setFilter("videos")}
-            className="transition-all duration-200 ease-in-out"
-            size="sm"
-          >
-            <Film className="mr-2 h-4 w-4" />
-            Videos
-          </Button>
-
-          {onVendorFilterChange && vendors.length > 0 && (
-            <VendorFilter
-              value={vendorFilter}
-              vendors={vendors}
-              onChange={onVendorFilterChange}
-            />
-          )}
-
-          {onDateFieldChange && (
-            <DateFieldFilter value={dateField} onChange={onDateFieldChange} />
-          )}
-
-          {onSortOrderChange && (
-            <SortOrderFilter value={sortOrder} onChange={onSortOrderChange} />
-          )}
-        </div>
-
-        <div className="flex gap-2">
-          <Button
-            variant={viewMode === "grid" ? "default" : "outline"}
-            onClick={() => setViewMode("grid")}
-            className="transition-all duration-200 ease-in-out"
-            size="sm"
-          >
-            <Grid className="mr-2 h-4 w-4" />
             Grid
           </Button>
           <Button
-            variant={viewMode === "table" ? "default" : "outline"}
-            onClick={() => setViewMode("table")}
-            className="transition-all duration-200 ease-in-out"
+            variant={viewMode === 'table' ? 'default' : 'outline'}
             size="sm"
+            onClick={() => setViewMode('table')}
           >
-            <Table className="mr-2 h-4 w-4" />
             Table
           </Button>
         </div>
       </div>
+
+      <div>
+        <Label className="text-sm font-medium">Sort By</Label>
+        <Select value={dateField} onValueChange={onDateFieldChange}>
+          <SelectTrigger className="mt-1">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="created_at">Created Date</SelectItem>
+            <SelectItem value="purchase_date">Purchase Date</SelectItem>
+            <SelectItem value="updated_at">Updated Date</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div>
+        <Label className="text-sm font-medium">Sort Order</Label>
+        <Select value={sortOrder} onValueChange={onSortOrderChange}>
+          <SelectTrigger className="mt-1">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="desc">Newest First</SelectItem>
+            <SelectItem value="asc">Oldest First</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {vendors && vendors.length > 0 && (
+        <div>
+          <Label className="text-sm font-medium">Vendors</Label>
+          <div className="mt-2 space-y-2 max-h-32 overflow-y-auto">
+            {vendors.map((vendor) => (
+              <div key={vendor} className="flex items-center space-x-2">
+                <Checkbox
+                  id={vendor}
+                  checked={vendorFilter.includes(vendor)}
+                  onCheckedChange={() => handleVendorToggle(vendor)}
+                />
+                <Label htmlFor={vendor} className="text-sm">
+                  {vendor}
+                </Label>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
-  );
-};
+  )
+}

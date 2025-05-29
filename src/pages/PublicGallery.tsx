@@ -1,3 +1,4 @@
+
 import { GalleryFilters } from "@/components/public-gallery/GalleryFilters";
 import { PublicMediaCard, PublicMediaViewer } from "@/components/public-viewer";
 import { EmptyState } from "@/components/public-viewer/EmptyState";
@@ -323,7 +324,6 @@ const PublicGallery = () => {
                       <PublicMediaCard
                         key={message.id}
                         message={message}
-                        group={group}
                         onClick={() => handleMediaClick(message)}
                       />
                     );
