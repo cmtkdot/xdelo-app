@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useToast } from "@/hooks/useToast";
 import { useTelegramOperations } from "@/hooks/useTelegramOperations";
 import { Message, AnalyzedContent } from "@/types";
+import { adaptMessage } from "@/lib/messageAdapter";
 
 export interface EditableMessage extends Message {
   isEditing: boolean;
@@ -15,7 +16,7 @@ export function useMessageTableState(initialMessages: Message[]) {
   const [messageToDelete, setMessageToDelete] = useState<Message | null>(null);
   const [isViewerOpen, setIsViewerOpen] = useState(false);
   const [selectedMedia, setSelectedMedia] = useState<Message[]>([]);
-  const { deleteMessage, isProcessing } = useTelegramOperations();
+  const { handleDelete, isProcessing } = useTelegramOperations();
   const { toast } = useToast();
 
   const handleEdit = (id: string) => {
@@ -77,42 +78,19 @@ export function useMessageTableState(initialMessages: Message[]) {
   };
 
   const handleDeleteClick = (message: Message) => {
-    if (!message) {
-      toast({
-        title: "Error",
-        description: "No message selected for deletion",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setMessageToDelete(message);
+    const adaptedMessage = adaptMessage(message);
+    
+    setMessageToDelete(adaptedMessage);
     setIsDeleteDialogOpen(true);
   };
 
   const handleDeleteConfirm = async (deleteTelegram: boolean) => {
-    if (!messageToDelete) {
-      toast({
-        title: "Error",
-        description: "No message selected for deletion",
-        variant: "destructive",
-      });
-      return;
-    }
+    if (!messageToDelete) return;
 
-    try {
-      await deleteMessage(messageToDelete, deleteTelegram);
-      setMessages(prev => prev.filter(m => m.id !== messageToDelete.id));
-      setIsDeleteDialogOpen(false);
-      setMessageToDelete(null);
-    } catch (error) {
-      console.error('Error in handleDeleteConfirm:', error);
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : 'An error occurred during deletion',
-        variant: "destructive",
-      });
-    }
+    await handleDelete(messageToDelete, deleteTelegram);
+    setMessages(prev => prev.filter(m => m.id !== messageToDelete.id));
+    setIsDeleteDialogOpen(false);
+    setMessageToDelete(null);
   };
 
   const handleAnalyzedContentChange = (id: string, field: keyof AnalyzedContent, value: string | number) => {

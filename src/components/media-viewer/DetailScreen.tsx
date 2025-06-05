@@ -4,10 +4,9 @@ import { AnalyzedContent } from '@/types/utils/AnalyzedContent'
 import { 
   Dialog, 
   DialogContent, 
-  DialogTitle,
-  DialogHeader 
+  DialogHeader, 
+  DialogTitle 
 } from '@/components/ui/dialog'
-import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
 import { 
   Tabs, 
   TabsContent, 
@@ -22,12 +21,22 @@ import {
 } from '@/components/ui/accordion'
 import { Button } from '@/components/ui/button'
 import { 
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle
+} from '@/components/ui/alert-dialog'
+import { Textarea } from '@/components/ui/textarea'
+import { 
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { Textarea } from '@/components/ui/textarea'
 import { 
   ChevronLeft, 
   ChevronRight, 
@@ -41,7 +50,7 @@ import {
 import { cn } from '@/lib/utils'
 import { format } from 'date-fns'
 import { useTelegramOperations } from '@/hooks/useTelegramOperations'
-import { DeleteMessageDialog } from '@/components/shared/DeleteMessageDialog'
+import { MessageAdapter } from '@/components/common/MessageAdapter'
 
 interface MediaViewerDetailProps {
   isOpen: boolean
@@ -65,23 +74,19 @@ export function MediaViewerDetail({
   hasNext = false,
 }: MediaViewerDetailProps) {
   const [currentIndex, setCurrentIndex] = useState(initialIndex)
-  const [isProcessing, setIsProcessing] = useState(false)
-  const [activeTab, setActiveTab] = useState('media')
   const [isEditingCaption, setIsEditingCaption] = useState(false)
+  const [captionValue, setCaptionValue] = useState('')
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
-  
-  // Get the telegram operations hook
-  const { deleteMessage, isDeleting } = useTelegramOperations()
+  const [isProcessing, setIsProcessing] = useState(false)
+  const [processingOperation, setProcessingOperation] = useState<string | null>(null)
+  const { handleDelete, reuploadMediaFromTelegram, fixContentDispositionForMessage, syncMediaGroup } = useTelegramOperations()
   
   const currentMedia = currentGroup[currentIndex]
-  const [captionValue, setCaptionValue] = useState(currentMedia?.caption || '')
   
-  // Reset current index when group changes
   React.useEffect(() => {
     setCurrentIndex(initialIndex)
   }, [currentGroup, initialIndex])
   
-  // Initialize caption value when media changes
   React.useEffect(() => {
     if (currentMedia) {
       setCaptionValue(currentMedia.caption || '')
@@ -109,8 +114,6 @@ export function MediaViewerDetail({
   }
   
   const handleSaveCaption = async () => {
-    // Implementation for saving caption would go here
-    // For now, just close the editing mode
     setIsEditingCaption(false)
   }
   
@@ -123,17 +126,84 @@ export function MediaViewerDetail({
     setIsDeleteDialogOpen(true)
   }
   
-  const handleDeleteConfirm = async (deleteTelegram: boolean) => {
+  const handleDeleteConfirm = async (deleteFrom: 'database' | 'telegram' | 'both') => {
     if (!currentMedia) return
     
     try {
-      await deleteMessage(currentMedia, deleteTelegram)
+      if (deleteFrom === 'database') {
+        await handleDelete(currentMedia, false)
+      } else if (deleteFrom === 'telegram') {
+        await handleDelete(currentMedia, true)
+      } else if (deleteFrom === 'both') {
+        await handleDelete(currentMedia, true)
+      }
+      
       setIsDeleteDialogOpen(false)
       onClose()
     } catch (error) {
       console.error('Error deleting message:', error)
     }
   }
+  
+  const handleReuploadMedia = async () => {
+    if (!currentMedia) return;
+    
+    setIsProcessing(true);
+    setProcessingOperation('reupload');
+    
+    const result = await reuploadMediaFromTelegram(currentMedia.id);
+    
+    if (result) {
+      toast.success('Media successfully re-uploaded');
+      triggerRefresh();
+    } else {
+      toast.error('Failed to re-upload media');
+    }
+    
+    setIsProcessing(false);
+    setProcessingOperation(null);
+  };
+  
+  const handleFixContentDisposition = async () => {
+    if (!currentMedia) return;
+    
+    setIsProcessing(true);
+    setProcessingOperation('fixdisposition');
+    
+    const result = await fixContentDispositionForMessage(currentMedia.id);
+    
+    if (result) {
+      toast.success('Content disposition fixed');
+      triggerRefresh();
+    } else {
+      toast.error('Failed to fix content disposition');
+    }
+    
+    setIsProcessing(false);
+    setProcessingOperation(null);
+  };
+  
+  const handleSyncMediaGroup = async () => {
+    if (!currentMedia || !currentMedia.media_group_id) return;
+    
+    setIsProcessing(true);
+    setProcessingOperation('syncgroup');
+    
+    const result = await syncMediaGroup(
+      currentMedia.id,
+      currentMedia.media_group_id
+    );
+    
+    if (result) {
+      toast.success('Media group synchronized');
+      triggerRefresh();
+    } else {
+      toast.error('Failed to synchronize media group');
+    }
+    
+    setIsProcessing(false);
+    setProcessingOperation(null);
+  };
   
   const openTelegramLink = () => {
     const chatId = currentMedia.chat_id?.toString().replace('-100', '')
@@ -144,7 +214,6 @@ export function MediaViewerDetail({
     }
   }
   
-  // Handle keyboard navigation
   React.useEffect(() => {
     if (!isOpen) return
     
@@ -178,14 +247,8 @@ export function MediaViewerDetail({
     <>
       <Dialog open={isOpen} onOpenChange={open => !open && onClose()}>
         <DialogContent className="max-w-6xl w-full h-[90vh] p-0 gap-0 overflow-hidden">
-          <DialogTitle>
-            <VisuallyHidden>Media Viewer</VisuallyHidden>
-          </DialogTitle>
-          {/* Main content with two columns */}
           <div className="grid grid-cols-1 md:grid-cols-5 h-full overflow-hidden">
-            {/* Media container - Left column (3/5 width on desktop) */}
             <div className="col-span-1 md:col-span-3 flex flex-col overflow-hidden bg-black relative">
-              {/* Media display */}
               <div className="flex-1 flex items-center justify-center overflow-hidden">
                 {isVideo ? (
                   <video 
@@ -202,7 +265,6 @@ export function MediaViewerDetail({
                 )}
               </div>
               
-              {/* Navigation arrows */}
               {canNavigatePrev && (
                 <Button 
                   variant="ghost" 
@@ -225,13 +287,11 @@ export function MediaViewerDetail({
                 </Button>
               )}
               
-              {/* Media count indicator */}
               <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/50 text-white px-3 py-1 rounded-full text-sm">
                 {currentIndex + 1} / {currentGroup.length}
               </div>
             </div>
             
-            {/* Info container - Right column (2/5 width on desktop) */}
             <div className="col-span-1 md:col-span-2 h-full overflow-y-auto bg-background border-l">
               <div className="p-6 flex flex-col space-y-4 h-full">
                 <DialogHeader>
@@ -240,7 +300,6 @@ export function MediaViewerDetail({
                   </DialogTitle>
                 </DialogHeader>
                 
-                {/* Action buttons */}
                 <div className="flex space-x-2 pt-2">
                   <TooltipProvider>
                     <Tooltip>
@@ -298,7 +357,6 @@ export function MediaViewerDetail({
                   </TooltipProvider>
                 </div>
                 
-                {/* Caption editing area */}
                 {isEditingCaption ? (
                   <div className="space-y-2">
                     <Textarea
@@ -334,7 +392,6 @@ export function MediaViewerDetail({
                   </div>
                 )}
                 
-                {/* Tabs for Content and Technical Info */}
                 <Tabs defaultValue="analyzed" className="mt-6 flex-1">
                   <TabsList className="w-full grid grid-cols-2">
                     <TabsTrigger value="analyzed">Analyzed Content</TabsTrigger>
@@ -365,7 +422,6 @@ export function MediaViewerDetail({
                           </div>
                         )}
                         
-                        {/* Previous analysis data if available */}
                         {currentMedia.old_analyzed_content && currentMedia.old_analyzed_content.length > 0 && (
                           <Accordion type="single" collapsible className="mt-6">
                             <AccordionItem value="old-analysis">
@@ -376,7 +432,6 @@ export function MediaViewerDetail({
                               <AccordionContent>
                                 <div className="space-y-3 pt-2">
                                   {currentMedia.old_analyzed_content.map((analysis, index) => {
-                                    // Type guard for analysis
                                     const typedAnalysis = analysis as Partial<AnalyzedContent & { 
                                       parsing_metadata?: { timestamp?: string } 
                                     }>;
@@ -482,14 +537,50 @@ export function MediaViewerDetail({
         </DialogContent>
       </Dialog>
       
-      {/* Delete confirmation dialog */}
-      <DeleteMessageDialog
-        isOpen={isDeleteDialogOpen}
-        onOpenChange={setIsDeleteDialogOpen}
-        messageToDelete={currentMedia}
-        onConfirm={handleDeleteConfirm}
-        isProcessing={isDeleting}
-      />
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Message</AlertDialogTitle>
+            <AlertDialogDescription>
+              How would you like to delete this message?
+              {currentMedia?.media_group_id && (
+                <p className="mt-2 text-sm text-destructive font-medium">
+                  Note: This will delete all related media in the group.
+                </p>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex flex-col sm:flex-row gap-2">
+            <AlertDialogCancel className="mt-0 sm:mt-0">Cancel</AlertDialogCancel>
+            <Button
+              variant="outline"
+              className="border-destructive text-destructive hover:bg-destructive/10"
+              onClick={() => handleDeleteConfirm('database')}
+              disabled={isProcessing}
+            >
+              <Database className="h-4 w-4 mr-2" />
+              Database Only
+            </Button>
+            <Button
+              variant="outline"
+              className="border-destructive text-destructive hover:bg-destructive/10"
+              onClick={() => handleDeleteConfirm('telegram')}
+              disabled={isProcessing}
+            >
+              <Send className="h-4 w-4 mr-2" />
+              Telegram Only
+            </Button>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => handleDeleteConfirm('both')}
+              disabled={isProcessing}
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Delete From Both
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   )
 }

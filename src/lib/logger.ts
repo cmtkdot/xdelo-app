@@ -1,172 +1,145 @@
 
 import { supabase } from "@/integrations/supabase/client";
 
-export type LogLevel = 'info' | 'warning' | 'error' | 'success' | 'debug';
+// Import directly from the shared utils
+export enum LogEventType {
+  // Message events
+  MESSAGE_RECEIVED = "MESSAGE_RECEIVED",
+  MESSAGE_PROCESSED = "MESSAGE_PROCESSED",
+  MESSAGE_ERROR = "MESSAGE_ERROR",
+  MEDIA_DOWNLOADED = "MEDIA_DOWNLOADED",
+  MEDIA_UPLOAD_ERROR = "MEDIA_UPLOAD_ERROR",
+  CAPTION_PARSED = "CAPTION_PARSED",
+  MESSAGE_UPDATED = "MESSAGE_UPDATED",
+  MESSAGE_DELETED = "MESSAGE_DELETED",
+  
+  // Sync events
+  SYNC_OPERATION = "SYNC_OPERATION",
+  SYNC_STARTED = "SYNC_STARTED",
+  SYNC_COMPLETED = "SYNC_COMPLETED",
+  SYNC_FAILED = "SYNC_FAILED",
+  SYNC_PRODUCTS = "SYNC_PRODUCTS",
+  
+  // Product matching
+  PRODUCT_MATCHING = "PRODUCT_MATCHING",
+  
+  // Media operations
+  MEDIA_REUPLOAD_REQUESTED = "MEDIA_REUPLOAD_REQUESTED",
+  MEDIA_REUPLOAD_SUCCESS = "MEDIA_REUPLOAD_SUCCESS",
+  MEDIA_REUPLOAD_FAILED = "MEDIA_REUPLOAD_FAILED",
+  
+  // System events
+  SYSTEM_EVENT = "SYSTEM_EVENT",
+  SYSTEM_WARNING = "SYSTEM_WARNING",
+  SYSTEM_ERROR = "SYSTEM_ERROR",
+  
+  // User events
+  USER_ACTION = "USER_ACTION"
+}
 
-export interface LogOptions {
-  writeToDatabase?: boolean;
-  useTimestamp?: boolean;
+export interface EventLogData {
+  [key: string]: any;
 }
 
 export class Logger {
-  private name: string;
-  private defaultOptions: LogOptions;
-
-  constructor(name: string, options: LogOptions = {}) {
-    this.name = name;
-    this.defaultOptions = {
-      writeToDatabase: true,
-      useTimestamp: true,
-      ...options
-    };
+  private namespace: string;
+  
+  constructor(namespace: string) {
+    this.namespace = namespace;
   }
-
-  /**
-   * Log an informational message
-   */
-  info(message: string, data?: any, options?: LogOptions): void {
-    this.log('info', message, data, options);
-  }
-
-  /**
-   * Log a success message
-   */
-  success(message: string, data?: any, options?: LogOptions): void {
-    this.log('success', message, data, options);
-  }
-
-  /**
-   * Log a warning message
-   */
-  warn(message: string, data?: any, options?: LogOptions): void {
-    this.log('warning', message, data, options);
-  }
-
-  /**
-   * Log an error message
-   */
-  error(message: string, data?: any, options?: LogOptions): void {
-    this.log('error', message, data, options);
-  }
-
-  /**
-   * Log a debug message (only shown in development)
-   */
-  debug(message: string, data?: any, options?: LogOptions): void {
-    if (process.env.NODE_ENV !== 'production') {
-      this.log('debug', message, data, options);
-    }
-  }
-
-  /**
-   * Log an event to the unified audit logs system
-   */
+  
   async logEvent(
-    eventType: string,
+    eventType: LogEventType | string,
     entityId: string,
-    metadata: Record<string, any> = {},
-    errorMessage?: string
+    metadata: EventLogData = {}
   ): Promise<void> {
     try {
-      const enhancedMetadata = {
-        ...metadata,
-        timestamp: metadata.timestamp || new Date().toISOString(),
-        logger: this.name,
-        logged_from: 'client'
-      };
-
-      await supabase.from('unified_audit_logs').insert({
-        event_type: eventType,
-        entity_id: entityId,
-        metadata: enhancedMetadata,
-        error_message: errorMessage,
-        event_timestamp: new Date().toISOString()
+      const correlationId = crypto.randomUUID().toString();
+      
+      // First attempt direct API call
+      try {
+        await supabase.functions.invoke('log-operation', {
+          body: { 
+            eventType,
+            entityId,
+            metadata: {
+              ...metadata,
+              namespace: this.namespace
+            }
+          }
+        });
+        return;
+      } catch (apiError) {
+        console.warn(`Edge function logging failed, falling back to RPC: ${apiError.message}`);
+      }
+      
+      // Fallback: log to database via RPC
+      await supabase.rpc('log_processing_event', {
+        p_event_type: eventType,
+        p_entity_id: entityId,
+        p_correlation_id: correlationId,
+        p_metadata: {
+          ...metadata,
+          namespace: this.namespace
+        }
       });
     } catch (error) {
-      console.error(`Error logging event: ${eventType}`, error);
+      console.error(`Error logging event: ${error}`);
     }
   }
-
-  /**
-   * Log a media operation
-   */
+  
   async logMediaOperation(
     operation: string,
     messageId: string,
     success: boolean,
-    metadata: Record<string, any> = {}
+    metadata: EventLogData = {}
   ): Promise<void> {
-    const eventType = success ? 'media_operation_success' : 'media_operation_failed';
-    
+    const eventType = success 
+      ? `MEDIA_${operation.toUpperCase()}_SUCCESS` 
+      : `MEDIA_${operation.toUpperCase()}_FAILED`;
+      
     await this.logEvent(eventType, messageId, {
       operation,
+      success,
       ...metadata
     });
   }
-
-  /**
-   * Internal logging method
-   */
-  private log(level: LogLevel, message: string, data?: any, options?: LogOptions): void {
-    const mergedOptions = { ...this.defaultOptions, ...options };
-    const timestamp = mergedOptions.useTimestamp ? new Date().toISOString() : null;
-    const prefix = `[${this.name}]${timestamp ? ` [${timestamp}]` : ''}`;
-    
-    // Format the message for console
-    const formattedMessage = `${prefix} ${message}`;
-    
-    // Log to console with appropriate level
-    switch (level) {
-      case 'info':
-        console.info(formattedMessage, data || '');
-        break;
-      case 'warning':
-        console.warn(formattedMessage, data || '');
-        break;
-      case 'error':
-        console.error(formattedMessage, data || '');
-        break;
-      case 'success':
-        console.log(`%c${formattedMessage}`, 'color: green', data || '');
-        break;
-      case 'debug':
-        console.debug(formattedMessage, data || '');
-        break;
-    }
-
-    // Optionally write to database
-    if (mergedOptions.writeToDatabase) {
-      this.logToDatabase(level, message, data);
-    }
-  }
-
-  /**
-   * Write a log entry to the database
-   */
-  private async logToDatabase(level: LogLevel, message: string, data?: any): Promise<void> {
-    try {
-      await supabase.from('unified_audit_logs').insert({
-        event_type: `client_${level}`,
-        entity_id: 'system',
-        metadata: {
-          message,
-          data,
-          logger: this.name,
-          timestamp: new Date().toISOString(),
-          logged_from: 'client'
-        },
-        event_timestamp: new Date().toISOString()
-      });
-    } catch (error) {
-      // Don't log this error to avoid infinite loops
-      console.error(`Error writing log to database: ${error instanceof Error ? error.message : String(error)}`);
-    }
-  }
 }
+
+// Helper function to create a logger
+export function createLogger(namespace: string): Logger {
+  return new Logger(namespace);
+}
+
+// Default logger for backward compatibility
+const defaultLogger = createLogger('client-log');
 
 /**
- * Create a new logger instance
+ * Logs an event to the unified audit logs system
+ * Simplified version that uses the new Logger class
  */
-export function createLogger(name: string, options?: LogOptions): Logger {
-  return new Logger(name, options);
-}
+export const logEvent = async (
+  eventType: LogEventType | string,
+  entityId: string,
+  metadata: EventLogData = {}
+) => {
+  await defaultLogger.logEvent(eventType, entityId, metadata);
+};
+
+/**
+ * Log a media operation
+ */
+export const logMediaOperation = async (
+  operation: string,
+  messageId: string,
+  success: boolean,
+  metadata: EventLogData = {}
+) => {
+  await defaultLogger.logMediaOperation(operation, messageId, success, metadata);
+};
+
+export default {
+  logEvent,
+  logMediaOperation,
+  LogEventType
+};

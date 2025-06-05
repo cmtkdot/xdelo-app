@@ -25,9 +25,12 @@ import Dashboard from "./pages/Dashboard";
 const MessagesEnhanced = lazy(() => import("./pages/MessagesEnhanced"));
 const MediaTable = lazy(() => import("./pages/MediaTable"));
 const AIChat = lazy(() => import("./pages/AIChat"));
+const Settings = lazy(() => import("./pages/Settings"));
+const AudioUpload = lazy(() => import("./pages/AudioUpload"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const PublicGallery = lazy(() => import("./pages/PublicGallery"));
-const Database = lazy(() => import("./pages/Database"));
+const TableDemo = lazy(() => import("./pages/table-demo"));
+const ProductMatching = lazy(() => import("./pages/ProductMatching"));
 
 import { AppSidebar } from "@/components/Layout/Sidebar";
 
@@ -63,7 +66,7 @@ const queryClient = new QueryClient({
 
 const PageLoader = () => (
   <div className="flex items-center justify-center min-h-screen">
-    <div className="w-8 h-8 border-4 rounded-full border-primary border-t-transparent animate-spin"></div>
+    <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
   </div>
 );
 
@@ -145,7 +148,7 @@ function App() {
                           <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
                             <AppSidebar />
                             <main className="transition-all duration-300 ease-in-out md:pl-16 min-h-screen pt-[4rem] md:pt-4 pb-20 md:pb-4">
-                              <div className="container px-4 py-6 mx-auto">
+                              <div className="container py-6 px-4 mx-auto">
                                 <Suspense fallback={<PageLoader />}>
                                   <Outlet />
                                 </Suspense>
@@ -192,10 +195,34 @@ function App() {
                       }
                     />
                     <Route
-                      path="/database"
+                      path="/settings"
                       element={
                         <Suspense fallback={<PageLoader />}>
-                          <Database />
+                          <Settings />
+                        </Suspense>
+                      }
+                    />
+                    <Route
+                      path="/audio-upload"
+                      element={
+                        <Suspense fallback={<PageLoader />}>
+                          <AudioUpload />
+                        </Suspense>
+                      }
+                    />
+                    <Route
+                      path="/table-demo"
+                      element={
+                        <Suspense fallback={<PageLoader />}>
+                          <TableDemo />
+                        </Suspense>
+                      }
+                    />
+                    <Route
+                      path="/product-matching"
+                      element={
+                        <Suspense fallback={<PageLoader />}>
+                          <ProductMatching />
                         </Suspense>
                       }
                     />

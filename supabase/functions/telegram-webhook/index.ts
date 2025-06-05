@@ -1,475 +1,221 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { isMessageForwarded } from "./_shared/consolidatedMessageUtils.ts";
-import { corsHeaders } from "./_shared/cors.ts";
-import { supabaseClient } from "./_shared/supabaseClient.ts";
-import { createRetryHandler } from "./_shared/retryHandler.ts";
-import { handleEditedMessage } from "./handlers/editedMessageHandler.ts";
-import { handleMediaMessage } from "./handlers/mediaMessageHandler.ts";
-import { handleOtherMessage } from "./handlers/textMessageHandler.ts";
-import { logProcessingEvent } from "./utils/dbOperations.ts";
-import { logWithCorrelation } from "./utils/logger.ts";
-// Helper to manually create CORS response
-function createManualCorsResponse(body, options = {}) {
-  const bodyString = typeof body === "string" ? body : body ? JSON.stringify(body) : null;
-  const headers = {
-    ...corsHeaders,
-    ...bodyString && {
-      "Content-Type": "application/json"
-    },
-    ...options.headers
-  };
-  return new Response(bodyString, {
-    ...options,
-    headers
-  });
-}
-serve(async (req)=>{
-  const correlationId = crypto.randomUUID();
-  const functionName = "telegram-webhook";
-  const startTime = Date.now();
-  if (req.method === "OPTIONS") {
-    logWithCorrelation(correlationId, "Received OPTIONS request, returning CORS headers", "debug", functionName);
-    // Use manual helper for OPTIONS response
-    return createManualCorsResponse(null);
-  }
-  // Initialize retry handler with configured parameters
-  const retryHandler = createRetryHandler({
-    maxRetries: 3,
-    initialDelayMs: 30000,
-    maxDelayMs: 300000,
-    backoffFactor: 2.0,
-    useJitter: true
-  });
+
+/**
+ * Main entry point for the Telegram webhook
+ */
+import { serve } from "https://deno.land/std@0.217.0/http/server.ts";
+import { createHandler, SecurityLevel, RequestMetadata } from "../_shared/unifiedHandler.ts";
+import { isMessageForwarded } from "./utils/messageUtils.ts";
+import { logEvent, logErrorEvent } from "./services/loggingService.ts";
+import { checkExistingMessage } from "./services/databaseService.ts";
+import { handleEditedMessage, handleMediaMessage, handleOtherMessage } from "./handlers/index.ts";
+import { createTelegramErrorResponse } from "./services/responseService.ts";
+import { Logger } from "./utils/logger.ts";
+
+// Define the core handler logic
+const webhookHandler = async (req: Request, metadata: RequestMetadata) => {
+  // Create a logger using the correlation ID from metadata
+  const logger = new Logger(metadata.correlationId, "telegram-webhook");
+
   try {
-    logWithCorrelation(correlationId, "Webhook received", "info", functionName, {
-      method: req.method,
-      url: req.url
+    // Log webhook received event
+    logger.info("Webhook received", {
+      method: metadata.method,
+      path: metadata.path,
     });
+
+    await logEvent(
+      "webhook_received",
+      "system",
+      metadata.correlationId,
+      {
+        source: "telegram-webhook",
+        timestamp: new Date().toISOString(),
+      }
+    );
+
+    // Parse the update from Telegram
     let update;
     try {
-      const bodyText = await req.text();
-      if (!bodyText) {
-        throw new Error("Request body is empty");
-      }
-      update = JSON.parse(bodyText);
-      logWithCorrelation(correlationId, "Received Telegram update", "debug", functionName, {
-        update_id: update.update_id
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      update = await req.json();
+      clearTimeout(timeoutId);
+
+      logger.info("Received Telegram update", {
+        update_id: update.update_id,
+        update_type: Object.keys(update)
+          .filter((k) => k !== "update_id")
+          .join(", "),
       });
     } catch (error) {
-      const errorMsg = `Failed to parse request body: ${error.message}`;
-      logWithCorrelation(correlationId, errorMsg, "error", functionName, {
-        bodyPreview: error instanceof SyntaxError ? req.body?.toString().substring(0, 100) : "N/A"
-      });
-      await logProcessingEvent(supabaseClient, "webhook_parse_error", null, correlationId, {
-        error: errorMsg
-      }, errorMsg);
-      // Use manual helper for error response
-      return createManualCorsResponse({
-        success: false,
-        error: "Invalid JSON in request body",
-        correlationId
-      }, {
-        status: 400
-      });
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorName = error instanceof Error ? error.name : "UnknownError";
+      logger.error("Failed to parse request body", { error: errorMessage });
+      
+      throw new Error(errorName === "AbortError" 
+        ? "Request timeout parsing JSON" 
+        : `Invalid JSON in request body: ${errorMessage}`);
     }
-    const message = update.message || update.edited_message || update.channel_post || update.edited_channel_post;
+
+    // Get the message object
+    const message =
+      update.message ||
+      update.edited_message ||
+      update.channel_post ||
+      update.edited_channel_post;
+      
     if (!message) {
-      logWithCorrelation(correlationId, "No processable message found in update", "warn", functionName, {
-        update_keys: Object.keys(update)
+      logger.warn("No processable content in update", {
+        update_keys: Object.keys(update),
       });
-      await logProcessingEvent(supabaseClient, "webhook_no_message", null, correlationId, {
-        update_keys: Object.keys(update)
-      }, "No processable message found");
-      // Use manual helper for error response
-      return createManualCorsResponse({
-        success: false,
-        message: "No processable message found",
-        correlationId
-      }, {
-        status: 200
-      });
+      throw new Error("No processable content in update");
     }
-    const isEdit = !!(update.edited_message || update.edited_channel_post);
-    const context = {
-      isChannelPost: !!(update.channel_post || update.edited_channel_post),
-      isForwarded: isMessageForwarded(message),
-      correlationId,
-      isEdit: isEdit,
-      startTime: new Date(startTime).toISOString()
-    };
-    logWithCorrelation(correlationId, `Processing message ${message.message_id}`, "info", functionName, {
-      chat_id: message.chat?.id,
-      chat_type: message.chat?.type,
-      is_edit: context.isEdit,
-      is_forwarded: context.isForwarded,
-      message_type: message.text ? "text" : message.photo ? "photo" : message.video ? "video" : message.document ? "document" : "other",
-      media_group_id: message.media_group_id
-    });
-    let response;
-    const telegramToken = Deno.env.get("TELEGRAM_BOT_TOKEN");
-    if (!telegramToken) {
-      logWithCorrelation(correlationId, "TELEGRAM_BOT_TOKEN environment variable not set.", "error", functionName);
-      await logProcessingEvent(supabaseClient, "config_error", null, correlationId, {
-        variable: "TELEGRAM_BOT_TOKEN"
-      }, "Bot token not configured");
-      throw new Error("TELEGRAM_BOT_TOKEN environment variable not set.");
-    }
-    if (context.isEdit) {
-      logWithCorrelation(correlationId, `Routing to handleEditedMessage with retry support`, "info", functionName, {
-        message_id: message.message_id
+
+    // --- Check Retry Limit ---
+    const MAX_RETRIES = 3;
+    
+    // Check if message already exists and has reached retry limit
+    const { exists, id: existingId, retryCount } = await checkExistingMessage(
+      message.message_id,
+      message.chat?.id
+    );
+
+    if (exists && (retryCount || 0) >= MAX_RETRIES) {
+      logger.warn(`Max retries (${MAX_RETRIES}) reached for message ${message.message_id}. Skipping processing.`, {
+        message_id: message.message_id,
+        chat_id: message.chat?.id,
+        retry_count: retryCount,
       });
-      // Use retry handler for edited message processing
-      const retryResult = await retryHandler.execute(async ()=>handleEditedMessage(message, context), {
-        operationName: "handleEditedMessage",
-        correlationId,
-        supabaseClient,
-        errorCategory: "webhook_error",
-        contextData: {
-          message_id: message.message_id,
-          chat_id: message.chat?.id
-        }
-      });
-      if (retryResult.success && retryResult.result) {
-        // Check if the result is a messageNotFound response object rather than a Response
-        const result = retryResult.result;
-        if (result && typeof result === "object" && "messageNotFound" in result && result.messageNotFound === true) {
-          // We need to handle this as a new message
-          logWithCorrelation(correlationId, `Original message not found for edit, processing as new ${result.detailedType} message`, "INFO", functionName, {
-            message_id: message.message_id,
-            message_type: result.detailedType,
-            is_recovered_edit: true
-          });
-          await logProcessingEvent(supabaseClient, "recovered_edit_fallback", null, correlationId, {
-            message_id: message.message_id,
-            chat_id: message.chat?.id,
-            message_type: result.detailedType,
-            detailed_type: result.detailedType
-          }, "Falling back to process edited message as new message");
-          // Create a modified context to indicate this is a recovered edit
-          const recoveredContext = {
-            ...context,
-            isRecoveredEdit: true
-          };
-          // Route to appropriate handler based on message type
-          if (result.media) {
-            // Handle as new media message
-            logWithCorrelation(correlationId, `Routing recovered edit to handleMediaMessage`, "INFO", functionName);
-            const mediaResult = await retryHandler.execute(async ()=>handleMediaMessage(telegramToken, message, recoveredContext), {
-              operationName: "handleMediaMessage_recoveredEdit",
-              correlationId,
-              supabaseClient,
-              errorCategory: "webhook_error",
-              contextData: {
-                message_id: message.message_id,
-                chat_id: message.chat?.id,
-                is_recovered_edit: true
-              }
-            });
-            response = Promise.resolve(mediaResult.success ? mediaResult.result : createManualCorsResponse({
-              success: false,
-              error: `Failed to process recovered edit as media message: ${mediaResult.error?.message}`,
-              correlationId
-            }, {
-              status: 500
-            }));
-          } else {
-            // Handle as new text/other message
-            logWithCorrelation(correlationId, `Routing recovered edit to handleOtherMessage`, "INFO", functionName);
-            const textResult = await retryHandler.execute(async ()=>handleOtherMessage(message, recoveredContext), {
-              operationName: "handleOtherMessage_recoveredEdit",
-              correlationId,
-              supabaseClient,
-              errorCategory: "webhook_error",
-              contextData: {
-                message_id: message.message_id,
-                chat_id: message.chat?.id,
-                is_recovered_edit: true
-              }
-            });
-            response = Promise.resolve(textResult.success ? textResult.result : createManualCorsResponse({
-              success: false,
-              error: `Failed to process recovered edit as text message: ${textResult.error?.message}`,
-              correlationId
-            }, {
-              status: 500
-            }));
-          }
-        } else {
-          // Normal successful response
-          response = Promise.resolve(result);
-        }
-      } else {
-        // All retries failed, create error response
-        response = Promise.resolve(createManualCorsResponse({
-          success: false,
-          error: `Failed to process edited message after ${retryResult.attempts} attempts: ${retryResult.error?.message}`,
-          correlationId,
-          retryInfo: {
-            attempts: retryResult.attempts,
-            maxRetriesReached: retryResult.maxRetriesReached,
-            totalTimeMs: retryResult.totalTimeMs
-          }
-        }, {
-          status: 500
-        }));
-      }
-    } else if (message.photo || message.video || message.document) {
-      logWithCorrelation(correlationId, `Routing to handleMediaMessage with retry support`, "info", functionName, {
-        message_id: message.message_id
-      });
-      // Use retry handler for media message processing
-      const retryResult = await retryHandler.execute(async ()=>handleMediaMessage(telegramToken, message, context), {
-        operationName: "handleMediaMessage",
-        correlationId,
-        supabaseClient,
-        errorCategory: "webhook_error",
-        contextData: {
+      
+      await logEvent(
+        "max_retries_reached",
+        existingId || message.message_id.toString(),
+        metadata.correlationId,
+        {
           message_id: message.message_id,
           chat_id: message.chat?.id,
-          media_type: message.photo ? "photo" : message.video ? "video" : "document"
+          retry_count: retryCount,
         }
-      });
-      if (retryResult.success && retryResult.result) {
-        // Check if the result is a messageNotFound response object rather than a Response
-        const result = retryResult.result;
-        if (result && typeof result === "object" && "messageNotFound" in result && result.messageNotFound === true) {
-          // We need to handle this as a new message
-          logWithCorrelation(correlationId, `Original message not found for edit, processing as new ${result.detailedType} message`, "INFO", functionName, {
-            message_id: message.message_id,
-            message_type: result.detailedType,
-            is_recovered_edit: true
-          });
-          await logProcessingEvent(supabaseClient, "recovered_edit_fallback", null, correlationId, {
-            message_id: message.message_id,
-            chat_id: message.chat?.id,
-            message_type: result.detailedType,
-            detailed_type: result.detailedType
-          }, "Falling back to process edited message as new message");
-          // Create a modified context to indicate this is a recovered edit
-          const recoveredContext = {
-            ...context,
-            isRecoveredEdit: true
-          };
-          // Route to appropriate handler based on message type
-          if (result.media) {
-            // Handle as new media message
-            logWithCorrelation(correlationId, `Routing recovered edit to handleMediaMessage`, "INFO", functionName);
-            const mediaResult = await retryHandler.execute(async ()=>handleMediaMessage(telegramToken, message, recoveredContext), {
-              operationName: "handleMediaMessage_recoveredEdit",
-              correlationId,
-              supabaseClient,
-              errorCategory: "webhook_error",
-              contextData: {
-                message_id: message.message_id,
-                chat_id: message.chat?.id,
-                is_recovered_edit: true
-              }
-            });
-            response = Promise.resolve(mediaResult.success ? mediaResult.result : createManualCorsResponse({
-              success: false,
-              error: `Failed to process recovered edit as media message: ${mediaResult.error?.message}`,
-              correlationId
-            }, {
-              status: 500
-            }));
-          } else {
-            // Handle as new text/other message
-            logWithCorrelation(correlationId, `Routing recovered edit to handleOtherMessage`, "INFO", functionName);
-            const textResult = await retryHandler.execute(async ()=>handleOtherMessage(message, recoveredContext), {
-              operationName: "handleOtherMessage_recoveredEdit",
-              correlationId,
-              supabaseClient,
-              errorCategory: "webhook_error",
-              contextData: {
-                message_id: message.message_id,
-                chat_id: message.chat?.id,
-                is_recovered_edit: true
-              }
-            });
-            response = Promise.resolve(textResult.success ? textResult.result : createManualCorsResponse({
-              success: false,
-              error: `Failed to process recovered edit as text message: ${textResult.error?.message}`,
-              correlationId
-            }, {
-              status: 500
-            }));
-          }
-        } else {
-          // Normal successful response
-          response = Promise.resolve(result);
+      );
+      
+      // Return 200 OK to Telegram to stop further retries
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          message: "Max retries reached, skipping.", 
+          correlationId: metadata.correlationId 
+        }), 
+        { 
+          status: 200, 
+          headers: { 'Content-Type': 'application/json' } 
         }
-      } else {
-        // All retries failed, create error response
-        response = Promise.resolve(createManualCorsResponse({
-          success: false,
-          error: `Failed to process media message after ${retryResult.attempts} attempts: ${retryResult.error?.message}`,
-          correlationId,
-          retryInfo: {
-            attempts: retryResult.attempts,
-            maxRetriesReached: retryResult.maxRetriesReached,
-            totalTimeMs: retryResult.totalTimeMs
-          }
-        }, {
-          status: 500
-        }));
-      }
-    } else if (message.text) {
-      logWithCorrelation(correlationId, `Routing to handleOtherMessage with retry support`, "info", functionName, {
-        message_id: message.message_id
-      });
-      // Use retry handler for text message processing
-      const retryResult = await retryHandler.execute(async ()=>handleOtherMessage(message, context), {
-        operationName: "handleOtherMessage",
-        correlationId,
-        supabaseClient,
-        errorCategory: "webhook_error",
-        contextData: {
-          message_id: message.message_id,
-          chat_id: message.chat?.id
-        }
-      });
-      if (retryResult.success && retryResult.result) {
-        // Check if the result is a messageNotFound response object rather than a Response
-        const result = retryResult.result;
-        if (result && typeof result === "object" && "messageNotFound" in result && result.messageNotFound === true) {
-          // We need to handle this as a new message
-          logWithCorrelation(correlationId, `Original message not found for edit, processing as new ${result.detailedType} message`, "INFO", functionName, {
-            message_id: message.message_id,
-            message_type: result.detailedType,
-            is_recovered_edit: true
-          });
-          await logProcessingEvent(supabaseClient, "recovered_edit_fallback", null, correlationId, {
-            message_id: message.message_id,
-            chat_id: message.chat?.id,
-            message_type: result.detailedType,
-            detailed_type: result.detailedType
-          }, "Falling back to process edited message as new message");
-          // Create a modified context to indicate this is a recovered edit
-          const recoveredContext = {
-            ...context,
-            isRecoveredEdit: true
-          };
-          // Route to appropriate handler based on message type
-          if (result.media) {
-            // Handle as new media message
-            logWithCorrelation(correlationId, `Routing recovered edit to handleMediaMessage`, "INFO", functionName);
-            const mediaResult = await retryHandler.execute(async ()=>handleMediaMessage(telegramToken, message, recoveredContext), {
-              operationName: "handleMediaMessage_recoveredEdit",
-              correlationId,
-              supabaseClient,
-              errorCategory: "webhook_error",
-              contextData: {
-                message_id: message.message_id,
-                chat_id: message.chat?.id,
-                is_recovered_edit: true
-              }
-            });
-            response = Promise.resolve(mediaResult.success ? mediaResult.result : createManualCorsResponse({
-              success: false,
-              error: `Failed to process recovered edit as media message: ${mediaResult.error?.message}`,
-              correlationId
-            }, {
-              status: 500
-            }));
-          } else {
-            // Handle as new text/other message
-            logWithCorrelation(correlationId, `Routing recovered edit to handleOtherMessage`, "INFO", functionName);
-            const textResult = await retryHandler.execute(async ()=>handleOtherMessage(message, recoveredContext), {
-              operationName: "handleOtherMessage_recoveredEdit",
-              correlationId,
-              supabaseClient,
-              errorCategory: "webhook_error",
-              contextData: {
-                message_id: message.message_id,
-                chat_id: message.chat?.id,
-                is_recovered_edit: true
-              }
-            });
-            response = Promise.resolve(textResult.success ? textResult.result : createManualCorsResponse({
-              success: false,
-              error: `Failed to process recovered edit as text message: ${textResult.error?.message}`,
-              correlationId
-            }, {
-              status: 500
-            }));
-          }
-        } else {
-          // Normal successful response
-          response = Promise.resolve(result);
-        }
-      } else {
-        // All retries failed, create error response
-        response = Promise.resolve(createManualCorsResponse({
-          success: false,
-          error: `Failed to process text message after ${retryResult.attempts} attempts: ${retryResult.error?.message}`,
-          correlationId,
-          retryInfo: {
-            attempts: retryResult.attempts,
-            maxRetriesReached: retryResult.maxRetriesReached,
-            totalTimeMs: retryResult.totalTimeMs
-          }
-        }, {
-          status: 500
-        }));
-      }
-    } else {
-      logWithCorrelation(correlationId, `Unsupported new message type received`, "warn", functionName, {
-        message_id: message.message_id,
-        message_keys: Object.keys(message)
-      });
-      await logProcessingEvent(supabaseClient, "webhook_unsupported_new_type", null, correlationId, {
-        message_id: message.message_id
-      }, "Unsupported new message type");
-      // Use manual helper for skipped response
-      response = Promise.resolve(createManualCorsResponse({
-        success: true,
-        operation: "skipped",
-        reason: "Unsupported message type",
-        correlationId
-      }, {
-        status: 200
-      }));
+      );
     }
-    const resultResponse = await response;
-    const duration = Date.now() - startTime;
-    logWithCorrelation(correlationId, `Finished processing message ${message.message_id}`, "info", functionName, {
-      status: resultResponse.status,
-      durationMs: duration,
-      retry_enabled: true
+    // --- End Retry Limit Check ---
+
+    // Determine message context
+    const context = {
+      isChannelPost: !!update.channel_post || !!update.edited_channel_post,
+      isForwarded: isMessageForwarded(message),
+      correlationId: metadata.correlationId,
+      isEdit: !!update.edited_message || !!update.edited_channel_post,
+      previousMessage: update.edited_message || update.edited_channel_post,
+      logger,
+      startTime: new Date().toISOString(),
+      metadata
+    };
+
+    // Log message details
+    logger.info("Processing message", {
+      message_id: message.message_id,
+      chat_id: message.chat?.id,
     });
-    // Add retry diagnostic information to the response
-    const responseObj = resultResponse instanceof Response ? resultResponse : new Response(JSON.stringify({
-      ...typeof resultResponse === "object" ? resultResponse : {
-        data: resultResponse
-      },
-      processingTime: duration,
-      correlationId
-    }), {
-      headers: {
-        ...corsHeaders,
-        "Content-Type": "application/json",
-        "X-Processing-Time": duration.toString(),
-        "X-Correlation-ID": correlationId,
-        "X-Retry-Enabled": "true"
+
+    // Handle different message types
+    try {
+      // Determine if the message (new or edited) contains media
+      const hasMedia = !!(message.photo || message.video || message.document);
+
+      let response;
+      
+      if (context.isEdit) {
+        // Handle edited messages
+        if (hasMedia) {
+          // Edited message WITH media -> media handler
+          logger.info("Routing edited message with media to media message handler");
+          response = await handleMediaMessage(message, context);
+        } else {
+          // Edited message WITHOUT media -> generic edit handler
+          logger.info("Routing edited message without media to edited message handler");
+          response = await handleEditedMessage(message, context);
+        }
+      } else {
+        // Handle new messages
+        if (hasMedia) {
+          // New message WITH media -> media handler
+          logger.info("Routing new media message to media message handler");
+          response = await handleMediaMessage(message, context);
+        } else {
+          // New message WITHOUT media -> text handler
+          logger.info("Routing new text message to text message handler");
+          response = await handleOtherMessage(message, context);
+        }
       }
-    });
-    return responseObj;
+
+      logger.info("Successfully processed message", {
+        message_id: message.message_id,
+        processing_time: new Date().getTime() - new Date(context.startTime).getTime(),
+      });
+
+      // Return the raw response
+      return response;
+    } catch (handlerError) {
+      const handlerErrorMessage = handlerError instanceof Error ? handlerError.message : String(handlerError);
+      const handlerErrorStack = handlerError instanceof Error ? handlerError.stack : undefined;
+      
+      logger.error("Error in message handler", {
+        error: handlerErrorMessage,
+        stack: handlerErrorStack,
+        message_id: message.message_id,
+      });
+
+      // Log the error to the database
+      await logErrorEvent(
+        "message_processing_failed",
+        message.message_id.toString(),
+        metadata.correlationId,
+        handlerError,
+        {
+          message_id: message.message_id,
+          chat_id: message.chat?.id,
+          handler_type: "message_handler"
+        }
+      );
+
+      // Return Telegram compatible error response (status 200)
+      return createTelegramErrorResponse(handlerError, metadata.correlationId);
+    }
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    logWithCorrelation(correlationId, "Unhandled error in webhook entry point", "error", functionName, {
-      error: errorMessage,
-      stack: error instanceof Error ? error.stack : undefined
+    const initialErrorMessage = error instanceof Error ? error.message : String(error);
+    const initialErrorStack = error instanceof Error ? error.stack : undefined;
+    
+    // Log any unexpected errors during initial processing
+    logger.error("Unhandled error during initial webhook processing", {
+      error: initialErrorMessage,
+      stack: initialErrorStack,
     });
-    await logProcessingEvent(supabaseClient, "webhook_critical_failure", null, correlationId, {
-      error: errorMessage
-    }, errorMessage);
-    // Use manual helper for 500 error response
-    return createManualCorsResponse({
-      success: false,
-      error: "Internal Server Error",
-      correlationId
-    }, {
-      status: 500
-    });
+    
+    // Re-throw for the unified handler to catch and format
+    throw error;
   }
-});
+};
+
+// Create the handler instance using the builder
+const handler = createHandler(webhookHandler)
+  .withMethods(['POST'])
+  .withSecurity(SecurityLevel.PUBLIC)
+  .withLogging(true)
+  .withMetrics(true);
+
+// Serve the built handler
+serve(handler.build());

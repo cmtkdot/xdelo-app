@@ -2,7 +2,7 @@
 import React from 'react';
 import { Button } from "@/components/ui/button";
 import { FileDown, RefreshCcw, FileEdit } from "lucide-react";
-import { Message } from "@/types/entities/Message";
+import { Message } from "@/types/MessagesTypes";
 import { useMediaUtils } from '@/hooks/useMediaUtils';
 
 interface MediaFixToolsProps {
@@ -15,7 +15,7 @@ export function MediaFixTools({ message, onEdit }: MediaFixToolsProps) {
   const isLoading = processingMessageIds[message.id];
 
   const handleReupload = async () => {
-    await reuploadMediaFromTelegram(message);
+    await reuploadMediaFromTelegram(message.id);
   };
 
   const handleDownload = () => {

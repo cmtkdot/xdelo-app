@@ -1,11 +1,10 @@
 
-import { useState, useEffect, useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { format, subDays } from 'date-fns';
-import type { Database } from '@/integrations/supabase/database.types';
+import { Message, ProcessingState } from '@/types';
+import { format, subDays, subWeeks, subMonths, parseISO } from 'date-fns';
 
-// Define the analytics data type
-export interface AnalyticsData {
+interface MessageStatistics {
   totalMessages: number;
   mediaTypes: {
     images: number;
@@ -13,216 +12,160 @@ export interface AnalyticsData {
     documents: number;
     other: number;
   };
-  processingStates: Record<string, number>;
+  processingStates: {
+    completed: number;
+    error: number;
+    processing: number;
+    pending: number;
+    initialized: number;
+  };
   mediaGroups: {
     total: number;
-    withCaption: number;
-    withoutCaption: number;
+    averageSize: number;
+    maxSize: number;
   };
   vendorStats: {
-    uniqueVendors: number;
-    topVendors: Array<{ vendor: string; count: number }>;
+    totalVendors: number;
+    topVendors: Array<{ name: string; count: number }>;
   };
   timePeriods: {
     today: number;
-    yesterday: number;
     thisWeek: number;
     thisMonth: number;
+    older: number;
   };
 }
 
-export const defaultAnalyticsData: AnalyticsData = {
-  totalMessages: 0,
-  mediaTypes: {
-    images: 0,
-    videos: 0,
-    documents: 0,
-    other: 0
-  },
-  processingStates: {},
-  mediaGroups: {
-    total: 0,
-    withCaption: 0,
-    withoutCaption: 0
-  },
-  vendorStats: {
-    uniqueVendors: 0,
-    topVendors: []
-  },
-  timePeriods: {
-    today: 0,
-    yesterday: 0,
-    thisWeek: 0,
-    thisMonth: 0
-  }
-};
-
-type DbMessage = Database['public']['Tables']['messages']['Row'];
-
 export function useMessageAnalytics() {
-  const [data, setData] = useState<AnalyticsData>(defaultAnalyticsData);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    setError('');
-    
-    try {
-      // Get message counts
-      const { data: messagesData, error: messagesError } = await supabase
-        .from('messages')
+  return useQuery({
+    queryKey: ['message-analytics'],
+    queryFn: async (): Promise<MessageStatistics> => {
+      // Fetch messages for analysis
+      const { data: messages, error } = await supabase
+        .from('v_messages_compatibility')
         .select('*');
+        
+      if (error) throw error;
       
-      if (messagesError) {
-        throw messagesError;
-      }
-      
-      if (!messagesData) {
-        throw new Error('No data found');
-      }
-      
-      // Process results
-      const messages = messagesData as DbMessage[];
-      const totalMessages = messages.length;
-      
-      // Initialize media types with zeros
-      const mediaTypes = {
-        images: 0,
-        videos: 0,
-        documents: 0,
-        other: 0
+      // Initialize stats object
+      const stats: MessageStatistics = {
+        totalMessages: 0,
+        mediaTypes: { images: 0, videos: 0, documents: 0, other: 0 },
+        processingStates: { 
+          completed: 0, 
+          error: 0, 
+          processing: 0, 
+          pending: 0, 
+          initialized: 0 
+        },
+        mediaGroups: { total: 0, averageSize: 0, maxSize: 0 },
+        vendorStats: { totalVendors: 0, topVendors: [] },
+        timePeriods: { today: 0, thisWeek: 0, thisMonth: 0, older: 0 }
       };
       
-      // Process processing states
-      const processingStates: Record<string, number> = {};
+      if (!messages || !Array.isArray(messages)) {
+        return stats;
+      }
       
-      // Process time periods
-      const today = new Date();
-      const yesterday = subDays(today, 1);
-      const firstDayOfWeek = subDays(today, today.getDay());
-      const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+      // Set total messages
+      stats.totalMessages = messages.length;
       
-      let todayCount = 0;
-      let yesterdayCount = 0;
-      let thisWeekCount = 0;
-      let thisMonthCount = 0;
+      // For time calculations
+      const now = new Date();
+      const today = format(now, 'yyyy-MM-dd');
+      const oneWeekAgo = subWeeks(now, 1);
+      const oneMonthAgo = subMonths(now, 1);
       
-      // Vendor stats
-      const vendorCounts: Record<string, number> = {};
-      let uniqueVendorCount = 0;
+      // Media group tracking
+      const mediaGroups = new Map<string, any[]>();
       
-      // Media groups stats
-      const mediaGroupsMap = new Map<string, boolean>();
-      let withCaptionCount = 0;
-      let withoutCaptionCount = 0;
+      // Vendor tracking
+      const vendors = new Map<string, number>();
       
-      // Process all messages
-      messages.forEach((message) => {
-        // Media type counts
-        const mediaType = message.mime_type || 'unknown';
-        if (mediaType.startsWith('image/')) {
-          mediaTypes.images++;
-        } else if (mediaType.startsWith('video/')) {
-          mediaTypes.videos++;
-        } else if (mediaType.startsWith('application/')) {
-          mediaTypes.documents++;
+      // Process each message
+      messages.forEach((message: any) => {
+        // Media type stats
+        if (message.mime_type) {
+          if (message.mime_type.startsWith('image/')) {
+            stats.mediaTypes.images++;
+          } else if (message.mime_type.startsWith('video/')) {
+            stats.mediaTypes.videos++;
+          } else if (message.mime_type.startsWith('application/')) {
+            stats.mediaTypes.documents++;
+          } else {
+            stats.mediaTypes.other++;
+          }
         } else {
-          mediaTypes.other++;
+          stats.mediaTypes.other++;
         }
         
-        // Processing state counts
-        const state = message.processing_state || 'unknown';
-        processingStates[String(state)] = (processingStates[String(state)] || 0) + 1;
-        
-        // Time period counts
-        const createdAt = message.created_at ? new Date(message.created_at) : null;
-        if (createdAt) {
-          if (format(createdAt, 'yyyy-MM-dd') === format(today, 'yyyy-MM-dd')) {
-            todayCount++;
-          }
-          if (format(createdAt, 'yyyy-MM-dd') === format(yesterday, 'yyyy-MM-dd')) {
-            yesterdayCount++;
-          }
-          if (createdAt >= firstDayOfWeek) {
-            thisWeekCount++;
-          }
-          if (createdAt >= firstDayOfMonth) {
-            thisMonthCount++;
-          }
+        // Processing state stats
+        if (message.processing_state) {
+          const state = message.processing_state as ProcessingState;
+          stats.processingStates[state]++;
         }
         
-        // Vendor stats 
-        if (message.analyzed_content && typeof message.analyzed_content === 'object') {
-          const analyzedContent = message.analyzed_content as Record<string, any>;
-          const vendorUid = analyzedContent.vendor_uid;
-          if (vendorUid && typeof vendorUid === 'string') {
-            if (!vendorCounts[vendorUid]) {
-              uniqueVendorCount++;
-            }
-            vendorCounts[vendorUid] = (vendorCounts[vendorUid] || 0) + 1;
-          }
-        }
-        
-        // Media groups
+        // Media group stats
         if (message.media_group_id) {
-          if (!mediaGroupsMap.has(message.media_group_id)) {
-            mediaGroupsMap.set(message.media_group_id, !!message.caption);
-            if (message.caption) {
-              withCaptionCount++;
-            } else {
-              withoutCaptionCount++;
-            }
+          const group = mediaGroups.get(message.media_group_id) || [];
+          group.push(message);
+          mediaGroups.set(message.media_group_id, group);
+        }
+        
+        // Vendor stats
+        if (message.analyzed_content?.vendor_uid) {
+          const vendor = message.analyzed_content.vendor_uid;
+          vendors.set(vendor, (vendors.get(vendor) || 0) + 1);
+        }
+        
+        // Time period stats
+        if (message.created_at) {
+          const createdDate = new Date(message.created_at);
+          const createdDateStr = format(createdDate, 'yyyy-MM-dd');
+          
+          if (createdDateStr === today) {
+            stats.timePeriods.today++;
+          }
+          
+          if (createdDate >= oneWeekAgo) {
+            stats.timePeriods.thisWeek++;
+          } else if (createdDate >= oneMonthAgo) {
+            stats.timePeriods.thisMonth++;
+          } else {
+            stats.timePeriods.older++;
           }
         }
       });
       
-      // Sort vendors by count and get top 5
-      const topVendors = Object.entries(vendorCounts)
-        .sort(([, countA], [, countB]) => countB - countA)
-        .slice(0, 5)
-        .map(([vendor, count]) => ({ vendor, count }));
+      // Process media group stats
+      stats.mediaGroups.total = mediaGroups.size;
       
-      setData({
-        totalMessages,
-        mediaTypes,
-        processingStates,
-        mediaGroups: {
-          total: mediaGroupsMap.size,
-          withCaption: withCaptionCount,
-          withoutCaption: withoutCaptionCount
-        },
-        vendorStats: {
-          uniqueVendors: uniqueVendorCount,
-          topVendors
-        },
-        timePeriods: {
-          today: todayCount,
-          yesterday: yesterdayCount,
-          thisWeek: thisWeekCount,
-          thisMonth: thisMonthCount
-        }
+      let totalGroupSize = 0;
+      let maxGroupSize = 0;
+      
+      mediaGroups.forEach(group => {
+        const size = group.length;
+        totalGroupSize += size;
+        maxGroupSize = Math.max(maxGroupSize, size);
       });
       
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : String(err);
-      setError(errorMessage);
-      console.error('Error fetching analytics data:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-  
-  // Initial fetch
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-  
-  // Return the data with loading property 
-  return {
-    data,
-    loading,
-    error,
-    refresh: fetchData
-  };
+      stats.mediaGroups.averageSize = mediaGroups.size > 0 
+        ? Math.round((totalGroupSize / mediaGroups.size) * 10) / 10 
+        : 0;
+      stats.mediaGroups.maxSize = maxGroupSize;
+      
+      // Process vendor stats
+      stats.vendorStats.totalVendors = vendors.size;
+      
+      // Convert vendor map to array and sort by count (highest first)
+      stats.vendorStats.topVendors = Array.from(vendors.entries())
+        .map(([name, count]) => ({ name, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 10);
+      
+      return stats;
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    refetchOnWindowFocus: false,
+  });
 }

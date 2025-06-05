@@ -1,14 +1,14 @@
+import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { Card } from "@/components/ui/card";
+import { AnalyzedContent } from "@/types";
 import { PageContainer } from "@/components/Layout/PageContainer";
 import { MessagesTable } from "@/components/MessagesTable/MessagesTable";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Toaster } from "@/components/ui/sonner";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useEnhancedMessages } from "@/hooks/enhancedMessages";
-import { supabase } from "@/integrations/supabase/client";
-import { AnalyzedContent } from "@/types";
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Toaster } from "@/components/ui/sonner";
+import { useEnhancedMessages } from "@/hooks/enhancedMessages";
 
 const Dashboard = () => {
   const queryClient = useQueryClient();
@@ -86,9 +86,9 @@ const Dashboard = () => {
     fetchStats();
   }, []);
 
-  const {
-    messages,
-    isLoading,
+  const { 
+    messages, 
+    isLoading, 
     refetch,
     isRefetching
   } = useEnhancedMessages({
@@ -97,9 +97,9 @@ const Dashboard = () => {
     grouped: false
   });
 
-  const filteredMessages = messages.filter(msg =>
-    msg.analyzed_content &&
-    msg.caption &&
+  const filteredMessages = messages.filter(msg => 
+    msg.analyzed_content && 
+    msg.caption && 
     msg.caption.trim() !== ''
   );
 
@@ -121,7 +121,7 @@ const Dashboard = () => {
       <div className="space-y-6">
         <div className="flex justify-between items-center">
           <h1 className="text-2xl font-bold">Dashboard</h1>
-          <Button
+          <Button 
             onClick={() => refetch()}
             variant="outline"
             size="sm"

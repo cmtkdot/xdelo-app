@@ -4,8 +4,8 @@
 import { useEnhancedMessages } from './enhancedMessages';
 
 export function useMediaGroups() {
-  const {
-    groupedMessages: data,
+  const { 
+    groupedMessages: data, 
     isLoading,
     isRefetching,
     error,

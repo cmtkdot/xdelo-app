@@ -1,7 +1,10 @@
-import { cn } from "@/lib/utils";
-import { Message } from "@/types";
-import { EmptyState } from "./grid/EmptyState";
-import { MessageCard } from "./grid/MessageCard";
+
+import React from 'react';
+import { Message } from '@/types';
+import { useIsMobile } from '@/hooks/useMobile';
+import { cn } from '@/lib/utils';
+import { MessageCard } from './grid/MessageCard';
+import { EmptyState } from './grid/EmptyState';
 
 interface MessageGridViewProps {
   messageGroups: Message[][];
@@ -14,35 +17,37 @@ interface MessageGridViewProps {
   onLoadMore: () => void;
 }
 
-export function MessageGridView({
-  messageGroups,
-  onSelect,
+export function MessageGridView({ 
+  messageGroups, 
+  onSelect, 
   onView,
   onEdit,
   onDelete,
   selectedMessages,
   hasMoreItems,
-  onLoadMore,
+  onLoadMore
 }: MessageGridViewProps) {
+  const isMobile = useIsMobile();
+
   if (!messageGroups || messageGroups.length === 0) {
     return <EmptyState />;
   }
 
   return (
     <div className="space-y-6">
-      <div
-        className={cn(
-          "grid gap-3",
-          "grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
-        )}
-      >
+      <div className={cn(
+        "grid gap-3",
+        isMobile
+          ? "grid-cols-2"
+          : "grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
+      )}>
         {messageGroups.map((group) => {
           // Skip empty groups
           if (!group || group.length === 0) return null;
-
+          
           // Use the first message of each group for the card
           const message = group[0];
-
+          
           return (
             <MessageCard
               key={message.id}
@@ -59,7 +64,7 @@ export function MessageGridView({
 
       {hasMoreItems && (
         <div className="flex justify-center mt-4">
-          <button
+          <button 
             onClick={onLoadMore}
             className="px-4 py-2 bg-primary/10 hover:bg-primary/20 rounded-md text-sm font-medium"
           >

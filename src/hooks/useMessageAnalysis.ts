@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from './useToast';
@@ -29,15 +28,13 @@ export function useMessageAnalysis() {
       // Log analysis start
       console.log(`Starting analysis for message ${message.id} with correlation ID ${correlationId}`);
       
-      // Use a different approach with Supabase functions instead of direct RPC
-      const { data: analysisData, error: analysisError } = await supabase.functions.invoke(
-        'process-caption', 
+      // Call database function directly
+      const { data: analysisData, error: analysisError } = await supabase.rpc(
+        'xdelo_process_caption_workflow',
         { 
-          body: { 
-            messageId: message.id,
-            correlationId: correlationId,
-            force: true
-          }
+          p_message_id: message.id,
+          p_correlation_id: correlationId,
+          p_force: true
         }
       );
       

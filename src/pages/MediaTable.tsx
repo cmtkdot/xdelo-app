@@ -1,13 +1,13 @@
 
+import { useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { MessagesTable } from "@/components/MessagesTable/MessagesTable";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useEnhancedMessages } from "@/hooks/enhancedMessages";
-import { supabase } from "@/integrations/supabase/client";
-import { useQueryClient } from "@tanstack/react-query";
 import { AlertCircle } from "lucide-react";
-import { useEffect } from "react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 const MediaTable = () => {
   const queryClient = useQueryClient();
@@ -95,7 +95,7 @@ const MediaTable = () => {
           Showing {messages.length} messages
         </div>
       </div>
-
+      
       {messages.length > 0 ? (
         <Card className="p-6">
           <MessagesTable messages={messages} />

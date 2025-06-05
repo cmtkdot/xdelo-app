@@ -1,5 +1,6 @@
 
-export { PublicMediaViewer } from './PublicMediaViewer';
-export { PublicMediaCard } from './PublicMediaCard';
-export { usePublicViewer } from './usePublicViewer';
-export { PublicEnhancedMediaDetail } from './PublicEnhancedMediaDetail';
+export { PublicMediaViewer } from './PublicMediaViewer'
+export { PublicMediaDetail } from './PublicMediaDetail'
+export { PublicMediaCard } from './PublicMediaCard'
+export { usePublicViewer } from './hooks/usePublicViewer'
+export type { MediaViewerProps } from './PublicMediaViewer'

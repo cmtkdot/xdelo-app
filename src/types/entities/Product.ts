@@ -1,25 +1,29 @@
 
-/**
- * Core product entity representing an inventory item
- */
+import { SyncStatus } from '../index';
+
 export interface GlProduct {
   id: string;
-  name: string;
-  sku?: string;
-  description?: string;
-  price?: number;
-  createdAt: string;
-  updatedAt?: string;
-  imageUrl?: string;
-  category?: string;
-  tags?: string[];
-  vendor?: string;
-  quantity?: number;
-  attributes?: Record<string, string | number | boolean>;
-  metadata?: Record<string, any>;
-  
-  // Add compatibility with existing code
+  product_name: string;
   product_name_display?: string;
+  product_code?: string;
+  vendor_name?: string;
+  vendor_uid?: string;
+  description?: string;
+  purchase_date?: string;
+  unit_price?: number;
+  quantity?: number;
+  total_price?: number;
+  product_category?: string;
+  status?: string;
+  glide_id?: string;
+  created_at?: string;
+  updated_at?: string;
+  sync_status?: SyncStatus;
+  new_product_name?: string;
+  vendor_product_name?: string;
+  product_purchase_date?: string;
+  
+  // Additional fields for display
   main_new_product_name?: string;
   main_vendor_product_name?: string;
   main_product_purchase_date?: string;
@@ -28,8 +32,10 @@ export interface GlProduct {
   main_category?: string;
   main_product_image1?: string;
   main_purchase_notes?: string;
-  messages?: {
+  
+  // Support for related messages
+  messages?: Array<{
     public_url: string;
-    media_group_id: string;
-  }[];
+    media_group_id?: string;
+  }>;
 }

@@ -4,8 +4,9 @@ import { Message } from '@/types/entities/Message';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { cn } from '@/lib/utils';
-import { EnhancedMediaDisplay } from '../shared/EnhancedMediaDisplay';
+import { MediaDisplay } from '../shared/MediaDisplay';
 import { useTouchInteraction } from '@/hooks/useTouchInteraction';
+import { useIsMobile } from '@/hooks/useMobile';
 import {
   Carousel,
   CarouselContent,
@@ -37,7 +38,7 @@ export function GalleryMediaCarousel({
   className
 }: MediaCarouselProps) {
   const [api, setApi] = useState<CarouselApi>();
-
+  const isMobile = useIsMobile();
   
   // Handle keyboard navigation
   useEffect(() => {
@@ -127,7 +128,7 @@ export function GalleryMediaCarousel({
       {mediaItems.length === 1 ? (
         // Single item display without carousel
         <div className="h-full w-full flex items-center justify-center">
-          <EnhancedMediaDisplay message={mediaItems[0]} className="max-h-[85vh] md:max-h-[85vh]" />
+          <MediaDisplay message={mediaItems[0]} className="max-h-[85vh] md:max-h-[85vh]" />
         </div>
       ) : (
         // Multiple items carousel
@@ -144,7 +145,7 @@ export function GalleryMediaCarousel({
             {mediaItems.map((message, index) => (
               <CarouselItem key={message.id || index} className="h-full flex items-center justify-center">
                 <div className="w-full h-full flex items-center justify-center p-2">
-                  <EnhancedMediaDisplay message={message} className="max-h-[85vh] md:max-h-[85vh]" />
+                  <MediaDisplay message={message} className="max-h-[85vh] md:max-h-[85vh]" />
                 </div>
               </CarouselItem>
             ))}

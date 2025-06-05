@@ -1,0 +1,57 @@
+
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { GlProduct } from "@/types";
+import { formatDate } from "@/lib/utils";
+
+interface GLProductCardProps {
+  product: GlProduct;
+}
+
+export function GLProductCard({ product }: GLProductCardProps) {
+  return (
+    <Card className="hover:shadow-lg transition-shadow">
+      <CardHeader>
+        <div className="space-y-1">
+          <h3 className="font-semibold truncate">
+            {product.product_name_display || product.main_new_product_name || product.new_product_name || product.product_name}
+          </h3>
+          <p className="text-sm text-muted-foreground">
+            {product.main_vendor_product_name || product.vendor_product_name || product.vendor_name}
+          </p>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-2">
+          {(product.messages?.[0]?.public_url || product.main_product_image1) && (
+            <img
+              src={product.messages?.[0]?.public_url || product.main_product_image1}
+              alt={product.main_new_product_name || product.new_product_name || product.product_name}
+              className="w-full h-48 object-cover rounded-md"
+            />
+          )}
+          <div className="grid grid-cols-2 gap-2 text-sm">
+            <div>
+              <p className="text-muted-foreground">Purchase Date</p>
+              <p>{(product.main_product_purchase_date || product.product_purchase_date || product.purchase_date) ? 
+                formatDate(new Date(product.main_product_purchase_date || product.product_purchase_date || product.purchase_date)) : 
+                "N/A"}
+              </p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">Quantity</p>
+              <p>{product.main_total_qty_purchased || product.quantity || "N/A"}</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">Cost</p>
+              <p>${product.main_cost?.toFixed(2) || product.unit_price?.toFixed(2) || "N/A"}</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">Category</p>
+              <p>{product.main_category || product.product_category || "N/A"}</p>
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}

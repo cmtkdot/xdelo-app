@@ -1,4 +1,3 @@
-
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Message, ProcessingState } from '@/types';
@@ -25,13 +24,13 @@ export function useEnhancedMessagesData({
     queryKey: ['enhanced-messages', limit, processingStates, sortBy, sortOrder, searchTerm, grouped],
     queryFn: async () => {
       try {
-        console.info('Fetching enhanced messages with options:', {
+        console.log('Fetching enhanced messages with options:', {
           limit, processingStates, sortBy, sortOrder, searchTerm, grouped
         });
         
         // Build the query
         let query = supabase
-          .from('messages')
+          .from('v_messages_compatibility')
           .select('*')
           .order(sortBy, { ascending: sortOrder === 'asc' })
           .limit(limit);
@@ -56,28 +55,22 @@ export function useEnhancedMessagesData({
         
         // Early return for empty data
         if (!data || data.length === 0) {
-          console.info('No messages found');
+          console.log('No messages found');
           return {
             flatMessages: [],
             groupedMessages: []
           };
         }
         
-        console.info(`Retrieved ${data.length} messages from database`);
+        console.log(`Retrieved ${data.length} messages from database`);
         
-        // Define our own strongly-typed message conversion function
-        const convertToMessage = (rawMessage: any): Message => ({
+        // Map the data to ensure required fields have values
+        const validMessages: Message[] = data.map((rawMessage: any): Message => ({
           id: rawMessage.id || `missing-id-${Date.now()}-${Math.random().toString(36).substring(2)}`,
           file_unique_id: rawMessage.file_unique_id || `missing-file-id-${Date.now()}`,
           public_url: rawMessage.public_url || '/placeholder.svg',
-          // Ensure processing_state is a valid ProcessingState
-          processing_state: rawMessage.processing_state as ProcessingState,
-          // Copy all other properties
           ...rawMessage
-        });
-        
-        // Use our conversion function
-        const validMessages: Message[] = data.map(convertToMessage);
+        }));
         
         // Process grouped messages if requested
         if (grouped) {
@@ -94,7 +87,7 @@ export function useEnhancedMessagesData({
             mediaGroups[groupId].push(message);
           });
           
-          console.info(`Created ${Object.keys(mediaGroups).length} media groups`);
+          console.log(`Created ${Object.keys(mediaGroups).length} media groups`);
           
           // Sort messages within each group
           Object.values(mediaGroups).forEach(group => {

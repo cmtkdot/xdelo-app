@@ -113,18 +113,18 @@
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
-
+  
   /* Responsive typography */
   h1 {
-    @apply text-2xl font-bold sm:text-3xl;
+    @apply text-2xl sm:text-3xl font-bold;
   }
   h2 {
-    @apply text-xl font-semibold sm:text-2xl;
+    @apply text-xl sm:text-2xl font-semibold;
   }
   h3 {
-    @apply text-lg font-medium sm:text-xl;
+    @apply text-lg sm:text-xl font-medium;
   }
-
+  
   /* Better touch targets for mobile */
   button, a, input, select, textarea {
     @apply focus:outline-none focus-visible:ring-2 focus-visible:ring-ring;
@@ -138,7 +138,7 @@
     padding-right: min(0vmin, env(safe-area-inset-right));
     padding-bottom: min(0vmin, env(safe-area-inset-bottom));
   }
-
+  
   .has-safe-area-bottom {
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
@@ -150,7 +150,7 @@
 }
 
 .mobile-stack {
-  @apply flex flex-col gap-2 sm:flex-row;
+  @apply flex flex-col sm:flex-row gap-2;
 }
 
 .mobile-touch-target {
@@ -167,7 +167,7 @@
 
 /* Custom styles for media gallery */
 .media-card {
-  @apply relative overflow-hidden transition-all border rounded-lg bg-card hover:shadow-lg dark:hover:shadow-accent/10;
+  @apply relative overflow-hidden rounded-lg border bg-card transition-all hover:shadow-lg dark:hover:shadow-accent/10;
 }
 
 .media-card:hover .media-card-overlay {
@@ -175,7 +175,7 @@
 }
 
 .media-card-overlay {
-  @apply absolute inset-0 flex items-center justify-center transition-opacity opacity-0 bg-black/60 dark:bg-black/75;
+  @apply absolute inset-0 bg-black/60 dark:bg-black/75 opacity-0 transition-opacity flex items-center justify-center;
 }
 
 .media-card-content {
@@ -183,11 +183,16 @@
 }
 
 .media-grid {
-  @apply grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4;
+  @apply grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4;
 }
 
 .filter-button {
-  @apply inline-flex items-center justify-center px-4 py-2 text-sm font-medium transition-colors border rounded-md shadow-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-background hover:bg-accent/10 dark:hover:bg-accent/20 border-input h-9;
+  @apply inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors 
+  focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 
+  disabled:pointer-events-none disabled:opacity-50
+  bg-background hover:bg-accent/10 dark:hover:bg-accent/20 
+  border border-input shadow-sm
+  h-9 px-4 py-2;
 }
 
 .filter-button[data-state='on'] {
@@ -201,7 +206,7 @@
 }
 
 .status-badge {
-  @apply inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors
+  @apply inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors 
   focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2;
 }
 
@@ -210,24 +215,24 @@
 }
 
 .status-badge-warning {
-  @apply text-yellow-500 border-transparent bg-yellow-500/10 dark:bg-yellow-500/20 dark:text-yellow-400;
+  @apply border-transparent bg-yellow-500/10 text-yellow-500 dark:bg-yellow-500/20 dark:text-yellow-400;
 }
 
 .status-badge-error {
-  @apply text-red-500 border-transparent bg-red-500/10 dark:bg-red-500/20 dark:text-red-400;
+  @apply border-transparent bg-red-500/10 text-red-500 dark:bg-red-500/20 dark:text-red-400;
 }
 
 .status-badge-processing {
-  @apply text-blue-500 border-transparent bg-blue-500/10 dark:bg-blue-500/20 dark:text-blue-400;
+  @apply border-transparent bg-blue-500/10 text-blue-500 dark:bg-blue-500/20 dark:text-blue-400;
 }
 
 /* Container styles */
 .content-container {
-  @apply p-3 border rounded-lg shadow-sm bg-card sm:p-4;
+  @apply bg-card rounded-lg border shadow-sm p-3 sm:p-4;
 }
 
 .sidebar-container {
-  @apply border rounded-lg shadow-sm bg-card;
+  @apply bg-card rounded-lg border shadow-sm;
 }
 
 /* Icon styles */
@@ -236,7 +241,11 @@
 }
 
 .icon-button {
-  @apply inline-flex items-center justify-center transition-colors bg-transparent rounded-md w-9 h-9 hover:bg-accent/10 dark:hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 text-foreground;
+  @apply inline-flex items-center justify-center rounded-md w-9 h-9
+  bg-transparent hover:bg-accent/10 dark:hover:bg-accent/20
+  focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
+  disabled:pointer-events-none disabled:opacity-50
+  text-foreground transition-colors;
 }
 
 .icon-button[data-state='on'] {
@@ -282,11 +291,11 @@
 
 .pull-to-refresh::before {
   content: "";
-  @apply absolute top-0 left-0 right-0 flex items-center justify-center h-16 transition-transform -translate-y-full bg-muted/20;
+  @apply absolute top-0 left-0 right-0 h-16 -translate-y-full flex items-center justify-center bg-muted/20 transition-transform;
 }
 
 .pill-button {
-  @apply rounded-full px-4 py-1.5 text-sm font-medium bg-muted/50 hover:bg-muted/70
+  @apply rounded-full px-4 py-1.5 text-sm font-medium bg-muted/50 hover:bg-muted/70 
   dark:bg-muted/30 dark:hover:bg-muted/50 transition-colors;
 }
 

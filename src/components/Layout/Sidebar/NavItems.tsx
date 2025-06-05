@@ -1,12 +1,15 @@
 import {
-  Database,
   FileText,
   GalleryHorizontal,
+  GitCompare,
   ImageIcon,
   LayoutDashboard,
   LucideIcon,
   MessageSquare,
-  PanelLeft
+  Music,
+  PanelLeft,
+  Settings,
+  Table,
 } from "lucide-react";
 import React from "react";
 
@@ -63,10 +66,16 @@ export const NavItems: React.FC<NavItemsProps> = ({
       isActive: currentPath === "/media-table",
     },
     {
-      title: "Database",
-      href: "/database",
-      icon: <Database size={20} />,
-      isActive: currentPath === "/database",
+      title: "Table Demo",
+      href: "/table-demo",
+      icon: <Table size={20} />,
+      isActive: currentPath === "/table-demo",
+    },
+    {
+      title: "Product Matching",
+      href: "/product-matching",
+      icon: <GitCompare size={20} />,
+      isActive: currentPath === "/product-matching",
     },
     {
       title: "AI Chat",
@@ -74,7 +83,18 @@ export const NavItems: React.FC<NavItemsProps> = ({
       icon: <FileText size={20} />,
       isActive: currentPath === "/ai-chat",
     },
-    // Settings removed
+    {
+      title: "Audio Upload",
+      href: "/audio-upload",
+      icon: <Music size={20} />,
+      isActive: currentPath === "/audio-upload",
+    },
+    {
+      title: "Settings",
+      href: "/settings",
+      icon: <Settings size={20} />,
+      isActive: currentPath === "/settings",
+    },
   ];
 
   return (
@@ -83,10 +103,11 @@ export const NavItems: React.FC<NavItemsProps> = ({
         <button
           key={item.href}
           onClick={() => onNavigate(item.href)}
-          className={`w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors ${item.isActive
-            ? "bg-primary text-primary-foreground"
-            : "hover:bg-muted"
-            }`}
+          className={`w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors ${
+            item.isActive
+              ? "bg-primary text-primary-foreground"
+              : "hover:bg-muted"
+          }`}
         >
           {item.icon}
           {(isExpanded || isMobile) && <span>{item.title}</span>}

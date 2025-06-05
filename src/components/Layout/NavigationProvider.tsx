@@ -1,5 +1,7 @@
+
 import React, { createContext, useContext, useState } from 'react';
 import { useLocation } from 'react-router-dom';
+import { useIsMobile } from '@/hooks/useMobile';
 
 type NavigationContextType = {
   isOpen: boolean;
@@ -33,14 +35,16 @@ export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [showBackButton, setShowBackButton] = useState(false);
   const [breadcrumbs, setBreadcrumbs] = useState<{ label: string; path: string }[]>([]);
   const [isSidebarCollapsed, setSidebarCollapsed] = useState(false);
-
+  
   const location = useLocation();
+  const isMobile = useIsMobile();
 
-  // Close navigation drawer when route changes (was mobile-only)
+  // Close navigation drawer when route changes on mobile
   React.useEffect(() => {
-    setIsOpen(false);
-    // TODO: If you want to only close on mobile, add a mobile detection hook here.
-  }, [location.pathname]);
+    if (isMobile) {
+      setIsOpen(false);
+    }
+  }, [location.pathname, isMobile]);
 
   const openNavigation = () => setIsOpen(true);
   const closeNavigation = () => setIsOpen(false);
@@ -68,4 +72,4 @@ export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       {children}
     </NavigationContext.Provider>
   );
-};
+}; 

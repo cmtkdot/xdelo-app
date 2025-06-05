@@ -1,194 +1,239 @@
+'use client'
 
-import React, { useState, useEffect, useRef } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
-import { MediaItem } from '@/types';
+import * as React from 'react'
+import { ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { MediaItem } from '@/types'
+import { cn } from '@/lib/utils'
+import { format } from "date-fns";
 
-interface ImageSwiperProps {
-  images: MediaItem[];
-  initialIndex?: number;
-  onIndexChange?: (index: number) => void;
+interface ImageSwiperProps extends React.HTMLAttributes<HTMLDivElement> {
+  media: MediaItem[];
+  showNavigation?: boolean;
   className?: string;
-  showControls?: boolean;
-  showDots?: boolean;
+  onIndexChange?: (index: number) => void;
+  onClick?: () => void;
 }
 
-export function ImageSwiper({
-  images,
-  initialIndex = 0,
+export function ImageSwiper({ 
+  media, 
+  className, 
+  showNavigation, 
   onIndexChange,
-  className,
-  showControls = true,
-  showDots = true,
+  onClick,
+  ...props 
 }: ImageSwiperProps) {
-  const [activeIndex, setActiveIndex] = useState(initialIndex);
-  const [isDragging, setIsDragging] = useState(false);
-  const [startX, setStartX] = useState(0);
-  const [scrollLeft, setScrollLeft] = useState(0);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [mediaIndex, setMediaIndex] = React.useState(0);
+  const [isHovered, setIsHovered] = React.useState(false);
+  const [lastNonVideoIndex, setLastNonVideoIndex] = React.useState(0);
+  const [mediaError, setMediaError] = React.useState<string | null>(null);
+  const videoRef = React.useRef<HTMLVideoElement>(null);
 
-  useEffect(() => {
-    if (initialIndex !== activeIndex) {
-      setActiveIndex(initialIndex);
+  // Safety check for empty or invalid media
+  const validMedia = React.useMemo(() => {
+    return Array.isArray(media) && media.length > 0 ? media : [];
+  }, [media]);
+
+  // Sort media to prioritize images over videos
+  const sortedMedia = React.useMemo(() => {
+    if (validMedia.length === 0) {
+      return [];
     }
-  }, [initialIndex]);
+    
+    return [...validMedia].sort((a, b) => {
+      // First, check if mimeType exists, using either property name
+      const aIsImage = a.mime_type?.startsWith('image') || false;
+      const bIsImage = b.mime_type?.startsWith('image') || false;
+      
+      // If mime type is missing, try to infer from URL
+      const aUrl = a.public_url || '';
+      const bUrl = b.public_url || '';
+      const aHasImageExt = aUrl.match(/\.(jpg|jpeg|png|gif)$/i);
+      const bHasImageExt = bUrl.match(/\.(jpg|jpeg|png|gif)$/i);
+      
+      const aIsLikelyImage = aIsImage || !!aHasImageExt;
+      const bIsLikelyImage = bIsImage || !!bHasImageExt;
+      
+      // Prioritize images
+      return bIsLikelyImage ? 1 : aIsLikelyImage ? -1 : 0;
+    });
+  }, [validMedia]);
 
-  useEffect(() => {
+  // Check if we have any media to display
+  if (sortedMedia.length === 0) {
+    return (
+      <div className="group relative aspect-video h-full w-full overflow-hidden rounded-lg bg-gray-100 flex items-center justify-center">
+        <span className="text-gray-400">No media available</span>
+      </div>
+    );
+  }
+
+  const currentMedia = sortedMedia[mediaIndex] || sortedMedia[0];
+  
+  // Safety check for currentMedia
+  if (!currentMedia) {
+    return (
+      <div className="group relative aspect-video h-full w-full overflow-hidden rounded-lg bg-gray-100 flex items-center justify-center">
+        <span className="text-gray-400">Media not available</span>
+      </div>
+    );
+  }
+  
+  // Use either new or legacy property names
+  const mediaUrl = currentMedia.public_url || '';
+  const mediaMimeType = currentMedia.mime_type || '';
+  const isVideo = mediaMimeType.startsWith("video/") || 
+                 (mediaUrl && /\.(mp4|mov|webm|avi)$/i.test(mediaUrl));
+
+  React.useEffect(() => {
     if (onIndexChange) {
-      onIndexChange(activeIndex);
+      onIndexChange(mediaIndex);
     }
-  }, [activeIndex, onIndexChange]);
+  }, [mediaIndex, onIndexChange]);
 
-  const handlePrev = () => {
-    setActiveIndex((prevIndex) => (prevIndex > 0 ? prevIndex - 1 : images.length - 1));
-  };
+  React.useEffect(() => {
+    if (!isVideo) {
+      setLastNonVideoIndex(mediaIndex);
+    }
+  }, [mediaIndex, isVideo]);
 
-  const handleNext = () => {
-    setActiveIndex((prevIndex) => (prevIndex < images.length - 1 ? prevIndex + 1 : 0));
-  };
-
-  const handleDotClick = (index: number) => {
-    setActiveIndex(index);
-  };
-
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if (!containerRef.current) return;
-    setIsDragging(true);
-    setStartX(e.pageX - containerRef.current.offsetLeft);
-    setScrollLeft(containerRef.current.scrollLeft);
-    containerRef.current.style.cursor = 'grabbing';
-  };
-
-  const handleMouseUp = () => {
-    if (!containerRef.current) return;
-    setIsDragging(false);
-    containerRef.current.style.cursor = 'grab';
-  };
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging || !containerRef.current) return;
-    e.preventDefault();
-    const x = e.pageX - containerRef.current.offsetLeft;
-    const walk = (x - startX) * 2;
-    containerRef.current.scrollLeft = scrollLeft - walk;
-  };
-
-  const handleTouchStart = (e: React.TouchEvent) => {
-    if (!containerRef.current) return;
-    setIsDragging(true);
-    setStartX(e.touches[0].pageX - containerRef.current.offsetLeft);
-    setScrollLeft(containerRef.current.scrollLeft);
-  };
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (!isDragging || !containerRef.current) return;
-    const x = e.touches[0].pageX - containerRef.current.offsetLeft;
-    const walk = (x - startX) * 2;
-    containerRef.current.scrollLeft = scrollLeft - walk;
-  };
-
-  const handleTouchEnd = () => {
-    setIsDragging(false);
-  };
-
-  // Handle keyboard navigation
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      switch (e.key) {
-        case 'ArrowLeft':
-          handlePrev();
-          break;
-        case 'ArrowRight':
-          handleNext();
-          break;
-        default:
-          break;
+  React.useEffect(() => {
+    if (isHovered && !showNavigation) {
+      const videoIndex = sortedMedia.findIndex(m => {
+        const mimeType = m.mime_type || '';
+        const url = m.public_url || '';
+        return mimeType.startsWith('video/') || (url && /\.(mp4|mov|webm|avi)$/i.test(url));
+      });
+      if (videoIndex !== -1) {
+        setMediaIndex(videoIndex);
       }
-    };
+    } else if (!isHovered && !showNavigation) {
+      setMediaIndex(lastNonVideoIndex);
+    }
+  }, [isHovered, sortedMedia, lastNonVideoIndex, showNavigation]);
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, []);
+  React.useEffect(() => {
+    if (isVideo && videoRef.current) {
+      if (isHovered) {
+        videoRef.current.currentTime = 0;
+        videoRef.current.play().catch(error => {
+          console.error("Video playback error:", error);
+          setMediaError("Failed to play video");
+        });
+      } else {
+        videoRef.current.pause();
+      }
+    }
+  }, [isHovered, isVideo]);
+
+  const handleNext = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setMediaError(null);
+    setMediaIndex((prev) => (prev + 1) % sortedMedia.length);
+  };
+
+  const handlePrev = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setMediaError(null);
+    setMediaIndex((prev) => (prev - 1 + sortedMedia.length) % sortedMedia.length);
+  };
+
+  // Media error handler
+  const handleMediaError = (type: 'image' | 'video') => {
+    setMediaError(`Failed to load ${type}`);
+  };
+
+  // Get title from either the title property or analyzed_content
+  const productName = currentMedia.caption || 
+                      (currentMedia.analyzed_content?.product_name) || 
+                      'Untitled Product';
+  
+  // Get date from either uploadedAt or created_at
+  let formattedDate = '';
+  
+  try {
+    const dateStr = currentMedia.created_at || '';
+    formattedDate = dateStr ? format(new Date(dateStr), 'MMM d, yyyy') : 'Unknown date';
+  } catch (e) {
+    formattedDate = 'Unknown date';
+  }
 
   return (
-    <div className={cn('relative group', className)}>
-      <div
-        ref={containerRef}
-        className="overflow-hidden touch-pan-y"
-        onMouseDown={handleMouseDown}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
-        onMouseMove={handleMouseMove}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-      >
-        <div
-          className="flex transition-transform duration-300 ease-out h-full"
-          style={{
-            transform: `translateX(-${activeIndex * 100}%)`,
-            width: `${images.length * 100}%`,
-          }}
-        >
-          {images.map((image, index) => (
-            <div
-              key={index}
-              className="relative flex-shrink-0"
-              style={{ width: `${100 / images.length}%` }}
-            >
-              <img
-                src={image.url}
-                alt={image.title || `Image ${index + 1}`}
-                className="w-full h-full object-contain"
-              />
-            </div>
-          ))}
+    <div
+      className={cn("group relative aspect-video h-full w-full overflow-hidden rounded-lg bg-black/90", className)}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      onClick={onClick}
+      {...props}
+    >
+      <div className="absolute inset-x-0 top-0 bg-gradient-to-b from-black/80 via-black/50 to-transparent p-4 z-10">
+        <h3 className="text-xl font-semibold text-white truncate">
+          {productName}
+        </h3>
+        <p className="text-sm text-gray-300">
+          {formattedDate}
+        </p>
+      </div>
+      
+      <div className="absolute bottom-2 w-full flex justify-center z-10">
+        <div className="flex min-w-9 items-center justify-center rounded-md bg-black/80 px-2 py-0.5 text-xs text-white opacity-100 transition-opacity">
+          {mediaIndex + 1}/{sortedMedia.length}
         </div>
       </div>
 
-      {showControls && images.length > 1 && (
-        <>
+      {showNavigation && (
+        <div className="absolute left-5 top-1/2 -translate-y-1/2 z-10">
           <Button
             variant="ghost"
             size="icon"
-            className="absolute left-2 top-1/2 transform -translate-y-1/2 opacity-70 hover:opacity-100 bg-background/50 hover:bg-background/70 rounded-full transition-opacity"
+            className="pointer-events-auto h-8 w-8 rounded-full bg-black/50 hover:bg-black/75 text-white opacity-100 transition-opacity"
             onClick={handlePrev}
           >
-            <ChevronLeft className="h-6 w-6" />
-            <span className="sr-only">Previous image</span>
+            <ChevronLeft className="h-4 w-4" />
           </Button>
-
+        </div>
+      )}
+      
+      {showNavigation && (
+        <div className="absolute right-5 top-1/2 -translate-y-1/2 z-10">
           <Button
             variant="ghost"
             size="icon"
-            className="absolute right-2 top-1/2 transform -translate-y-1/2 opacity-70 hover:opacity-100 bg-background/50 hover:bg-background/70 rounded-full transition-opacity"
+            className="pointer-events-auto h-8 w-8 rounded-full bg-black/50 hover:bg-black/75 text-white opacity-100 transition-opacity"
             onClick={handleNext}
           >
-            <ChevronRight className="h-6 w-6" />
-            <span className="sr-only">Next image</span>
+            <ChevronRight className="h-4 w-4" />
           </Button>
-        </>
+        </div>
       )}
 
-      {showDots && images.length > 1 && (
-        <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 flex space-x-1">
-          {images.map((_, index) => (
-            <button
-              key={index}
-              className={cn(
-                'w-2 h-2 rounded-full transition-colors',
-                index === activeIndex
-                  ? 'bg-primary'
-                  : 'bg-muted hover:bg-muted-foreground/50'
-              )}
-              onClick={() => handleDotClick(index)}
-              aria-label={`Go to image ${index + 1}`}
-            />
-          ))}
+      {mediaError && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-20">
+          <div className="bg-black/80 text-white px-4 py-3 rounded-md flex items-center">
+            <AlertCircle className="h-5 w-5 mr-2" />
+            <span>{mediaError}</span>
+          </div>
         </div>
+      )}
+
+      {isVideo ? (
+        <video
+          ref={videoRef}
+          src={mediaUrl}
+          className="h-full w-full object-cover"
+          loop
+          muted
+          playsInline
+          autoPlay={isHovered}
+          onError={() => handleMediaError('video')}
+        />
+      ) : (
+        <img 
+          src={mediaUrl} 
+          alt={productName}
+          className="h-full w-full object-cover" 
+          onError={() => handleMediaError('image')}
+        />
       )}
     </div>
   );

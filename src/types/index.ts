@@ -1,69 +1,44 @@
 
-// Export all type definitions
-export * from './entities/Message';
-export * from './entities/ProductMatching';
-export * from './utils/AnalyzedContent';
-export * from './api/ProcessingState';
+// Re-export all type definitions for easy importing throughout the app
+// Using named exports to avoid ambiguity
 
-// Re-export GlProduct from the appropriate file
-export * from './GlProducts';
+// Core entity types with proper naming to avoid conflicts
+export type { ProcessingState } from './api/ProcessingState';
+export type { Message } from './entities/Message';
+export type { MediaItem } from './entities/MediaItem';
+export type { GlProduct } from './entities/Product';
 
-// Match result type from product matching library
+// Additional types used throughout the app
+export type SyncStatus = 'pending' | 'in_progress' | 'completed' | 'failed' | 'partial';
+
+// Export AnalyzedContent interface for common use
+export interface AnalyzedContent {
+  product_name?: string;
+  product_code?: string;
+  vendor_uid?: string;
+  purchase_date?: string;
+  quantity?: number;
+  notes?: string;
+  caption?: string;
+  unit_price?: number;
+  total_price?: number;
+  parsing_metadata?: {
+    method?: string;
+    timestamp?: string;
+    partial_success?: boolean;
+  };
+}
+
+// Export MatchResult interface for product matching
 export interface MatchResult {
-  isMatch: boolean;
-  score: number;
-  productId?: string;
-  product_id?: string;
-  message_id?: string;
-  confidence?: number;
-  match_fields?: string[];
-  match_date?: string;
-  matchType?: string;
-  details?: Record<string, any>;
-  matches?: Record<string, { value: string; score: number }>;
-  matchCriteria?: {
-    nameMatch?: boolean;
-    vendorMatch?: boolean;
-    dateMatch?: boolean;
-  };
-}
-
-// Batch match result
-export interface BatchMatchResult {
-  success: boolean;
-  totalProcessed?: number;
-  matchedCount?: number;
-  unmatchedCount?: number;
-  failedCount?: number;
-  averageConfidence?: number;
-  results: Array<{
-    messageId: string;
-    success: boolean;
-    matched: boolean;
-    confidence?: number;
-    productId?: string;
-    error?: string;
-  }>;
-  summary?: {
-    total: number;
-    matched: number;
-    unmatched: number;
-    failed: number;
-  };
-  error?: string;
-}
-
-// Add MediaItem export to fix missing exports
-export interface MediaItem {
   id: string;
-  url: string;
-  type: 'image' | 'video' | 'audio' | 'document' | 'unknown';
-  thumbnail?: string;
-  title?: string;
-  description?: string;
-  mimeType?: string;
-  fileSize?: number;
-  width?: number;
-  height?: number;
-  duration?: number;
+  message_id: string;
+  product_id: string;
+  confidence: number;
+  matchType: string;
+  details: {
+    matchedFields: string[];
+    confidence: number;
+  };
+  isMatch?: boolean; // Added for backward compatibility
 }

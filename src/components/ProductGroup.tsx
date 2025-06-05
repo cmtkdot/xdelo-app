@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+
+import React from 'react';
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { FileEdit, Eye, Trash2 } from "lucide-react";
@@ -6,7 +7,6 @@ import { Message } from "@/types";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { useTelegramOperations } from '@/hooks/useTelegramOperations';
 import { getMainMediaFromGroup, isVideoMessage } from '@/utils/mediaUtils';
-import { DeleteMessageDialog } from '@/components/shared/DeleteMessageDialog';
 
 interface ProductGroupProps {
   group: Message[];
@@ -25,7 +25,6 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
 }) => {
   const mainMedia = getMainMediaFromGroup(group);
   const { isProcessing } = useTelegramOperations();
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
   if (!mainMedia) return null;
 
@@ -37,11 +36,6 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
   const handleDelete = async (deleteTelegram: boolean) => {
     if (!mainMedia) return;
     await onDelete(mainMedia, deleteTelegram);
-    setIsDeleteDialogOpen(false);
-  };
-
-  const handleDeleteClick = () => {
-    setIsDeleteDialogOpen(true);
   };
 
   return (
@@ -106,21 +100,13 @@ export const ProductGroup: React.FC<ProductGroupProps> = ({
         <Button
           variant="destructive"
           size="sm"
-          onClick={handleDeleteClick}
+          onClick={() => handleDelete(false)}
           disabled={isDeleting || isProcessing}
         >
           <Trash2 className="w-4 h-4 mr-2" />
           Delete
         </Button>
       </CardFooter>
-      
-      <DeleteMessageDialog
-        isOpen={isDeleteDialogOpen}
-        onOpenChange={setIsDeleteDialogOpen}
-        messageToDelete={mainMedia}
-        onConfirm={handleDelete}
-        isProcessing={isDeleting || isProcessing}
-      />
     </Card>
   );
 };

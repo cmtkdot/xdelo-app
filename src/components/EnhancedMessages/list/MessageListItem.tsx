@@ -1,9 +1,10 @@
-import { cn } from '@/lib/utils';
-import { Message } from '@/types';
+
 import React, { useState } from 'react';
-import { ListItemActions } from './ListItemActions';
+import { Message } from '@/types';
+import { cn } from '@/lib/utils';
 import { MediaThumbnail } from './MediaThumbnail';
 import { MessageContent } from './MessageContent';
+import { ListItemActions } from './ListItemActions';
 
 interface MessageListItemProps {
   message: Message;
@@ -12,6 +13,7 @@ interface MessageListItemProps {
   onEdit?: (message: Message) => void;
   onDelete?: (message: Message) => void;
   isSelected?: boolean;
+  isMobile: boolean;
   hasError: boolean;
 }
 
@@ -22,35 +24,37 @@ export const MessageListItem: React.FC<MessageListItemProps> = ({
   onEdit,
   onDelete,
   isSelected,
+  isMobile,
   hasError
 }) => {
   const [mediaError, setMediaError] = useState(hasError);
-
+  
   const handleMediaError = () => {
     setMediaError(true);
   };
-
+  
   return (
-    <div
+    <div 
       className={cn(
         "flex items-center gap-3 p-3 hover:bg-muted/50 cursor-pointer transition-colors",
         isSelected && "bg-muted/70"
       )}
       onClick={() => onSelect(message)}
     >
-      <MediaThumbnail
+      <MediaThumbnail 
         message={message}
         hasError={mediaError}
         onView={onView}
       />
-
+      
       <MessageContent message={message} />
-
-      <ListItemActions
+      
+      <ListItemActions 
         message={message}
         onView={onView}
         onEdit={onEdit}
         onDelete={onDelete}
+        isMobile={isMobile}
       />
     </div>
   );

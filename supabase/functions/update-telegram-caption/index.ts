@@ -1,475 +1,226 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts"; // Keep for serve
+import {
+  createHandler,
+  createSuccessResponse,
+  RequestMetadata,
+  SecurityLevel,
+} from "../_shared/unifiedHandler.ts";
+import { supabaseClient } from "../_shared/supabase.ts"; // Use singleton client
+import { logProcessingEvent } from "../_shared/auditLogger.ts"; // Import from dedicated module
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+interface UpdateCaptionBody {
+  messageId: string; // Database message ID (UUID)
+  newCaption: string;
+}
 
-const MAX_BATCH_SIZE = 5; // Process media group updates in smaller batches for reliability
+// Core logic for updating Telegram caption
+async function handleUpdateCaption(req: Request, metadata: RequestMetadata): Promise<Response> {
+  const { correlationId } = metadata;
+  console.log(`[${correlationId}] Processing update-telegram-caption request`);
 
-serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+  // --- Environment Variable Check ---
+  const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN");
+  if (!TELEGRAM_BOT_TOKEN) {
+    console.error(`[${correlationId}] TELEGRAM_BOT_TOKEN is not configured`);
+    await logProcessingEvent('caption_update_failed', 'system', correlationId, {}, 'Missing Telegram Bot Token');
+    throw new Error("Configuration error: TELEGRAM_BOT_TOKEN is not set");
   }
 
-  // Generate a correlation ID for this operation
-  const correlationId = `caption_update_${crypto.randomUUID()}`;
+  // --- Request Body Parsing and Validation ---
+  let requestBody: UpdateCaptionBody;
+  try {
+    requestBody = await req.json();
+  } catch (parseError: unknown) {
+    const errorMessage = parseError instanceof Error ? parseError.message : "Invalid JSON body";
+    console.error(`[${correlationId}] Failed to parse request body: ${errorMessage}`);
+    throw new Error(`Invalid request: ${errorMessage}`);
+  }
+
+  const { messageId, newCaption } = requestBody;
+  if (!messageId || newCaption === undefined || newCaption === null) { // Allow empty string caption
+    console.error(`[${correlationId}] Missing required fields messageId or newCaption`);
+    throw new Error("Invalid request: messageId and newCaption are required.");
+  }
+
+  await logProcessingEvent('caption_update_started', messageId, correlationId, { newCaptionLength: newCaption.length });
+  console.log(`[${correlationId}] Updating caption for DB message ${messageId}. New caption length: ${newCaption.length}`);
 
   try {
-    const { messageId, newCaption, updateMediaGroup = true } = await req.json();
-    console.log(`[${correlationId}] Updating caption for message:`, messageId, 'New caption:', newCaption, 'Update media group:', updateMediaGroup);
-
-    // Get environment variables
-    const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN');
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-
-    if (!TELEGRAM_BOT_TOKEN || !supabaseUrl || !supabaseKey) {
-      throw new Error('Missing required environment variables');
-    }
-
-    const supabase = createClient(supabaseUrl, supabaseKey);
-
-    // Log operation start
-    await supabase
-      .from('unified_audit_logs')
-      .insert({
-        event_type: 'caption_updated',
-        entity_id: messageId,
-        metadata: {
-          operation: 'update_started',
-          update_media_group: updateMediaGroup
-        },
-        correlation_id: correlationId
-      });
-
-    // Get message details from database
-    const { data: message, error: messageError } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('id', messageId)
+    // --- Fetch Message Details ---
+    const { data: message, error: messageError } = await supabaseClient
+      .from("messages")
+      .select("id, caption, chat_id, telegram_message_id, media_group_id, telegram_data, storage_path, public_url") // Select all needed fields
+      .eq("id", messageId)
       .single();
 
-    if (messageError || !message) {
-      await logError(supabase, messageId, 'Message not found', correlationId);
-      throw new Error('Message not found');
+    if (messageError) {
+      console.error(`[${correlationId}] Error fetching message ${messageId}:`, messageError);
+      await logProcessingEvent('caption_update_failed', messageId, correlationId, { stage: 'fetch_message' }, messageError.message);
+      throw new Error(`Database error fetching message: ${messageError.message}`);
+    }
+    if (!message) {
+        console.error(`[${correlationId}] Message ${messageId} not found.`);
+        await logProcessingEvent('caption_update_failed', messageId, correlationId, { stage: 'fetch_message' }, 'Message not found');
+        throw new Error(`Message not found: ${messageId}`);
+    }
+    if (!message.chat_id || !message.telegram_message_id) {
+        console.error(`[${correlationId}] Message ${messageId} is missing chat_id or telegram_message_id.`);
+        await logProcessingEvent('caption_update_failed', messageId, correlationId, { stage: 'fetch_message' }, 'Missing chat_id or telegram_message_id');
+        throw new Error(`Data integrity error: Message ${messageId} missing key Telegram identifiers.`);
     }
 
-    // Check if the caption is actually different
-    const currentCaption = message.caption || '';
+    // --- Check if Caption Changed ---
+    const currentCaption = message.caption || "";
     if (currentCaption === newCaption) {
-      console.log(`[${correlationId}] Caption unchanged, skipping update`);
-      return new Response(
-        JSON.stringify({ success: true, message: 'Caption unchanged' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      console.log(`[${correlationId}] Caption for message ${messageId} is unchanged. Skipping update.`);
+      await logProcessingEvent('caption_update_skipped', messageId, correlationId, { reason: 'unchanged' });
+      return createSuccessResponse({ success: true, message: "Caption unchanged" }, correlationId);
     }
 
-    // Update caption in Telegram
-    const telegramResponse = await fetch(
-      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/editMessageCaption`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          chat_id: message.chat_id,
-          message_id: message.telegram_message_id,
-          caption: newCaption,
-        }),
-      }
-    );
-
-    const telegramResult = await telegramResponse.json();
-    console.log(`[${correlationId}] Telegram API response:`, telegramResult);
-
-    if (!telegramResponse.ok) {
-      // Check if it's just a "message not modified" error
-      if (telegramResult.description?.includes('message is not modified')) {
-        console.log(`[${correlationId}] Message not modified, proceeding with database update`);
-      } else {
-        await logError(supabase, messageId, `Telegram API error: ${JSON.stringify(telegramResult)}`, correlationId);
-        throw new Error(`Telegram API error: ${JSON.stringify(telegramResult)}`);
-      }
-    }
-
-    // Update telegram_data with new caption
-    const updatedTelegramData = {
-      ...message.telegram_data,
-      message: {
-        ...(message.telegram_data?.message || {}),
-        caption: newCaption
-      }
-    };
-
-    // Archive previous analyzed content
-    const oldAnalyzedContent = message.analyzed_content;
-
-<<<<<<< HEAD
-    // Properly handle edit history as a JSONB field
-    let newEditHistory;
-    const newEditEntry = {
-      edited_at: new Date().toISOString(),
-      previous_caption: message.caption,
-      previous_analyzed_content: oldAnalyzedContent,
-      correlation_id: correlationId,
-      source: 'caption_update_edge_function'
-    };
-
-    if (message.edit_history && Array.isArray(message.edit_history)) {
-      // If edit_history already exists and is an array, add to it
-      newEditHistory = [newEditEntry, ...message.edit_history];
-    } else {
-      // Otherwise create a new array with just this entry
-      newEditHistory = [newEditEntry];
-    }
-
-=======
->>>>>>> 35f58cbf (refactor: improve type safety and error handling in media operations)
-    // Update caption in database
-    const { error: updateError } = await supabase
-      .from('messages')
-      .update({
-        caption: newCaption,
-        telegram_data: updatedTelegramData,
-        updated_at: new Date().toISOString(),
-
-        // Archive old analyzed content
-        old_analyzed_content: oldAnalyzedContent,
-
-        // Reset processing state to trigger reanalysis
-        processing_state: 'initialized',
-
-<<<<<<< HEAD
-        // Add edit history as a proper JSONB
-        edit_history: newEditHistory,
-=======
-        // Add edit history
-        edit_history: [
-          {
-            edited_at: new Date().toISOString(),
-            previous_caption: message.caption,
-            previous_analyzed_content: oldAnalyzedContent,
-            correlation_id: correlationId,
-            source: 'caption_update_edge_function'
-          },
-          ...(message.edit_history || [])
-        ],
->>>>>>> 35f58cbf (refactor: improve type safety and error handling in media operations)
-
-        // Set edit metadata
-        is_edit: true,
-        edit_count: (message.edit_count || 0) + 1,
-        last_edited_at: new Date().toISOString(),
-
-        // Preserve existing storage path and public URL to prevent deletion
-        storage_path: message.storage_path,
-        public_url: message.public_url
-      })
-      .eq('id', messageId);
-
-    if (updateError) {
-      await logError(supabase, messageId, `Database update error: ${updateError.message}`, correlationId);
-      throw updateError;
-    }
-
-    // Log successful individual message update
-    await supabase
-      .from('unified_audit_logs')
-      .insert({
-        event_type: 'caption_updated',
-        entity_id: messageId,
-        metadata: {
-          operation: 'message_updated',
-          old_caption: message.caption,
-          new_caption: newCaption,
-        },
-        correlation_id: correlationId
-      });
-
-    // Media group handling
-    let mediaGroupResults = [];
-
-    if (updateMediaGroup && message.media_group_id) {
-      console.log(`[${correlationId}] Handling media group updates for group: ${message.media_group_id}`);
-
-      // Get all related messages in the media group
-      const { data: groupMessages, error: groupError } = await supabase
-        .from('messages')
-        .select('*')
-        .eq('media_group_id', message.media_group_id)
-        .neq('id', messageId); // Exclude the current message
-
-      if (groupError) {
-        await logError(supabase, messageId, `Error fetching media group: ${groupError.message}`, correlationId, { media_group_id: message.media_group_id });
-        console.error(`[${correlationId}] Error fetching media group:`, groupError);
-      } else if (groupMessages && groupMessages.length > 0) {
-        console.log(`[${correlationId}] Found ${groupMessages.length} related messages in media group`);
-
-        // Process in smaller batches to improve reliability
-        for (let i = 0; i < groupMessages.length; i += MAX_BATCH_SIZE) {
-          // Get the current batch
-          const batch = groupMessages.slice(i, i + MAX_BATCH_SIZE);
-          console.log(`[${correlationId}] Processing batch ${Math.floor(i / MAX_BATCH_SIZE) + 1}/${Math.ceil(groupMessages.length / MAX_BATCH_SIZE)}`);
-
-          // Process each batch with a small delay between items
-          const batchResults = await Promise.all(
-            batch.map(async (groupMsg, index) => {
-              try {
-                // Add a small delay between API calls to avoid rate limiting
-                if (index > 0) {
-                  await new Promise(resolve => setTimeout(resolve, 100));
-                }
-
-                console.log(`[${correlationId}] Updating media group message: ${groupMsg.id}`);
-
-                // First update in database to ensure consistency
-                // Archive previous analyzed content for this group message
-                const oldGroupAnalyzedContent = groupMsg.analyzed_content;
-
-                // Create telegram data update with the new caption
-                const updatedGroupTelegramData = {
-                  ...groupMsg.telegram_data,
-                  message: {
-                    ...groupMsg.telegram_data?.message,
-                    caption: newCaption
-                  }
-                };
-
-<<<<<<< HEAD
-                // Properly handle edit history for group message
-                let groupMsgEditHistory;
-                const groupEditEntry = {
-                  edited_at: new Date().toISOString(),
-                  previous_caption: groupMsg.caption,
-                  previous_analyzed_content: oldGroupAnalyzedContent,
-                  correlation_id: correlationId,
-                  source: 'media_group_caption_sync'
-                };
-
-                if (groupMsg.edit_history && Array.isArray(groupMsg.edit_history)) {
-                  // If edit_history already exists and is an array, add to it
-                  groupMsgEditHistory = [groupEditEntry, ...groupMsg.edit_history];
-                } else {
-                  // Otherwise create a new array with just this entry
-                  groupMsgEditHistory = [groupEditEntry];
-                }
-
-=======
->>>>>>> 35f58cbf (refactor: improve type safety and error handling in media operations)
-                // Update group message in database first
-                const { error: groupUpdateError } = await supabase
-                  .from('messages')
-                  .update({
-                    caption: newCaption,
-                    telegram_data: updatedGroupTelegramData,
-                    updated_at: new Date().toISOString(),
-
-                    // Archive old analyzed content
-                    old_analyzed_content: oldGroupAnalyzedContent,
-
-                    // Reset processing state to trigger reanalysis
-                    processing_state: 'initialized',
-
-<<<<<<< HEAD
-                    // Add edit history as a proper JSONB
-                    edit_history: groupMsgEditHistory,
-=======
-                    // Add edit history
-                    edit_history: [
-                      {
-                        edited_at: new Date().toISOString(),
-                        previous_caption: groupMsg.caption,
-                        previous_analyzed_content: oldGroupAnalyzedContent,
-                        correlation_id: correlationId,
-                        source: 'media_group_caption_sync'
-                      },
-                      ...(groupMsg.edit_history || [])
-                    ],
->>>>>>> 35f58cbf (refactor: improve type safety and error handling in media operations)
-
-                    // Set edit metadata
-                    is_edit: true,
-                    edit_count: (groupMsg.edit_count || 0) + 1,
-                    last_edited_at: new Date().toISOString(),
-                  })
-                  .eq('id', groupMsg.id);
-
-                // Now try updating in Telegram
-                let telegramSuccess = false;
-                let telegramResult = null;
-
-                try {
-                  // Update caption in Telegram
-                  const groupResponse = await fetch(
-                    `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/editMessageCaption`,
-                    {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        chat_id: groupMsg.chat_id,
-                        message_id: groupMsg.telegram_message_id,
-                        caption: newCaption,
-                      }),
-                    }
-                  );
-
-                  telegramResult = await groupResponse.json();
-                  telegramSuccess = groupResponse.ok || telegramResult.description?.includes('message is not modified');
-
-                  // If we have a "message not modified" error, that's actually a success for our purposes
-                  if (!groupResponse.ok && telegramResult.description?.includes('message is not modified')) {
-                    console.log(`[${correlationId}] Media group message ${groupMsg.id} reported as not modified in Telegram, treating as success`);
-                  }
-                } catch (telegramError) {
-                  console.error(`[${correlationId}] Telegram API error for group message ${groupMsg.id}:`, telegramError);
-                }
-
-                // Log the result
-                await supabase
-                  .from('unified_audit_logs')
-                  .insert({
-                    event_type: 'media_group_caption_updated',
-                    entity_id: groupMsg.id,
-                    metadata: {
-                      media_group_id: groupMsg.media_group_id,
-                      telegram_success: telegramSuccess,
-                      database_success: !groupUpdateError,
-                      old_caption: groupMsg.caption,
-                      new_caption: newCaption
-                    },
-                    correlation_id: correlationId,
-                    error_message: (!telegramSuccess || groupUpdateError)
-                      ? `Errors: ${!telegramSuccess ? JSON.stringify(telegramResult) : ''} ${groupUpdateError ? groupUpdateError.message : ''}`
-                      : null
-                  });
-
-                return {
-                  id: groupMsg.id,
-                  telegram_message_id: groupMsg.telegram_message_id,
-                  telegram_success: telegramSuccess,
-                  telegram_result: telegramResult,
-                  database_success: !groupUpdateError,
-                  database_error: groupUpdateError ? groupUpdateError.message : null
-                };
-              } catch (error) {
-                console.error(`[${correlationId}] Error processing group message ${groupMsg.id}:`, error);
-
-                // Log the error
-                await supabase
-                  .from('unified_audit_logs')
-                  .insert({
-                    event_type: 'media_group_caption_update_failed',
-                    entity_id: groupMsg.id,
-                    metadata: {
-                      media_group_id: groupMsg.media_group_id,
-                      error: error.message
-                    },
-                    correlation_id: correlationId,
-                    error_message: error.message
-                  });
-
-                return {
-                  id: groupMsg.id,
-                  error: error.message
-                };
-              }
-            })
-          );
-
-          // Add batch results to overall results
-          mediaGroupResults = [...mediaGroupResults, ...batchResults];
-
-          // Add a delay between batches
-          if (i + MAX_BATCH_SIZE < groupMessages.length) {
-            console.log(`[${correlationId}] Waiting between batches...`);
-            await new Promise(resolve => setTimeout(resolve, 1000));
-          }
+    // --- Update Caption via Telegram API ---
+    let telegramUpdateOk = false;
+    try {
+      console.log(`[${correlationId}] Calling Telegram API to update caption for message ${message.telegram_message_id}`);
+      const telegramResponse = await fetch(
+        `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/editMessageCaption`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: message.chat_id,
+            message_id: message.telegram_message_id,
+            caption: newCaption,
+          }),
         }
+      );
+
+      const telegramResult = await telegramResponse.json();
+      console.log(`[${correlationId}] Telegram API response for message ${message.telegram_message_id}:`, telegramResult);
+
+      if (telegramResponse.ok) {
+        telegramUpdateOk = true;
+        await logProcessingEvent('caption_update_telegram_success', messageId, correlationId, { telegram_message_id: message.telegram_message_id });
+      } else if (telegramResult.description?.includes("message is not modified")) {
+        // Treat "not modified" as success for our purpose, as DB needs update anyway
+        console.warn(`[${correlationId}] Telegram reported caption not modified for message ${message.telegram_message_id}, proceeding with DB update.`);
+        telegramUpdateOk = true; // Allow DB update
+        await logProcessingEvent('caption_update_telegram_skipped', messageId, correlationId, { telegram_message_id: message.telegram_message_id, reason: 'not modified' });
+      } else {
+        const errorMsg = `Telegram API error: ${telegramResult.description || JSON.stringify(telegramResult)}`;
+        console.error(`[${correlationId}] ${errorMsg}`);
+        await logProcessingEvent('caption_update_failed', messageId, correlationId, { stage: 'telegram_api', telegram_result: telegramResult }, errorMsg);
+        throw new Error(errorMsg);
       }
+    } catch (apiError: unknown) {
+        const errorMessage = apiError instanceof Error ? apiError.message : "Telegram API request failed";
+        // Avoid double logging if already logged
+        if (!errorMessage.startsWith('Telegram API error')) {
+            console.error(`[${correlationId}] Exception calling Telegram API: ${errorMessage}`);
+            await logProcessingEvent('caption_update_failed', messageId, correlationId, { stage: 'telegram_api_exception' }, errorMessage);
+        }
+        throw new Error(`Telegram API error: ${errorMessage}`);
     }
 
-    // Trigger reanalysis with new caption
-    await supabase.functions.invoke('parse-caption-with-ai', {
-      body: {
-        message_id: messageId,
-        media_group_id: message.media_group_id,
-        caption: newCaption,
-        correlation_id: correlationId
+    // --- Update Database ---
+    if (telegramUpdateOk) { // Only update DB if Telegram call was OK or "not modified"
+      try {
+        // Update telegram_data cautiously
+        const updatedTelegramData = message.telegram_data ? { ...message.telegram_data } : {};
+        // Ensure nested structure exists before assigning
+        if (updatedTelegramData.message) {
+            updatedTelegramData.message.caption = newCaption;
+        } else if (updatedTelegramData.channel_post) {
+             updatedTelegramData.channel_post.caption = newCaption;
+        } else {
+            // If neither exists, maybe log a warning or decide structure
+            console.warn(`[${correlationId}] Could not find 'message' or 'channel_post' in telegram_data for message ${messageId} to update caption.`);
+        }
+
+
+        console.log(`[${correlationId}] Updating database record for message ${messageId}`);
+        const { error: updateError } = await supabaseClient
+          .from("messages")
+          .update({
+            caption: newCaption,
+            telegram_data: updatedTelegramData, // Store updated raw data
+            updated_at: new Date().toISOString(),
+            processing_state: 'pending', // Set state to pending for re-analysis
+            // Preserve existing storage path and public URL if they exist
+            storage_path: message.storage_path,
+            public_url: message.public_url,
+          })
+          .eq("id", messageId);
+
+        if (updateError) {
+          console.error(`[${correlationId}] Error updating database for message ${messageId}:`, updateError);
+          await logProcessingEvent('caption_update_failed', messageId, correlationId, { stage: 'db_update' }, updateError.message);
+          throw new Error(`Database update error: ${updateError.message}`);
+        }
+        await logProcessingEvent('caption_update_db_success', messageId, correlationId);
+
+        // --- Trigger Re-analysis ---
+        // No need to await this, let it run in the background
+        console.log(`[${correlationId}] Invoking parse-caption function for message ${messageId}`);
+        supabaseClient.functions.invoke("parse-caption", {
+          body: {
+            messageId: messageId, // Pass DB ID
+            media_group_id: message.media_group_id,
+            caption: newCaption, // Pass the new caption
+            isEdit: true, // Indicate this is an edit context
+            correlationId: correlationId, // Pass correlation ID
+          },
+        }).then(({ error: invokeError }: { error: any }) => { // Add type annotation for invokeError
+            if (invokeError) {
+                const errorMessage = invokeError instanceof Error ? invokeError.message : String(invokeError);
+                console.error(`[${correlationId}] Error invoking parse-caption for message ${messageId}:`, errorMessage);
+                // Log this failure, but don't fail the main request
+                logProcessingEvent('caption_reparse_invoke_failed', messageId, correlationId, {}, errorMessage);
+            } else {
+                 console.log(`[${correlationId}] Successfully invoked parse-caption for message ${messageId}`);
+                 logProcessingEvent('caption_reparse_invoked', messageId, correlationId);
+            }
+        });
+
+      } catch (dbUpdateError: unknown) {
+          const errorMessage = dbUpdateError instanceof Error ? dbUpdateError.message : "DB update failed";
+          if (!errorMessage.startsWith('Database update error')) {
+             console.error(`[${correlationId}] Exception updating database for message ${messageId}: ${errorMessage}`);
+             await logProcessingEvent('caption_update_failed', messageId, correlationId, { stage: 'db_update_exception' }, errorMessage);
+          }
+          throw new Error(`Database update error: ${errorMessage}`);
       }
-    });
+    } else {
+         // Should not happen if logic above is correct, but as a safeguard
+         console.error(`[${correlationId}] Database update skipped because Telegram update failed for message ${messageId}.`);
+         // Throw error because the primary action (Telegram update) failed critically
+         throw new Error(`Caption update failed: Telegram API error prevented database update.`);
+    }
 
-    // Log successful completion
-    await supabase
-      .from('unified_audit_logs')
-      .insert({
-        event_type: 'caption_updated',
-        entity_id: messageId,
-        metadata: {
-          operation: 'update_completed',
-          update_media_group: updateMediaGroup,
-          media_group_id: message.media_group_id,
-          media_group_results: mediaGroupResults.length
-        },
-        correlation_id: correlationId
-      });
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        message_id: messageId,
-        media_group_id: message.media_group_id,
-        media_group_updated: updateMediaGroup && !!message.media_group_id,
-        media_group_results: mediaGroupResults,
-        correlation_id: correlationId
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    // --- Success Response ---
+    console.log(`[${correlationId}] Caption update process completed successfully for message ${messageId}.`);
+    return createSuccessResponse({ success: true, message: "Caption updated and re-analysis triggered" }, correlationId);
 
-  } catch (error) {
-    console.error(`[${correlationId}] Error updating caption:`, error);
-    return new Response(
-      JSON.stringify({
-        error: error.message,
-        correlation_id: correlationId
-      }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      }
-    );
-  }
-});
-
-// Helper function to log errors
-async function logError(supabase, entityId, errorMessage, correlationId, additionalMetadata = {}) {
-  try {
-    await supabase
-      .from('unified_audit_logs')
-      .insert({
-<<<<<<< HEAD
-        event_type: 'caption_update_failed',
-        entity_id: entityId,
-        metadata: {
-          error: errorMessage,
-=======
-        event_type: 'caption_updated',
-        entity_id: entityId,
-        metadata: {
-          operation: 'update_error',
->>>>>>> 35f58cbf (refactor: improve type safety and error handling in media operations)
-          ...additionalMetadata
-        },
-        correlation_id: correlationId,
-        error_message: errorMessage
-      });
-  } catch (logError) {
-<<<<<<< HEAD
-    console.error(`[${correlationId}] Error logging error:`, logError);
-=======
-    console.error(`[${correlationId}] Error logging to audit logs:`, logError);
->>>>>>> 35f58cbf (refactor: improve type safety and error handling in media operations)
+  } catch (error: unknown) {
+    // Catch errors thrown from steps above
+    const errorMessage = error instanceof Error ? error.message : "Unknown error updating caption";
+    // Avoid double logging if already logged
+    if (!errorMessage.includes('error:')) {
+        console.error(`[${correlationId}] Top-level error updating caption for message ${messageId}: ${errorMessage}`);
+        // Optionally log here if needed
+        // await logProcessingEvent('caption_update_failed', messageId || 'unknown', correlationId, { stage: 'top_level' }, errorMessage);
+    }
+    throw error; // Re-throw for unifiedHandler
   }
 }
+
+// Create and configure the handler
+const handler = createHandler(handleUpdateCaption)
+  .withMethods(['POST'])
+  .withSecurity(SecurityLevel.AUTHENTICATED) // Updating requires authentication
+  .build();
+
+// Serve the handler
+serve(handler);
+
+console.log("update-telegram-caption function deployed and listening.");

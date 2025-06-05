@@ -1,22 +1,23 @@
 
 import { useMemo } from 'react';
+import { Message } from '@/types';
 import { useEnhancedMessages } from '../enhancedMessages';
 import { useMessagesStore } from '../useMessagesStore';
-import { useClientSideFiltering } from './useClientSideFiltering';
 import { useFiltersNormalization } from './useFiltersNormalization';
+import { useClientSideFiltering } from './useClientSideFiltering';
 
 export function useFilteredMessages() {
   const { filters } = useMessagesStore();
   const { normalizeFilters } = useFiltersNormalization();
-
+  
   // Normalize the filters
   const safeFilters = normalizeFilters(filters);
-
+  
   // Fetch messages with the base filters applied via API
-  const {
-    groupedMessages = [],
-    isLoading = false,
-    error = null,
+  const { 
+    groupedMessages = [], 
+    isLoading = false, 
+    error = null, 
     refetch,
     isRefetching = false
   } = useEnhancedMessages({
@@ -27,7 +28,7 @@ export function useFilteredMessages() {
     sortBy: safeFilters.sortField as any,
     sortOrder: safeFilters.sortOrder
   });
-
+  
   // Apply additional client-side filtering
   const { filteredMessages } = useClientSideFiltering(groupedMessages, safeFilters);
 
@@ -36,7 +37,7 @@ export function useFilteredMessages() {
     if (!filteredMessages || !Array.isArray(filteredMessages) || filteredMessages.length === 0) {
       return [];
     }
-
+    
     const startIndex = (safeFilters.page - 1) * safeFilters.itemsPerPage;
     return filteredMessages.slice(startIndex, startIndex + safeFilters.itemsPerPage);
   }, [filteredMessages, safeFilters.page, safeFilters.itemsPerPage]);

@@ -1,5 +1,6 @@
-import { PublicMediaViewer } from "@/components/public-viewer/PublicMediaViewer";
-import type { PublicMediaViewerProps as MediaViewerProps } from "@/components/public-viewer/PublicMediaViewer";
+
+import { PublicMediaViewer } from '@/components/public-viewer/PublicMediaViewer';
+import type { MediaViewerProps } from '@/components/public-viewer/PublicMediaViewer';
 
 export type { MediaViewerProps };
 

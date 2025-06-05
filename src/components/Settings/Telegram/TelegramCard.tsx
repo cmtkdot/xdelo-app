@@ -172,7 +172,7 @@ export function TelegramCard({ botToken, webhookUrl }: TelegramCardProps) {
     
     try {
       const { error } = await supabase
-        .from('telegram_settings')
+        .from('settings')
         .upsert({ 
           id: '1', 
           bot_token: selectedToken,
