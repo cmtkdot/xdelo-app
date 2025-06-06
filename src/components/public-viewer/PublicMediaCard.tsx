@@ -1,74 +1,397 @@
-
-import React from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { Message } from '@/types/entities/Message'
-import { Card, CardContent } from '@/components/ui/card'
-import { format } from 'date-fns'
-import { cn } from '@/lib/utils'
-import { Calendar, ImageIcon, VideoIcon } from 'lucide-react'
+import { Play, Eye, Pencil, Trash } from 'lucide-react'
+import { useVideoThumbnail } from '@/hooks/useVideoThumbnail'
+import { isVideoMessage } from '@/utils/mediaUtils'
+import { ExpandableTabs } from '@/components/ui/expandable-tabs'
+import { MediaEditDialog } from '@/components/MediaEditDialog/MediaEditDialog'
+import { DeleteConfirmationDialog } from '@/components/MessagesTable/TableComponents/DeleteConfirmationDialog'
 
 interface PublicMediaCardProps {
   message: Message
-  onClick: () => void
-  className?: string
+  onClick: (message: Message) => void
 }
 
-export function PublicMediaCard({ message, onClick, className }: PublicMediaCardProps) {
-  // Determine if the message contains a video
-  const isVideo = message.mime_type?.startsWith('video/')
+// Function to format video duration in mm:ss format
+function formatDuration(seconds: number): string {
+  const minutes = Math.floor(seconds / 60)
+  const remainingSeconds = Math.floor(seconds % 60)
+  return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`
+}
+
+// Helper function to get image dimensions, prefixed with _ as currently unused
+function _getImageDimensions(img: HTMLImageElement): Promise<{ width: number; height: number }> {
+  return new Promise((resolve) => {
+    img.onload = () => {
+      resolve({ width: img.width, height: img.height });
+    };
+  });
+}
+
+export function PublicMediaCard({ message, onClick }: PublicMediaCardProps) {
+  // Enhanced video detection - check MIME type, Telegram data, and URL extension
+  const isVideo = isVideoMessage(message) || 
+    (message.public_url && (
+      message.public_url.endsWith('.mp4') || 
+      message.public_url.endsWith('.mov') ||
+      message.public_url.endsWith('.webm') ||
+      message.public_url.endsWith('.avi')
+    ))
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const [isHovering, setIsHovering] = useState(false)
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   
-  // Get the published date
-  const publishedDate = message.created_at 
-    ? format(new Date(message.created_at), 'MMM d, yyyy')
-    : 'Unknown date'
+  // Use the video thumbnail hook to generate thumbnails for videos
+  const { thumbnailUrl, isLoading, generateThumbnail } = useVideoThumbnail(message)
   
-  // Get product name from caption or analyzed content
-  const productName = message.analyzed_content?.product_name || message.caption || 'Unknown product'
+  // Auto-generate thumbnail for videos on component mount with debouncing
+  useEffect(() => {
+    // Skip if not a video or if we already have a thumbnail or are currently generating one
+    if (!isVideo || thumbnailUrl || isLoading) return;
+    
+    // Add a slight delay to avoid too many simultaneous thumbnail generations
+    const timeoutId = setTimeout(() => {
+      generateThumbnail();
+    }, 100 * (Math.floor(Math.random() * 10) + 1)); // Random delay between 100-1000ms
+    
+    return () => clearTimeout(timeoutId);
+  }, [isVideo, message.id, thumbnailUrl, isLoading, generateThumbnail])
   
-  // Get vendor name
-  const vendorName = message.vendor_uid || message.analyzed_content?.vendor_uid || 'Unknown vendor'
+  // Handle video hover playback with better error handling
+  useEffect(() => {
+    if (!videoRef.current || !isVideo) return;
+    
+    if (isHovering) {
+      // Add a small delay to ensure UI updates first
+      const timeoutId = setTimeout(() => {
+        if (videoRef.current) {
+          // Reset to beginning for consistent preview
+          videoRef.current.currentTime = 0;
+          
+          // Try to play with proper error handling
+          try {
+            const playPromise = videoRef.current.play();
+            
+            if (playPromise !== undefined) {
+              playPromise.catch(err => {
+                // Just log the error, the static thumbnail will still be visible
+                console.warn('Video autoplay blocked (this is normal):', err);
+              });
+            }
+          } catch (err) {
+            console.warn('Video playback error:', err);
+          }
+        }
+      }, 50);
+      
+      return () => clearTimeout(timeoutId);
+    } else if (videoRef.current) {
+      // Pause when not hovering
+      videoRef.current.pause();
+    }
+  }, [isHovering, isVideo]);
+
+  const handleClick = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    
+    // Clear visual feedback that the card was clicked
+    const target = e.currentTarget as HTMLElement
+    target.classList.add('ring-2', 'ring-primary')
+    
+    // Call the onClick handler with the message
+    if (onClick) {
+      onClick(message)
+      
+      // Remove visual feedback after a delay
+      setTimeout(() => {
+        target.classList.remove('ring-2', 'ring-primary')
+      }, 300)
+    }
+  }
   
+  // Not currently used but keeping for future implementation
+  const _openTelegramLink = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    e.preventDefault()
+    const chatId = message.chat_id?.toString().replace('-100', '')
+    const messageId = message.telegram_message_id
+    
+    if (chatId && messageId) {
+      window.open(`https://t.me/c/${chatId}/${messageId}`, '_blank')
+    }
+  }
+  
+  const handleTabSelect = (index: number | null) => {
+    if (index === null) return
+    
+    switch (index) {
+      case 0: // View
+        onClick(message)
+        break
+      case 1: // Edit
+        setIsEditDialogOpen(true)
+        break
+      case 2: // Delete
+        setIsDeleteDialogOpen(true)
+        break
+    }
+  }
+  
+  const handleDeleteConfirm = async (_deleteTelegram: boolean) => {
+    // Will be implemented in future
+    setIsDeleteDialogOpen(false)
+  }
+  
+  const tabs = [
+    { title: "View", icon: Eye },
+    { title: "Edit", icon: Pencil },
+    { title: "Delete", icon: Trash }
+  ]
+  
+  // Format date in MM/DD/YYYY format for hover state
+  const compactDate = message.purchase_date 
+    ? new Date(message.purchase_date).toLocaleDateString('en-US', { 
+        month: '2-digit', 
+        day: '2-digit', 
+        year: 'numeric' 
+      })
+    : null
+    
+  // Format date for default state with month name
+  const formattedDate = message.purchase_date 
+    ? new Date(message.purchase_date).toLocaleDateString(undefined, { 
+        month: 'short', 
+        day: 'numeric', 
+        year: 'numeric' 
+      })
+    : null
+
+  // Get color based on vendor UID to create consistent color coding
+  const getVendorColor = (vendorUid: string) => {
+    // Simple hash function to generate a consistent color for the same vendor
+    const hash = vendorUid.split('').reduce((acc, char) => {
+      return char.charCodeAt(0) + ((acc << 5) - acc)
+    }, 0)
+    
+    // List of predefined colors for better visual appearance
+    const colors = [
+      'bg-blue-500/70', 'bg-emerald-500/70', 'bg-amber-500/70',
+      'bg-indigo-500/70', 'bg-pink-500/70', 'bg-teal-500/70',
+      'bg-orange-500/70', 'bg-violet-500/70', 'bg-lime-500/70'
+    ]
+    
+    // Return a consistent color from the predefined list
+    return colors[Math.abs(hash) % colors.length]
+  }
+
+  // Get ring color to match the vendor badge
+  const getVendorRingColor = (vendorUid: string) => {
+    // Similar logic but for the ring color
+    const hash = vendorUid.split('').reduce((acc, char) => {
+      return char.charCodeAt(0) + ((acc << 5) - acc)
+    }, 0)
+    
+    const colors = [
+      'ring-blue-500/20', 'ring-emerald-500/20', 'ring-amber-500/20',
+      'ring-indigo-500/20', 'ring-pink-500/20', 'ring-teal-500/20',
+      'ring-orange-500/20', 'ring-violet-500/20', 'ring-lime-500/20'
+    ]
+    
+    return colors[Math.abs(hash) % colors.length]
+  }
+  
+  const vendorBgColor = message.vendor_uid ? getVendorColor(message.vendor_uid) : 'bg-purple-500/70'
+  const vendorRingColor = message.vendor_uid ? getVendorRingColor(message.vendor_uid) : 'ring-purple-500/20'
+
   return (
-    <Card 
-      className={cn(
-        "overflow-hidden cursor-pointer hover:shadow-md transition-shadow duration-200", 
-        className
-      )}
-      onClick={onClick}
+    <div 
+      className="group relative overflow-hidden rounded-lg bg-background border shadow-sm hover:shadow-lg transition-all duration-300 cursor-pointer hover:scale-[1.02]"
+      onMouseEnter={() => setIsHovering(true)}
+      onMouseLeave={() => setIsHovering(false)}
+      onClick={handleClick}
+      role="button"
+      tabIndex={0}
+      aria-label={`View details for ${message.product_name || 'media item'}`}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          handleClick(e as unknown as React.MouseEvent)
+        }
+      }}
     >
-      <div className="relative aspect-square">
-        {/* Media thumbnail */}
-        <img 
-          src={message.public_url || '/placeholder.svg'} 
-          alt={productName}
-          className="w-full h-full object-cover"
-          onError={(e) => {
-            const target = e.target as HTMLImageElement;
-            target.src = '/placeholder.svg';
-          }}
-        />
-        
-        {/* Media type indicator */}
-        <div className="absolute top-2 right-2 bg-black/60 text-white p-1 rounded-md">
-          {isVideo ? (
-            <VideoIcon className="h-4 w-4" />
-          ) : (
-            <ImageIcon className="h-4 w-4" />
+      {/* Vendor UID Tag (Top Right) */}
+      {message.vendor_uid && (
+        <div className="absolute top-2 right-2 z-10">
+          <span className={`inline-flex items-center rounded-full ${vendorBgColor} backdrop-blur-sm px-2 py-1 text-xs font-medium text-white shadow-sm ring-1 ring-inset ${vendorRingColor}`}>
+            {message.vendor_uid}
+          </span>
+        </div>
+      )}
+
+      {/* Media Type Tag (Top Left) with glassmorphism */}
+      <div className="absolute top-2 left-2 z-10">
+        <div className="bg-black/50 backdrop-blur-sm px-2 py-0.5 rounded text-white/90 text-xs italic font-light">
+          {isVideo ? 'Video' : 'Image'}
+        </div>
+      </div>
+
+      {/* Media content */}
+      <div className="aspect-square overflow-hidden bg-muted/20">
+        {isVideo ? (
+          <div className="relative w-full h-full bg-black">
+            {/* Thumbnail image (shown while not hovering) */}
+            {!isHovering && (
+              <img
+                src={thumbnailUrl || message.public_url}
+                alt={message.product_name || "Video thumbnail"}
+                className="w-full h-full object-cover"
+                loading="lazy"
+                onError={(e) => {
+                  console.warn(`Error loading thumbnail for message: ${message.id}`);
+                  e.currentTarget.onerror = null; // Prevent infinite error loop
+                }}
+              />
+            )}
+            
+            {/* Autoplay video (plays on hover) */}
+            <video
+              ref={videoRef}
+              src={message.public_url}
+              poster={thumbnailUrl || undefined}
+              className={`w-full h-full object-cover ${isHovering ? 'opacity-100' : 'opacity-0 absolute inset-0'}`}
+              playsInline
+              muted
+              loop
+              preload="metadata"
+              onLoadedMetadata={() => {
+                // Once metadata is loaded, generate a thumbnail if we don't have one
+                if (!thumbnailUrl && !isLoading) {
+                  generateThumbnail();
+                }
+              }}
+              onError={() => {
+                console.warn(`Video playback error for message: ${message.id}`);
+                // Show the thumbnail with a play icon instead
+                setIsHovering(false);
+              }}
+            />
+            
+            {/* Video Play Overlay - only show when not hovering */}
+            {!isHovering && (
+              <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-t from-black/60 to-transparent pointer-events-none">
+                <div className="rounded-full bg-black/40 p-3 backdrop-blur-sm border border-white/20 transform group-hover:scale-110 transition-transform duration-300 shadow-xl">
+                  <Play className="h-8 w-8 text-white" fill="white" />
+                </div>
+              </div>
+            )}
+            
+
+            
+            {/* Duration badge if available */}
+            {message.duration && (
+              <div className="absolute bottom-2 right-2 bg-black/60 text-white text-xs px-1.5 py-0.5 rounded backdrop-blur-sm">
+                {formatDuration(message.duration)}
+              </div>
+            )}
+          </div>
+        ) : (
+          <img
+            src={message.public_url}
+            alt={message.product_name || "Image"}
+            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+            loading="lazy"
+            onError={(e) => {
+              console.warn(`Error loading image for message: ${message.id}`);
+              e.currentTarget.onerror = null; // Prevent infinite error loop
+            }}
+          />
+        )}
+      </div>
+      
+      {/* Default State: Product Name and Date */}
+      <div className="absolute inset-x-0 bottom-0 p-2 bg-black/60 backdrop-blur-sm">
+        <div className="flex justify-between items-center">
+          <div className="flex-1">
+            {message.product_name && (
+              <div className="text-white text-sm font-medium line-clamp-1">
+                {message.product_name}
+              </div>
+            )}
+          </div>
+          
+          {formattedDate && (
+            <div className="text-white/80 text-xs ml-2">
+              {formattedDate}
+            </div>
           )}
         </div>
       </div>
       
-      <CardContent className="p-3">
-        <h3 className="font-medium line-clamp-1 mb-1">{productName}</h3>
-        
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span className="line-clamp-1 mr-2">{vendorName}</span>
+      {/* Hover State: Bottom Bar (only visible on hover) */}
+      <div className="absolute inset-x-0 bottom-0 p-3 bg-black/70 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20">
+        <div className="flex items-center gap-2">
+          {/* Product Name */}
+          <div className="flex-1">
+            {message.product_name && (
+              <span className="text-white text-sm font-medium line-clamp-1">
+                {message.product_name}
+              </span>
+            )}
+          </div>
           
-          <div className="flex items-center">
-            <Calendar className="h-3 w-3 mr-1" />
-            <span>{publishedDate}</span>
+          {/* Date and Quantity in right column */}
+          <div className="flex flex-col items-end">
+            {compactDate && (
+              <span className="text-white/80 text-xs">
+                {compactDate}
+              </span>
+            )}
+            {message.product_quantity && (
+              <span className="text-white/90 text-xs whitespace-nowrap">
+                Qty: {message.product_quantity}
+              </span>
+            )}
           </div>
         </div>
-      </CardContent>
-    </Card>
+        
+        {/* Product code pill using vendor color scheme */}
+        {message.product_code && (
+          <div className="mt-2">
+            <span className={`inline-flex items-center rounded-md ${vendorBgColor} px-1.5 py-0.5 text-xs font-medium text-white shadow-sm ring-1 ring-inset ${vendorRingColor}`}>
+              PO#{message.product_code}
+            </span>
+          </div>
+        )}
+      </div>
+      
+      {/* Centered Tabs - Only visible on hover */}
+      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-30">
+        <div className="pointer-events-auto">
+          <ExpandableTabs 
+            tabs={tabs} 
+            activeColor="text-white"
+            className="border-white/20 bg-black/80 backdrop-blur-md shadow-lg p-0.5 scale-[0.85] border-[1.5px]"
+            onChange={handleTabSelect}
+          />
+        </div>
+      </div>
+      
+      {/* Modals/Dialogs */}
+      <MediaEditDialog
+        media={{ id: message.id, caption: message.caption, media_group_id: message.media_group_id }}
+        open={isEditDialogOpen}
+        onOpenChange={setIsEditDialogOpen}
+        onSuccess={() => setIsEditDialogOpen(false)}
+      />
+      
+      <DeleteConfirmationDialog
+        isOpen={isDeleteDialogOpen}
+        onOpenChange={setIsDeleteDialogOpen}
+        messageToDelete={message}
+        onConfirm={handleDeleteConfirm}
+        isProcessing={false}
+      />
+    </div>
   )
 }

@@ -1,263 +1,287 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import {
-  createHandler,
-  createSuccessResponse,
-  RequestMetadata,
-  SecurityLevel,
-} from "../_shared/unifiedHandler.ts";
-import { supabaseClient } from "../_shared/supabase.ts"; // Import singleton client
-import { logProcessingEvent } from "../_shared/auditLogger.ts"; // Import from dedicated module
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
+import { corsHeaders } from "../_shared/cors.ts";
 
-// Define expected request body structure (optional but good practice)
-interface DeleteRequestBody {
-  message_id: number;
-  chat_id: number;
-  media_group_id?: string;
-}
-
-// Core logic for deleting a Telegram message
-async function handleDeleteTelegramMessage(req: Request, metadata: RequestMetadata): Promise<Response> {
-  const { correlationId } = metadata;
-  console.log(`[${correlationId}] Processing delete-telegram-message request`);
-
-  // --- Environment Variable Check ---
-  const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN");
-  if (!TELEGRAM_BOT_TOKEN) {
-    console.error(`[${correlationId}] TELEGRAM_BOT_TOKEN is not configured`);
-    // Throwing here will be caught by createHandler and logged
-    throw new Error("Configuration error: TELEGRAM_BOT_TOKEN is not set");
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
   }
 
-  // --- Request Body Parsing and Validation ---
-  let requestBody: DeleteRequestBody;
+  // Generate a correlation ID for this deletion operation
+  const correlationId = `telegram_delete_${crypto.randomUUID()}`;
+  
   try {
-    requestBody = await req.json();
-  } catch (parseError: unknown) {
-    const errorMessage = parseError instanceof Error ? parseError.message : "Invalid JSON body";
-    console.error(`[${correlationId}] Failed to parse request body: ${errorMessage}`);
-    throw new Error(`Invalid request: ${errorMessage}`); // Let createHandler format this
-  }
+    const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN");
+    if (!TELEGRAM_BOT_TOKEN) {
+      throw new Error("TELEGRAM_BOT_TOKEN is not configured");
+    }
 
-  const { message_id, chat_id, media_group_id } = requestBody;
+    const { message_id, chat_id, media_group_id } = await req.json();
+    console.log("Deleting message:", { message_id, chat_id, media_group_id, correlation_id: correlationId });
 
-  if (!message_id || !chat_id) {
-    console.error(`[${correlationId}] Missing required fields message_id or chat_id`);
-    throw new Error("Invalid request: message_id and chat_id are required.");
-  }
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!supabaseUrl || !supabaseKey) {
+      throw new Error("Supabase credentials not configured");
+    }
 
-  console.log(`[${correlationId}] Deleting message:`, { message_id, chat_id, media_group_id });
-
-  // --- Database Interaction: Find Message ID ---
-  let messageId: string; // Database UUID
-  try {
-    const { data: messageData, error: messageError } = await supabaseClient
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    
+    // Find the message in the database to get its ID
+    const { data: messageData, error: messageError } = await supabase
       .from('messages')
       .select('id')
       .eq('telegram_message_id', message_id)
       .eq('chat_id', chat_id)
       .single();
-
-    if (messageError || !messageData) {
-      const dbErrorMsg = messageError?.message || "Message not found in database";
-      console.error(`[${correlationId}] Error finding message in DB: ${dbErrorMsg}`);
-      await logProcessingEvent(
-        'message_deletion_failed',
-        message_id.toString(), // entityId (use telegram_message_id if DB id unknown)
-        correlationId,
-        { entityType: 'message', telegram_message_id: message_id, chat_id, media_group_id, stage: 'find_message_db' }, // metadata
-        dbErrorMsg // errorMessage
-      );
-      // Throw error to be handled by createHandler
-      throw new Error(`Database error: ${dbErrorMsg}`);
+      
+    if (messageError) {
+      // Use unified audit logs for logging errors
+      await supabase
+        .from('unified_audit_logs')
+        .insert({
+          event_type: 'message_deleted',
+          entity_id: 'unknown',
+          metadata: { 
+            telegram_message_id: message_id,
+            chat_id: chat_id, 
+            media_group_id,
+            error: messageError.message, 
+            stage: 'find_message'
+          },
+          correlation_id: correlationId,
+          error_message: messageError.message
+        });
+      throw messageError;
     }
-    messageId = messageData.id;
-  } catch (dbError: unknown) {
-    // Catch potential errors from the DB call itself (network etc.)
-     const errorMessage = dbError instanceof Error ? dbError.message : "Database lookup failed";
-     console.error(`[${correlationId}] Exception during DB lookup: ${errorMessage}`);
-     await logProcessingEvent(
-        'message_deletion_failed',
-        message_id.toString(),
-        correlationId,
-        { entityType: 'message', telegram_message_id: message_id, chat_id, media_group_id, stage: 'find_message_db_exception' }, // metadata
-        errorMessage // errorMessage
-      );
-     throw new Error(`Database error: ${errorMessage}`);
-  }
+    
+    const messageId = messageData.id;
+    
+    // Log the start of the deletion process
+    await supabase
+      .from('unified_audit_logs')
+      .insert({
+        event_type: 'message_deleted',
+        entity_id: messageId,
+        metadata: { 
+          telegram_message_id: message_id,
+          chat_id: chat_id,
+          media_group_id, 
+          operation: 'deletion_started'
+        },
+        correlation_id: correlationId
+      });
 
-
-  await logProcessingEvent(
-    'message_deletion_started',
-    messageId,
-    correlationId,
-    { entityType: 'message', telegram_message_id: message_id, chat_id, media_group_id } // metadata
-    // No error message here
-  );
-
-  // --- Telegram API Call: Delete Main Message ---
-  const deleteUrl = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/deleteMessage`;
-  let telegramResult: any;
-  try {
+    // Delete message from Telegram
+    const deleteUrl = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/deleteMessage`;
     const response = await fetch(deleteUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chat_id, message_id: message_id }),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        chat_id: chat_id,
+        message_id: message_id,
+      }),
     });
-    telegramResult = await response.json();
-    console.log(`[${correlationId}] Telegram deletion result for main message:`, telegramResult);
 
-    if (!telegramResult.ok) {
-      const errorMsg = `Failed to delete Telegram message ${message_id}: ${telegramResult.description || 'Unknown Telegram error'}`;
-      console.error(`[${correlationId}] ${errorMsg}`);
-      await logProcessingEvent(
-        'message_deletion_failed',
-        messageId,
-        correlationId,
-        { entityType: 'message', telegram_message_id: message_id, chat_id, media_group_id, telegram_result: telegramResult, stage: 'telegram_api_call' }, // metadata
-        errorMsg // errorMessage
-      );
-      // Throw error - Telegram deletion failed
+    const result = await response.json();
+    console.log("Telegram deletion result:", result);
+
+    if (!result.ok) {
+      const errorMsg = `Failed to delete Telegram message: ${result.description}`;
+      await supabase
+        .from('unified_audit_logs')
+        .insert({
+          event_type: 'message_deleted',
+          entity_id: messageId,
+          metadata: { 
+            telegram_message_id: message_id,
+            chat_id: chat_id,
+            media_group_id, 
+            telegram_result: result,
+            operation: 'deletion_failed',
+            stage: 'telegram_api_call'
+          },
+          correlation_id: correlationId,
+          error_message: errorMsg
+        });
       throw new Error(errorMsg);
     }
-  } catch (fetchError: unknown) {
-     const errorMessage = fetchError instanceof Error ? fetchError.message : "Telegram API request failed";
-     console.error(`[${correlationId}] Exception during Telegram API call: ${errorMessage}`);
-     await logProcessingEvent(
-        'message_deletion_failed',
-        messageId,
-        correlationId,
-        { entityType: 'message', telegram_message_id: message_id, chat_id, media_group_id, stage: 'telegram_api_exception' }, // metadata
-        errorMessage // errorMessage
-      );
-     throw new Error(`Telegram API error: ${errorMessage}`);
-  }
+    
+    // Log successful deletion from Telegram
+    await supabase
+      .from('unified_audit_logs')
+      .insert({
+        event_type: 'message_deleted',
+        entity_id: messageId,
+        metadata: { 
+          telegram_message_id: message_id,
+          chat_id: chat_id,
+          media_group_id, 
+          telegram_result: result,
+          operation: 'deletion_successful'
+        },
+        correlation_id: correlationId
+      });
 
-
-  await logProcessingEvent(
-    'message_deletion_successful',
-    messageId,
-    correlationId,
-    { entityType: 'message', telegram_message_id: message_id, chat_id, media_group_id, telegram_result: telegramResult } // metadata
-    // No error message here
-  );
-
-  // --- Media Group Deletion Logic ---
-  if (media_group_id) {
-    console.log(`[${correlationId}] Handling media group deletion for group: ${media_group_id}`);
-    await logProcessingEvent(
-      'media_group_deletion_started',
-      media_group_id, // entityId
-      correlationId,
-      { entityType: 'media_group', parent_telegram_message_id: message_id, parent_chat_id: chat_id } // metadata
-      // No error message here
-    );
-
-    let relatedMessages: { id: string; telegram_message_id: number; chat_id: number }[] = [];
-    try {
-      const { data, error: fetchError } = await supabaseClient
+    // If it's part of a media group, delete all related messages
+    if (media_group_id) {
+      // Log the start of media group deletion
+      await supabase
+        .from('unified_audit_logs')
+        .insert({
+          event_type: 'media_group_deleted',
+          entity_id: messageId,
+          metadata: { 
+            telegram_message_id: message_id,
+            chat_id: chat_id,
+            media_group_id, 
+            operation: 'media_group_deletion_started'
+          },
+          correlation_id: correlationId
+        });
+      
+      const { data: relatedMessages, error: fetchError } = await supabase
         .from('messages')
         .select('id, telegram_message_id, chat_id')
         .eq('media_group_id', media_group_id)
-        .neq('telegram_message_id', message_id); // Skip the one already deleted
+        .neq('telegram_message_id', message_id); // Skip the one we just deleted
 
       if (fetchError) {
-        console.error(`[${correlationId}] Error fetching related media group messages: ${fetchError.message}`);
-        // Log this error but don't necessarily stop the whole process
-         await logProcessingEvent(
-            'media_group_deletion_failed',
-            media_group_id,
-            correlationId,
-            { entityType: 'media_group', stage: 'fetch_related_db', parent_telegram_message_id: message_id }, // metadata
-            fetchError.message // errorMessage
-          );
-         // Decide if this is critical - for now, we log and continue (maybe no other messages exist)
+        await supabase
+          .from('unified_audit_logs')
+          .insert({
+            event_type: 'media_group_deleted',
+            entity_id: messageId,
+            metadata: { 
+              telegram_message_id: message_id,
+              chat_id: chat_id,
+              media_group_id, 
+              error: fetchError.message,
+              operation: 'media_group_deletion_failed',
+              stage: 'fetch_related_messages'
+            },
+            correlation_id: correlationId,
+            error_message: fetchError.message
+          });
+        throw fetchError;
       }
-      relatedMessages = data || [];
-      console.log(`[${correlationId}] Found ${relatedMessages.length} related messages in group ${media_group_id}`);
 
-    } catch (fetchDbError: unknown) {
-       const errorMessage = fetchDbError instanceof Error ? fetchDbError.message : "DB error fetching related messages";
-       console.error(`[${correlationId}] Exception fetching related media group messages: ${errorMessage}`);
-       await logProcessingEvent(
-            'media_group_deletion_failed',
-            media_group_id,
-            correlationId,
-            { entityType: 'media_group', stage: 'fetch_related_db_exception', parent_telegram_message_id: message_id }, // metadata
-            errorMessage // errorMessage
-          );
-       // Continue, maybe log overall failure later
-    }
-
-
-    const groupResults = [];
-    for (const msg of relatedMessages) {
-      try {
-        console.log(`[${correlationId}] Deleting related message ${msg.telegram_message_id} from group ${media_group_id}`);
-        const groupResponse = await fetch(deleteUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ chat_id: msg.chat_id, message_id: msg.telegram_message_id }),
-        });
-        const groupResult = await groupResponse.json();
-        groupResults.push({ telegram_message_id: msg.telegram_message_id, result: groupResult });
-
-        if (groupResult.ok) {
-           console.log(`[${correlationId}] Successfully deleted related message ${msg.telegram_message_id}`);
-           // Optionally mark as deleted in DB (consider if needed, might be handled by triggers/cleanup)
-           // await supabaseClient.from('messages').update({ deleted_from_telegram: true }).eq('id', msg.id);
-           await logProcessingEvent(
-              'message_deletion_successful', // Log individual message deletion
-              msg.id,
-              correlationId,
-              { entityType: 'message', telegram_message_id: msg.telegram_message_id, chat_id: msg.chat_id, media_group_id, reason: 'part_of_group_deletion' } // metadata
-              // No error message here
-            );
-        } else {
-           console.warn(`[${correlationId}] Failed to delete related message ${msg.telegram_message_id}: ${groupResult.description}`);
-           await logProcessingEvent(
-              'message_deletion_failed', // Log individual message deletion failure
-              msg.id,
-              correlationId,
-              { entityType: 'message', telegram_message_id: msg.telegram_message_id, chat_id: msg.chat_id, media_group_id, telegram_result: groupResult, stage: 'telegram_api_group' }, // metadata
-              groupResult.description || 'Telegram group deletion failed' // errorMessage
-            );
-           // Continue deleting others
+      // Delete all related messages from Telegram
+      const groupResults = [];
+      for (const msg of relatedMessages || []) {
+        try {
+          const groupResponse = await fetch(deleteUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              chat_id: msg.chat_id,
+              message_id: msg.telegram_message_id,
+            }),
+          });
+          
+          const groupResult = await groupResponse.json();
+          groupResults.push({
+            id: msg.id,
+            telegram_message_id: msg.telegram_message_id,
+            result: groupResult
+          });
+          
+          // Mark the message as deleted from Telegram
+          if (groupResult.ok) {
+            await supabase
+              .from('messages')
+              .update({
+                deleted_from_telegram: true,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', msg.id);
+              
+            // Log successful group message deletion
+            await supabase
+              .from('unified_audit_logs')
+              .insert({
+                event_type: 'message_deleted',
+                entity_id: msg.id,
+                metadata: { 
+                  telegram_message_id: msg.telegram_message_id,
+                  chat_id: msg.chat_id,
+                  media_group_id, 
+                  parent_message_id: messageId,
+                  operation: 'group_message_deleted'
+                },
+                correlation_id: correlationId
+              });
+          }
+        } catch (groupError) {
+          console.error(`Error deleting group message ${msg.telegram_message_id}:`, groupError);
+          // Continue with other messages even if one fails
+          groupResults.push({
+            id: msg.id,
+            telegram_message_id: msg.telegram_message_id,
+            error: groupError.message
+          });
+          
+          // Log failed group message deletion
+          await supabase
+            .from('unified_audit_logs')
+            .insert({
+              event_type: 'message_deleted',
+              entity_id: msg.id,
+              metadata: { 
+                telegram_message_id: msg.telegram_message_id,
+                chat_id: msg.chat_id,
+                media_group_id, 
+                parent_message_id: messageId,
+                error: groupError.message,
+                operation: 'group_message_deletion_failed'
+              },
+              correlation_id: correlationId,
+              error_message: groupError.message
+            });
         }
-      } catch (groupError: unknown) {
-        const errorMessage = groupError instanceof Error ? groupError.message : "Failed to delete group message";
-        console.error(`[${correlationId}] Exception deleting group message ${msg.telegram_message_id}:`, errorMessage);
-        groupResults.push({ telegram_message_id: msg.telegram_message_id, error: errorMessage });
-         await logProcessingEvent(
-            'message_deletion_failed',
-            msg.id,
-            correlationId,
-            { entityType: 'message', telegram_message_id: msg.telegram_message_id, chat_id: msg.chat_id, media_group_id, stage: 'telegram_api_group_exception' }, // metadata
-            errorMessage // errorMessage
-          );
-        // Continue deleting others
       }
+      
+      // Log completion of media group deletion
+      await supabase
+        .from('unified_audit_logs')
+        .insert({
+          event_type: 'media_group_deleted',
+          entity_id: messageId,
+          metadata: { 
+            telegram_message_id: message_id,
+            chat_id: chat_id,
+            media_group_id, 
+            group_results: groupResults,
+            operation: 'media_group_deletion_completed'
+          },
+          correlation_id: correlationId
+        });
     }
 
-    await logProcessingEvent(
-      'media_group_deletion_completed',
-      media_group_id,
-      correlationId,
-      { entityType: 'media_group', parent_telegram_message_id: message_id, results: groupResults } // metadata
-      // No error message here
+    return new Response(
+      JSON.stringify({ 
+        success: true,
+        correlation_id: correlationId
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+
+  } catch (error) {
+    console.error("Error deleting Telegram message:", error);
+    return new Response(
+      JSON.stringify({ 
+        error: error.message,
+        correlation_id: correlationId
+      }),
+      { 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 500
+      }
     );
   }
-
-  // --- Success Response ---
-  return createSuccessResponse({ success: true }, correlationId);
-}
-
-// Create and configure the handler
-const handler = createHandler(handleDeleteTelegramMessage)
-  .withMethods(['POST']) // Should only be called via POST
-  .withSecurity(SecurityLevel.AUTHENTICATED) // Requires user authentication token
-  .build();
-
-// Serve the handler
-serve(handler);
-
-console.log("delete-telegram-message function deployed and listening.");
+});

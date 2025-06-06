@@ -1,10 +1,11 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { Message } from '@/types';
-import { MediaDisplay } from './MediaDisplay';
+import { EnhancedMediaDisplay } from '@/components/media-viewer/shared/EnhancedMediaDisplay';
 import { MediaToolbar } from './MediaToolbar';
 import { cn } from '@/lib/utils';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import { X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -32,10 +33,8 @@ export function MediaViewer({
   className
 }: MediaViewerProps) {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
-  const [showTools, setShowTools] = useState(false);
   
   const currentMedia = currentGroup[currentIndex];
-  const messageIds = currentGroup.map(message => message.id);
   
   // Reset current index when group changes
   useEffect(() => {
@@ -72,9 +71,6 @@ export function MediaViewer({
           break;
         case 'Escape':
           onClose();
-          break;
-        case 't':
-          setShowTools(prev => !prev);
           break;
         default:
           break;
@@ -125,6 +121,9 @@ export function MediaViewer({
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
+        <DialogTitle>
+          <VisuallyHidden>Media Viewer</VisuallyHidden>
+        </DialogTitle>
         {/* Close button */}
         <div className="absolute top-2 right-2 z-50">
           <Button 
@@ -164,17 +163,14 @@ export function MediaViewer({
           </div>
         )}
         
-        {/* Media display */}
-        <div className="flex-1 overflow-hidden relative">
-          <MediaDisplay message={currentMedia} />
+        {/* Enhanced Media display */}
+        <div className="flex-1 overflow-hidden relative flex items-center justify-center bg-black/50">
+          <EnhancedMediaDisplay message={currentMedia} className="rounded-md" />
         </div>
         
         {/* Toolbar */}
         <MediaToolbar 
           currentMedia={currentMedia}
-          showTools={showTools}
-          onToggleTools={() => setShowTools(prev => !prev)}
-          messageIds={messageIds}
         />
       </DialogContent>
     </Dialog>

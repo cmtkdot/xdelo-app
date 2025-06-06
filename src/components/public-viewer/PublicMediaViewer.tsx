@@ -1,11 +1,7 @@
 
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { Message } from '@/types/entities/Message'
-import { 
-  Dialog, 
-  DialogContent
-} from '@/components/ui/dialog'
-import { PublicMediaDetail } from './PublicMediaDetail'
+import { PublicEnhancedMediaDetail } from './PublicEnhancedMediaDetail'
 
 export interface MediaViewerProps {
   isOpen: boolean
@@ -16,7 +12,6 @@ export interface MediaViewerProps {
   onNext?: () => void
   hasPrevious?: boolean
   hasNext?: boolean
-  onEdit?: (message: Message, newCaption: string) => Promise<void>
   onDelete?: (messageId: string) => Promise<void>
   className?: string
 }
@@ -30,25 +25,23 @@ export function PublicMediaViewer({
   onNext,
   hasPrevious = false,
   hasNext = false,
-  onEdit,
-  onDelete,
-  className
+  onDelete
 }: MediaViewerProps) {
   const [touchStart, setTouchStart] = useState<number | null>(null)
   const [touchEnd, setTouchEnd] = useState<number | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   
-  // Handle touch gestures for navigation
-  const handleTouchStart = (e: React.TouchEvent) => {
+  // Handle touch gestures for navigation - using useCallback for performance
+  const handleTouchStart = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
     setTouchEnd(null)
     setTouchStart(e.targetTouches[0].clientX)
-  }
+  }, [])
   
-  const handleTouchMove = (e: React.TouchEvent) => {
+  const handleTouchMove = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
     setTouchEnd(e.targetTouches[0].clientX)
-  }
+  }, [])
   
-  const handleTouchEnd = () => {
+  const handleTouchEnd = useCallback(() => {
     if (!touchStart || !touchEnd) return
     
     // Determine swipe direction and minimum distance
@@ -66,21 +59,21 @@ export function PublicMediaViewer({
     // Reset touch positions
     setTouchStart(null)
     setTouchEnd(null)
-  }
+  }, [touchStart, touchEnd, onNext, onPrevious])
   
   // Attach global touch event listeners when the viewer is open
   useEffect(() => {
     const containerElement = containerRef.current
     
     if (isOpen && containerElement) {
-      containerElement.addEventListener('touchstart', handleTouchStart as any)
-      containerElement.addEventListener('touchmove', handleTouchMove as any)
-      containerElement.addEventListener('touchend', handleTouchEnd as any)
+      containerElement.addEventListener('touchstart', handleTouchStart as unknown as EventListener)
+      containerElement.addEventListener('touchmove', handleTouchMove as unknown as EventListener)
+      containerElement.addEventListener('touchend', handleTouchEnd as unknown as EventListener)
       
       return () => {
-        containerElement.removeEventListener('touchstart', handleTouchStart as any)
-        containerElement.removeEventListener('touchmove', handleTouchMove as any)
-        containerElement.removeEventListener('touchend', handleTouchEnd as any)
+        containerElement.removeEventListener('touchstart', handleTouchStart as unknown as EventListener)
+        containerElement.removeEventListener('touchmove', handleTouchMove as unknown as EventListener)
+        containerElement.removeEventListener('touchend', handleTouchEnd as unknown as EventListener)
       }
     }
   }, [isOpen, handleTouchStart, handleTouchMove, handleTouchEnd])
@@ -95,7 +88,7 @@ export function PublicMediaViewer({
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
-      <PublicMediaDetail
+      <PublicEnhancedMediaDetail
         isOpen={isOpen}
         onClose={onClose}
         currentGroup={currentGroup}
@@ -104,7 +97,6 @@ export function PublicMediaViewer({
         onNext={onNext}
         hasPrevious={hasPrevious}
         hasNext={hasNext}
-        onEdit={onEdit}
         onDelete={onDelete}
       />
     </div>

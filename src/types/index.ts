@@ -1,44 +1,19 @@
 
-// Re-export all type definitions for easy importing throughout the app
-// Using named exports to avoid ambiguity
+// Export core types
+export * from './GlobalTypes';
 
-// Core entity types with proper naming to avoid conflicts
-export type { ProcessingState } from './api/ProcessingState';
-export type { Message } from './entities/Message';
-export type { MediaItem } from './entities/MediaItem';
-export type { GlProduct } from './entities/Product';
+// Export entity types
+export * from './entities/Message';
+export * from './entities/Product';
+export * from './entities/MediaItem';
 
-// Additional types used throughout the app
-export type SyncStatus = 'pending' | 'in_progress' | 'completed' | 'failed' | 'partial';
+// Export API types
+export * from './api/SupabaseTypes';
+export * from './api/ProcessingState';
 
-// Export AnalyzedContent interface for common use
-export interface AnalyzedContent {
-  product_name?: string;
-  product_code?: string;
-  vendor_uid?: string;
-  purchase_date?: string;
-  quantity?: number;
-  notes?: string;
-  caption?: string;
-  unit_price?: number;
-  total_price?: number;
-  parsing_metadata?: {
-    method?: string;
-    timestamp?: string;
-    partial_success?: boolean;
-  };
-}
+// Export additional types
 
-// Export MatchResult interface for product matching
-export interface MatchResult {
-  id: string;
-  message_id: string;
-  product_id: string;
-  confidence: number;
-  matchType: string;
-  details: {
-    matchedFields: string[];
-    confidence: number;
-  };
-  isMatch?: boolean; // Added for backward compatibility
-}
+export * from './utils/AnalyzedContent';
+
+// Note: MessagesTypes is deprecated as its exports are now consolidated
+// in the appropriate entity files

@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
@@ -11,6 +10,9 @@ import { Loader2, Save, ZapIcon } from "lucide-react";
 import { fetchMatchingConfig, updateMatchingConfig } from "@/lib/product-matching/config";
 import { ProductMatchingConfig, DEFAULT_CONFIG } from "@/lib/product-matching/types";
 import { supabase } from "@/integrations/supabase/client";
+import { Database } from "@/integrations/supabase/database.types";
+
+type GlProduct = Database['public']['Tables']['gl_products']['Row'];
 
 const ProductMatchingCard = () => {
   const [config, setConfig] = useState<ProductMatchingConfig>(DEFAULT_CONFIG);
@@ -118,13 +120,15 @@ const ProductMatchingCard = () => {
       if (matchingError) throw matchingError;
       
       if (matchResult.bestMatch) {
-        // Get product details
-        const { data: product } = await supabase
+        // Get product details from gl_products
+        const { data: productData } = await supabase
           .from('gl_products')
           .select('new_product_name')
           .eq('id', matchResult.bestMatch.product_id)
           .single();
           
+        const product = productData as GlProduct;
+        
         setTestResult({
           success: true,
           confidence: matchResult.bestMatch.confidence,

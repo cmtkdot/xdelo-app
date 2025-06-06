@@ -15,6 +15,8 @@ export interface BaseMediaViewerProps {
 export interface MediaDisplayProps {
   message: Message;
   className?: string;
+  onLoadSuccess?: () => void;
+  onLoadError?: () => void;
 }
 
 export interface MediaToolbarProps {

@@ -1,91 +1,100 @@
-
-import { useEffect, useState } from "react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { MatchingConfiguration } from "@/components/ProductMatching/MatchingConfiguration";
-import { TestMatchingPanel } from "@/components/ProductMatching/TestMatchingPanel";
-import { BatchMatchingPanel } from "@/components/ProductMatching/BatchMatchingPanel";
-import { MatchingHistory } from "@/components/ProductMatching/MatchingHistory";
-import { ensureMatchingConfigColumn } from "@/components/Settings/ensureMatchingConfigColumn";
-import { useToast } from "@/hooks/useToast";
-import { Loader2 } from "lucide-react";
+import { useState } from 'react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { BatchMatchingPanel } from '@/components/ProductMatching/BatchMatchingPanel';
+import { TestMatchingPanel } from '@/components/ProductMatching/TestMatchingPanel';
+import { MatchingConfiguration } from '@/components/ProductMatching/MatchingConfiguration';
+import { MatchingHistory } from '@/components/ProductMatching/MatchingHistory';
+import { useProductMatching } from '@/hooks/useProductMatching';
 
 const ProductMatching = () => {
-  const [isInitializing, setIsInitializing] = useState(true);
-  const { toast } = useToast();
-
-  useEffect(() => {
-    const initializeSettings = async () => {
-      setIsInitializing(true);
-      try {
-        const result = await ensureMatchingConfigColumn();
-        if (!result) {
-          toast({
-            title: "Database initialization notification",
-            description: "Setting up with default matching configuration.",
-            variant: "default",
-          });
-        }
-      } catch (error) {
-        console.error("Error initializing product matching:", error);
-        toast({
-          title: "Initialization message",
-          description: "Using default matching configuration.",
-          variant: "default",
-        });
-      } finally {
-        setIsInitializing(false);
-      }
-    };
-
-    initializeSettings();
-  }, [toast]);
-
-  if (isInitializing) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <div className="flex flex-col items-center gap-2">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <p className="text-sm text-muted-foreground">Initializing product matching...</p>
-        </div>
-      </div>
-    );
-  }
+  const [activeTab, setActiveTab] = useState('test');
+  const productMatching = useProductMatching();
+  
+  // Clear results when changing tabs
+  const handleTabChange = (value: string) => {
+    setActiveTab(value);
+    productMatching.clearResults();
+  };
 
   return (
-    <div className="container py-8">
-      <div className="flex flex-col gap-6">
-        <div>
-          <h1 className="text-3xl font-bold">Product Matching</h1>
-          <p className="text-muted-foreground mt-2">
-            Configure and manage how messages are matched to products in your inventory
-          </p>
-        </div>
-
-        <Tabs defaultValue="configuration" className="w-full">
-          <TabsList className="mb-4">
-            <TabsTrigger value="configuration">Configuration</TabsTrigger>
-            <TabsTrigger value="testing">Testing</TabsTrigger>
-            <TabsTrigger value="batch">Batch Operations</TabsTrigger>
-            <TabsTrigger value="history">Match History</TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="configuration">
-            <MatchingConfiguration />
-          </TabsContent>
-          
-          <TabsContent value="testing">
-            <TestMatchingPanel />
-          </TabsContent>
-          
-          <TabsContent value="batch">
-            <BatchMatchingPanel />
-          </TabsContent>
-          
-          <TabsContent value="history">
-            <MatchingHistory />
-          </TabsContent>
-        </Tabs>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">Product Matching</h1>
+        <p className="text-muted-foreground mt-2">
+          Test and manage product matching functionality
+        </p>
       </div>
+
+      <Tabs 
+        defaultValue="test" 
+        value={activeTab} 
+        onValueChange={handleTabChange}
+        className="space-y-4"
+      >
+        <TabsList className="grid grid-cols-4 w-full max-w-2xl">
+          <TabsTrigger value="test">Test Matching</TabsTrigger>
+          <TabsTrigger value="batch">Batch Process</TabsTrigger>
+          <TabsTrigger value="history">History</TabsTrigger>
+          <TabsTrigger value="settings">Settings</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="test" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Test Product Matching</CardTitle>
+              <CardDescription>
+                Test the product matching system with individual messages or custom text
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <TestMatchingPanel />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="batch" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Batch Processing</CardTitle>
+              <CardDescription>
+                Process multiple messages and match them to products
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <BatchMatchingPanel />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="history" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Matching History</CardTitle>
+              <CardDescription>
+                View previous matching operations and their results
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <MatchingHistory />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="settings" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Configuration</CardTitle>
+              <CardDescription>
+                Adjust product matching settings and thresholds
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <MatchingConfiguration />
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };

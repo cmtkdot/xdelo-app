@@ -1,5 +1,6 @@
-import type { Config } from "tailwindcss";
-export default {
+/** @type {import('tailwindcss').Config} */
+// Updated timestamp: 2023-07-23T18:45:12.000Z - forced cache refresh after removing SqlConsole
+module.exports = {
   darkMode: ["class"],
   content: ["./index.html", "./src/**/*.{ts,tsx,js,jsx}"],
   future: {
@@ -83,6 +84,12 @@ export default {
       },
     },
   },
-	plugins: [require("tailwindcss-animate")],
-} satisfies Config;
-
+  plugins: [
+    require("tailwindcss-animate"),
+    function({ addVariant }) {
+      addVariant('hocus', ['&:hover', '&:focus']);
+      addVariant('group-hocus', ['.group:hover &', '.group:focus &']);
+      addVariant('supports-grid', '@supports (display: grid)');
+    }
+  ],
+}

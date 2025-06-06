@@ -2,17 +2,11 @@
 import { useState, useCallback } from 'react';
 import { Message } from '@/types';
 import { useTelegramOperations } from './useTelegramOperations';
-import { useMediaUtils } from './useMediaUtils';
 
 export function useMessageViewHandlers() {
   // Store the actual message objects rather than just booleans
   const [selectedMessages, setSelectedMessages] = useState<Record<string, Message>>({});
   const { handleDelete, isProcessing } = useTelegramOperations();
-  const { 
-    fixContentDispositionForMessage,
-    reuploadMediaFromTelegram,
-    processingMessageIds
-  } = useMediaUtils();
 
   // Toggle message selection with proper typing
   const handleToggleSelect = useCallback((message: Message) => {
@@ -53,9 +47,6 @@ export function useMessageViewHandlers() {
     getSelectedMessageIds,
     getSelectedMessagesArray,
     deleteMessage: handleDelete,
-    fixContentDispositionForMessage,
-    reuploadMediaFromTelegram,
-    isProcessing,
-    processingMessageIds
+    isProcessing
   };
 }

@@ -1,6 +1,7 @@
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { Message } from '@/types';
+import { isVideoMessage } from '@/utils/mediaUtils';
 
 interface UseGalleryFiltersProps {
   messages: Message[];
@@ -30,7 +31,16 @@ export function useGalleryFilters({
     if (filter === "images") {
       result = result.filter(m => m.mime_type?.startsWith('image/'));
     } else if (filter === "videos") {
-      result = result.filter(m => m.mime_type?.startsWith('video/'));
+      // Use the same video detection logic as in PublicMediaCard
+      result = result.filter(m => {
+        return isVideoMessage(m) || 
+          (m.public_url && (
+            m.public_url.endsWith('.mp4') || 
+            m.public_url.endsWith('.mov') ||
+            m.public_url.endsWith('.webm') ||
+            m.public_url.endsWith('.avi')
+          ));
+      });
     }
     
     return result;

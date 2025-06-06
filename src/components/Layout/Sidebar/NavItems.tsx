@@ -1,17 +1,25 @@
-import {
-  FileText,
-  GalleryHorizontal,
-  GitCompare,
-  ImageIcon,
-  LayoutDashboard,
-  LucideIcon,
-  MessageSquare,
-  Music,
-  PanelLeft,
-  Settings,
-  Table,
-} from "lucide-react";
 import React from "react";
+import {
+  LayoutDashboard,
+  MessageSquare,
+  Package,
+  Settings,
+  Music,
+  GalleryHorizontal,
+  Users,
+  GitPullRequest,
+  PanelLeft,
+  PanelTopOpen,
+  FileText,
+  Home,
+  ImageIcon,
+  Table,
+  LucideIcon,
+  Database,
+  Tags,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 interface NavItem {
   name: string;
@@ -66,28 +74,35 @@ export const NavItems: React.FC<NavItemsProps> = ({
       isActive: currentPath === "/media-table",
     },
     {
+      title: "Database",
+      href: "/database",
+      icon: <Database size={20} />,
+      isActive: currentPath === "/database",
+    },
+    {
+      title: "Products",
+      href: "/products",
+      icon: <Package size={20} />,
+      isActive: currentPath === "/products",
+    },
+    {
+      title: "Product Matching",
+      href: "/product-matching",
+      icon: <Tags size={20} />,
+      isActive: currentPath === "/product-matching",
+    },
+    {
       title: "Table Demo",
       href: "/table-demo",
       icon: <Table size={20} />,
       isActive: currentPath === "/table-demo",
     },
-    {
-      title: "Product Matching",
-      href: "/product-matching",
-      icon: <GitCompare size={20} />,
-      isActive: currentPath === "/product-matching",
-    },
+
     {
       title: "AI Chat",
       href: "/ai-chat",
       icon: <FileText size={20} />,
       isActive: currentPath === "/ai-chat",
-    },
-    {
-      title: "Audio Upload",
-      href: "/audio-upload",
-      icon: <Music size={20} />,
-      isActive: currentPath === "/audio-upload",
     },
     {
       title: "Settings",
